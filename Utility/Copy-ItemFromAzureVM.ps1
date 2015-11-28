@@ -14,7 +14,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI 
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Copy-ItemFromAzureVM.ps1
 
 .ICONURI 
 

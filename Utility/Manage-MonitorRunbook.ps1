@@ -15,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI 
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Manage-MonitorRunbook.ps1
 
 .ICONURI 
 

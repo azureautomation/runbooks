@@ -14,7 +14,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI 
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Connect-AzureVM.ps1
 
 .ICONURI 
 

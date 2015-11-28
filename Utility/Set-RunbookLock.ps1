@@ -15,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI 
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Set-RunbookLock.ps1
 
 .ICONURI 
 
