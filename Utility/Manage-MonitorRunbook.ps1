@@ -5,9 +5,9 @@
 
 .GUID 1a505183-5f4e-4de2-964e-c6514c351841
 
-.AUTHOR elcooper_msft
+.AUTHOR Azure-Automation-Team
 
-.COMPANYNAME 
+.COMPANYNAME Microsoft
 
 .COPYRIGHT 
 

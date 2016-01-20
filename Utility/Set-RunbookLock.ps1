@@ -5,9 +5,9 @@
 
 .GUID 9e5dbf19-475a-425c-80d0-271240f8d235
 
-.AUTHOR elcooper_msft
+.AUTHOR Azure-Automation-Team
 
-.COMPANYNAME 
+.COMPANYNAME Microsoft
 
 .COPYRIGHT 
 
@@ -35,8 +35,8 @@
 <# 
 
 .DESCRIPTION 
-	This Azure Automation runbook ensures that only one instance of a runbook is running at
-    any one time. It is meant to be called from another runbook as an inline runbook, 
+	This Azure Automation runbook ensures that only one instance of a PowerShell Workflow runbook is running at
+    any one time by suspending and resuming jobs.  It is meant to be called from another runbook as an inline runbook, 
     not started asynchronously through the web service. 
 
 #> 
