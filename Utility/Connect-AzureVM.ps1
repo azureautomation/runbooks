@@ -1,4 +1,4 @@
-﻿<#PSScriptInfo
+<#PSScriptInfo
 
 .VERSION 1.0
 
@@ -27,9 +27,11 @@
 .RELEASENOTES
 
 
-#>
+#> 
 
 #Requires -Module Azure
+
+
 
 <# 
 
