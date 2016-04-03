@@ -55,22 +55,26 @@
 .PARAMETER AutomationAccountName
     The name of the Automation account where this runbook is started from
 
-.PARAMETER AzureOrgIdCredential
-    A credential setting containing an Org Id username / password with access to this Azure subscription 
+.PARAMETER AzureConnectionAssetName
+   Optional with default of "AzureRunAsConnection".
+   The name of an Automation connection asset that contains an Azure AD service principal with authorization for the subscription. 
+   To use an asset with a different name you can pass the asset name as a runbook input parameter or change
+   the default value for this input parameter.
+
+   If you selected "Create Azure Run As Account" when creating the automation account running this runbook, you will already
+   have a connection asset with the default name ("AzureRunAsConnection") set up. If not, you can create a connection asset / Azure AD
+   service principal by following the directions here: https://azure.microsoft.com/en-us/documentation/articles/automation-sec-configure-azure-runas-account
 
 .PARAMETER NoOfInstances
     The number of concurrent jobs to allow. Will default to 1 if not provided. Optional Parameter.
 
-.PARAMETER SubscriptionID
-    The ID of the Azure subscription. Will default to current subscription if not provided. Optional Parameter.
-
 .EXAMPLE
  
-    .\Wait-RunbookLock.ps1 -ResourceGroup 'Finance' -AutomationAccountName 'FinanceTeam' -AzureOrgIdCredential 'AD-UserName' -NoOfInstances 3 -SubscriptionID 'bcdd8138-bb95-4d6e-8e83-dsss706025359' 
+    .\Wait-RunbookLock.ps1 -ResourceGroup 'Finance' -AutomationAccountName 'FinanceTeam'
 	  
 .NOTES
     AUTHOR: System Center Automation Team
-    LASTEDIT: Jan 17th, 2015 
+    LASTEDIT: April 3rd, 2016
 #>
 
 Param ( 
@@ -80,20 +84,18 @@ Param (
     [Parameter(Mandatory=$true)]
     [String] $AutomationAccountName,
         
-    [Parameter(Mandatory=$true)]
-    [String] $AzureOrgIdCredential,
+    [Parameter(Mandatory=$false)] 
+    [String]  $AzureConnectionAssetName = "AzureRunAsConnection",
 
     [Parameter(Mandatory=$false)]
-    [Int] $NoOfInstances = 1,
-
-    [Parameter(Mandatory=$false)]
-    [String] $SubscriptionID = $null
+    [Int] $NoOfInstances = 1
 )
 
-$AzureCred = Get-AutomationPSCredential -Name $AzureOrgIdCredential
-if ($AzureCred -eq $null)
+# Connect to Azure using service principal auth
+$ServicePrincipalConnection = Get-AutomationConnection -Name $AzureConnectionAssetName    
+if ($ServicePrincipalConnection -eq $null)
 {
-    throw "Could not retrieve '$AzureOrgIdCredential' credential asset. Check that you created this first in the Automation service."
+    throw "Could not retrieve '$AzureConnectionAssetName' credential asset. Check that you created this first in the Automation service."
 }
     
 # Get the automation job id for this runbook job
@@ -101,12 +103,13 @@ $AutomationJobID = $PSPrivateMetaData.JobId.Guid
 Write-Verbose ("This Job is " + $AutomationJobID)
 Write-Verbose ("Number of instances allowed is " + $NoOfInstances)
              
-Login-AzureRMAccount -Credential $AzureCred | Write-Verbose 
+Login-AzureRMAccount `
+        -ServicePrincipal `
+        -TenantId $ServicePrincipalConnection.TenantId `
+        -ApplicationId $ServicePrincipalConnection.ApplicationId `
+        -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose 
 
-If (($SubscriptionID -ne $null) -and ($SubscriptionID -ne ""))
-{
-    Select-AzureRmSubscription -SubscriptionId $SubscriptionID  | Write-Verbose 
-}
+Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID  | Write-Verbose 
                
 # Get the information for this job so we can retrieve the runbook name
 $CurrentJob = Get-AzureRMAutomationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Id $AutomationJobID
