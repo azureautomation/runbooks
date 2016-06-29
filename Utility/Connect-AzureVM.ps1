@@ -2,19 +2,19 @@
 
 .VERSION 1.0
 
-.GUID b66368a8-dc27-481a-b4f3-dff65a6d42ee
+.GUID 803969d1-8f13-482b-8345-6b5b503dff25
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR Rohit Minni
 
 .COMPANYNAME Microsoft
 
 .COPYRIGHT 
 
-.TAGS AzureAutomation OMS VirtualMachines Utility
+.TAGS 
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Connect-AzureVM.ps1
+.PROJECTURI 
 
 .ICONURI 
 
@@ -27,103 +27,198 @@
 .RELEASENOTES
 
 
-#> 
-
-#Requires -Module Azure
-
-
-
-<# 
-
-.DESCRIPTION 
-    This runbook sets up a connection to an Azure virtual machine. It requires the Azure virtual machine to
-    have the Windows Remote Management service enabled, which is the default. It sets up a connection to the Azure
-	subscription and then imports the certificate used for the Azure VM so remote PowerShell calls can be made to it.  
-
-#> 
-Param()
-
+#>
 
 <#
 .SYNOPSIS 
-    Sets up the connection to an Azure VM
+    Sets up the connection to an Azure ARM VM
 
 .DESCRIPTION
-    This runbook sets up a connection to an Azure virtual machine. It requires the Azure virtual machine to
-    have the Windows Remote Management service enabled, which is the default. It sets up a connection to the Azure
-	subscription and then imports the certificate used for the Azure VM so remote PowerShell calls can be made to it.  
+    This runbook sets up a connection to an Azure ARM virtual machine. It requires the Azure virtual machine to
+    have the Windows Remote Management service enabled. It enables WinRM and configures it on your VM after which it sets up a connection to the Azure
+	subscription, gets the public IP Address of the virtual machine and return it. 
 
-.PARAMETER AzureSubscriptionName
-    Name of the Azure subscription to connect to.
+.PARAMETER AzureSubscriptionId
+    SubscriptionId of the Azure subscription to connect to
     
-.PARAMETER AzureOrgIdCredential
+.PARAMETER AzureOrgIdCredentialName
     A credential containing an Org Id username / password with access to this Azure subscription.
 
-	If invoking this runbook inline from within another runbook, pass a PSCredential for this parameter.
+	If invoking this runbook inline from within another runbook, pass a Azure Automation PSCredential Name for this parameter.
 
-	If starting this runbook using Start-AzureAutomationRunbook, or via the Azure portal UI, pass as a string the
-	name of an Azure Automation PSCredential asset instead. Azure Automation will automatically grab the asset with
-	that name and pass it into the runbook.
-
-.PARAMETER ServiceName
-    Name of the cloud service where the VM is located.
+.PARAMETER ResourceGroupName
+    Name of the resource group where the VM is located.
 
 .PARAMETER VMName    
-    Name of the virtual machine that you want to connect to. 
+    Name of the virtual machine that you want to connect to  
 
 .EXAMPLE
-    Connect-AzureVM -AzureSubscriptionName "Visual Studio Ultimate with MSDN" -ServiceName "Finance" -VMName "WebServer01" -AzureOrgIdCredential $cred
+    Connect-AzureARMVMPS -AzureSubscriptionId "1019**********************" -ResourceGroupName "RG1" -VMName "VM01" -AzureOrgIdCredentialName $cred
 
 .NOTES
-    AUTHOR: System Center Automation Team
-    LASTEDIT: Dec 18, 2014 
+    AUTHOR: Rohit Minni
+    LASTEDIT: May 25, 2016 
 #>
-workflow Connect-AzureVM
-{
-	[OutputType([System.Uri])]
-
+   
     Param
     (            
         [parameter(Mandatory=$true)]
-        [String]
-        $AzureSubscriptionName,
+        [String]$AzureSubscriptionId,
 
-		[parameter(Mandatory=$true)]
-        [PSCredential]
-        $AzureOrgIdCredential,
+        [parameter(Mandatory=$true)]
+        [String]$AzureOrgIdCredentialName,
+                        
+        [parameter(Mandatory=$true)]
+        [String]$ResourceGroupName,
         
         [parameter(Mandatory=$true)]
-        [String]
-        $ServiceName,
-        
-        [parameter(Mandatory=$true)]
-        [String]
-        $VMName      
+        [String]$VMName      
     )
-   
-    Add-AzureAccount -Credential $AzureOrgIdCredential | Write-Verbose
+
+    $ErrorActionPreference = "SilentlyContinue"
+    $AzureOrgIdCredential = Get-AutomationPSCredential -Name $AzureOrgIdCredentialName
+	
+    $Login = Login-AzureRmAccount -Credential $AzureOrgIdCredential
 
 	# Select the Azure subscription we will be working against
-    Select-AzureSubscription -SubscriptionName $AzureSubscriptionName | Write-Verbose
+    $Subscription = Select-AzureRmSubscription -SubscriptionId $AzureSubscriptionId
 
-    InlineScript { 
-        # Get the Azure certificate for remoting into this VM
-        $winRMCert = (Get-AzureVM -ServiceName $Using:ServiceName -Name $Using:VMName | select -ExpandProperty vm).DefaultWinRMCertificateThumbprint   
-        $AzureX509cert = Get-AzureCertificate -ServiceName $Using:ServiceName -Thumbprint $winRMCert -ThumbprintAlgorithm sha1
 
-        # Add the VM certificate into the LocalMachine
-        if ((Test-Path Cert:\LocalMachine\Root\$winRMCert) -eq $false)
-        {
-            Write-Progress "VM certificate is not in local machine certificate store - adding it"
-            $certByteArray = [System.Convert]::fromBase64String($AzureX509cert.Data)
-            $CertToImport = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList (,$certByteArray)
-            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "Root", "LocalMachine"
-            $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-            $store.Add($CertToImport)
-            $store.Close()
-        }
-		
-		# Return the WinRM Uri so that it can be used to connect to this VM
-		Get-AzureWinRMUri -ServiceName $Using:ServiceName -Name $Using:VMName     
+  function Configure-AzureWinRMHTTPS {
+  <#
+  .SYNOPSIS
+  Configure WinRM over HTTPS inside an Azure VM.
+  .DESCRIPTION
+  1. Creates a self signed certificate on the Azure VM.
+  2. Creates and executes a custom script extension to enable Win RM over HTTPS and opens 5986 in the Windows Firewall
+  3. Creates a Network Security Rules for the Network Security Group attached the the first NIC attached the the VM allowing inbound traffic on port 5986  
+  #>
+ 
+   
+  Param
+          (
+            [parameter(Mandatory=$true)]
+            [String]$VMName,
+             
+            [parameter(Mandatory=$true)]
+            [String]$ResourceGroupName,      
+ 
+            [parameter()]
+            [String]$DNSName = $env:COMPUTERNAME,
+              
+            [parameter()]
+            [String]$SourceAddressPrefix = "*"
+ 
+          ) 
+ 
+# define a temporary file in the users TEMP directory
+$file = $env:TEMP + "\ConfigureWinRM_HTTPS.ps1"
+
+$string = "param(`$DNSName)" + "`r`n" + "Enable-PSRemoting -Force" + "`r`n" + "New-NetFirewallRule -Name 'WinRM HTTPS' -DisplayName 'WinRM HTTPS' -Enabled True -Profile 'Any' -Action 'Allow' -Direction 'Inbound' -LocalPort 5986 -Protocol 'TCP'" + "`r`n" + "`$thumbprint = (New-SelfSignedCertificate -DnsName `$DNSName -CertStoreLocation Cert:\LocalMachine\My).Thumbprint" + "`r`n" + "`$cmd = `"winrm create winrm/config/Listener?Address=*+Transport=HTTPS @{Hostname=`"`"`$DNSName`"`"; CertificateThumbprint=`"`"`$thumbprint`"`"}`"" + "`r`n" + "cmd.exe /C `$cmd"
+	
+$string | Out-File -FilePath $file -force
+ 
+  
+# Get the VM we need to configure
+$vm = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Name $VMName
+ 
+# Get storage account name
+$StorageAccountName = $vm.StorageProfile.OsDisk.Vhd.Uri.Split("//")[2].Split('.')[0]
+# get storage account key
+$StorageKey = Get-AzureRmStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
+try
+{
+    $key = $StorageKey.value[0]
+}
+catch
+{
+}
+finally
+{
+    if($key -eq $null)
+    {
+        $key = $StorageKey.Key1
     }
 }
+# create storage context
+$StorageContext = New-AzureStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $key
+  
+# create a container called scripts
+$CreateContainer = New-AzureStorageContainer -Name "scripts" -Context $StorageContext -ErrorAction SilentlyContinue
+  
+#upload the file
+$BlobContent = Set-AzureStorageBlobContent -Container "scripts" -File $file -Blob "ConfigureWinRM_HTTPS.ps1" -Context $StorageContext -force
+ 
+# Create custom script extension from uploaded file
+$extension = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $ResourceGroupName -VMName $VMName -Name "EnableWinRM_HTTPS" -Location $vm.Location -StorageAccountName $StorageAccountName -StorageAccountKey $key -FileName "ConfigureWinRM_HTTPS.ps1" -ContainerName "scripts" -RunFile "ConfigureWinRM_HTTPS.ps1" -Argument $DNSName
+
+# Get the name of the first NIC in the VM
+$nicName = Get-AzureRmResource -ResourceId $vm.NetworkInterfaceIDs[0]
+$nic = Get-AzureRmNetworkInterface -ResourceGroupName $ResourceGroupName -Name $nicName.ResourceName
+ 
+# Get the network security group attached to the NIC
+$nsgRes = Get-AzureRmResource -ResourceId $nic.NetworkSecurityGroup.Id
+$nsg = Get-AzureRmNetworkSecurityGroup  -ResourceGroupName $ResourceGroupName  -Name $nsgRes.Name 
+  
+# Add the new NSG rule, and update the NSG
+$InboundRule = $nsg | Add-AzureRmNetworkSecurityRuleConfig -Name "WinRM_HTTPS" -Priority 1100 -Protocol TCP -Access Allow -SourceAddressPrefix $SourceAddressPrefix -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 5986 -Direction Inbound -ErrorAction SilentlyContinue | Set-AzureRmNetworkSecurityGroup -ErrorAction SilentlyContinue
+
+}
+
+    Configure-AzureWinRMHTTPS -ResourceGroupName $ResourceGroupName -VMName $VMName
+
+    $VM = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Name $VMName
+    if($VM)
+    {
+  
+        $NICs = Get-AzureRmNetworkInterface | Where-Object{$_.VirtualMachine.Id -eq $VM.Id}
+        $IPConfigArray = New-Object System.Collections.ArrayList
+        foreach($nic in $NICs)
+        {
+            if($nic.IpConfigurations.LoadBalancerBackendAddressPools)
+            {
+                $arr = $nic.IpConfigurations.LoadBalancerBackendAddressPools.id.Split('/')
+                $LoadBalancerNameIndex = $arr.IndexOf("loadBalancers") + 1                    
+                $loadBalancer = Get-AzureRmLoadBalancer | Where-Object{$_.Name -eq $arr[$LoadBalancerNameIndex]}
+                $PublicIpId = $loadBalancer.FrontendIPConfigurations.PublicIpAddress.Id
+            }
+
+            $publicips = New-Object System.Collections.ArrayList
+
+            if($nic.IpConfigurations.PublicIpAddress.Id)
+            {
+                $publicips.Add($nic.IpConfigurations.PublicIpAddress.Id) | Out-Null
+            }
+
+            if($PublicIpId)
+            {
+                $publicips.Add($PublicIpId) | Out-Null
+            }
+
+            foreach($publicip in $publicips)
+            {
+                $name = $publicip.split('/')[$publicip.Split('/').Count - 1]
+                $ResourceGroup = $publicip.Split('/')[$publicip.Split('/').Indexof("resourceGroups")+1]
+                $PublicIPAddress = Get-AzureRmPublicIpAddress -Name $name -ResourceGroupName $ResourceGroup | Select-Object -Property Name,ResourceGroupName,Location,PublicIpAllocationMethod,IpAddress
+                $IPConfigArray.Add($PublicIPAddress) | Out-Null
+            }
+        }
+        $Uri = $IPConfigArray | Where-Object{$_.IpAddress -ne $null} | Select-Object -First 1 -Property IpAddress
+
+        if($Uri.IpAddress -ne $null)
+        {               
+            return $Uri.IpAddress.ToString()           
+        }
+        else
+        {
+            Write-Output "Couldnt get the IP Address of the VM"
+            return $null
+        }  
+    
+    }
+    else
+    {
+        Write-Output "VM not found"
+        return $null
+    }        
+    
