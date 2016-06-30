@@ -1,0 +1,43 @@
+
+<#
+.SYNOPSIS 
+    Queries the automation accounts in the subscription to find the automation account, runbook and resource group that the job is running in.
+
+.DESCRIPTION
+    Queries the automation accounts in the subscription to find the automation account, runbook and resource group that the job is running in.
+    It then prints out the subscription, region, automation account name, runbook name, resource group name, and job id.
+    Useful if doing some additional logging or other scenarios where you need to know this information within a running job.
+    This uses the RunAs connection that is set up during automation account creation for authentication against the Azure subscription. You
+    could remove this authentication if the parent runbook has already authencticated against the subscription.
+    
+.EXAMPLE
+    Find-WhoAmI
+
+.NOTES
+    AUTHOR: Azure/OMS Automation Team
+    LASTEDIT: June 30, 2016  
+#>       
+
+$ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+Add-AzureRmAccount `
+    -ServicePrincipal `
+    -TenantId $ServicePrincipalConnection.TenantId `
+    -ApplicationId $ServicePrincipalConnection.ApplicationId `
+    -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
+
+$AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+foreach ($Automation in $AutomationResource)
+{
+    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+    if (!([string]::IsNullOrEmpty($Job)))
+    {
+        $Automation.SubscriptionId
+        $Automation.Location
+        $Job.ResourceGroupName
+        $Job.AutomationAccountName
+        $Job.RunbookName
+        $Job.JobId.Guid
+        break;
+    }
+}
