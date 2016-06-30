@@ -11,7 +11,8 @@
     could remove this authentication if the parent runbook has already authencticated against the subscription.
     
 .EXAMPLE
-    Find-WhoAmI
+    $AccountInfo = .\Find-WhoAmI.ps1
+    $AccountInfo
 
 .NOTES
     AUTHOR: Azure/OMS Automation Team
@@ -32,12 +33,14 @@ foreach ($Automation in $AutomationResource)
     $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
     if (!([string]::IsNullOrEmpty($Job)))
     {
-        $Automation.SubscriptionId
-        $Automation.Location
-        $Job.ResourceGroupName
-        $Job.AutomationAccountName
-        $Job.RunbookName
-        $Job.JobId.Guid
+        $AutomationInformation = @{}
+        $AutomationInformation.Add("SubscriptionId",$Automation.SubscriptionId)
+        $AutomationInformation.Add("Location",$Automation.Location)
+        $AutomationInformation.Add("ResourceGroupName",$Job.ResourceGroupName)
+        $AutomationInformation.Add("AutomationAccountName",$Job.AutomationAccountName)
+        $AutomationInformation.Add("RunbookName",$Job.RunbookName)
+        $AutomationInformation.Add("JobId",$Job.JobId.Guid)
+        $AutomationInformation
         break;
     }
 }
