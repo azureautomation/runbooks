@@ -81,11 +81,11 @@
         -AuthenticationAssetName AzureRunAsConnection `
         -ActionType DELETE `
         -SubscriptionIds abcd1234-567e-8f9a-1a2b-3c4de5fa6b78,bbcd1234-567e-8f9a-1a2b-3c4de5fa6b78 `
-        -NameFilter removeme,removemetoo `
+        -NameFilter removeme,removemetoo
 
 .NOTES
     AUTHOR: System Center Automation Team
-    LASTEDIT: August 3, 2016
+    LASTEDIT: August 8, 2016
 #> 
 
 workflow Remove-ResourceGroups
