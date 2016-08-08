@@ -136,7 +136,7 @@ workflow Remove-ResourceGroups
 		} 		 
 	 }
 	 elseif ($AuthenticationType.ToUpper() -eq "SERVICEPRINCIPAL") {
-		$servicePrincipalConnection = Get-AutomationConnection -Name $AuthenticationAssetName
+		$ServicePrincipalConnection = Get-AutomationConnection -Name $AuthenticationAssetName
 		
 		Add-AzureRmAccount -ServicePrincipal `
          -TenantId $servicePrincipalConnection.TenantId `
@@ -158,14 +158,14 @@ workflow Remove-ResourceGroups
 	foreach ($subscriptionId in $subscriptionIdList) {
 		try {
 			# Select the subscription, if not found, skip resource group removal
-			Write-Output "Attempting connection to subscription: $subscriptionId"
+			Write-Verbose "Attempting connection to subscription: $subscriptionId"
 			Set-AzureRMContext -SubscriptionId $subscriptionId -ErrorAction Stop -ErrorVariable err
 			if($err) { 
 				Write-Error "Subscription not found: $subscriptionId."
 				throw $err
 			}
 			else {
-				Write-Output "Successful connection to subscription: $subscriptionId"
+				Write-Verbose "Successful connection to subscription: $subscriptionId"
 				# Find resource groups to remove based on passed in name filter and KEEP, DELETE, or DELEETALL action
 				if ($ActionType.ToUpper() -eq 'KEEP') {
 					$groupsToRemove = Get-AzureRmResourceGroup | `
@@ -192,7 +192,7 @@ workflow Remove-ResourceGroups
 						foreach ($group in $groupsToRemove){						
 						Write-Output $($group.ResourceGroupName)
 						}
-						Write-Output "Preview Mode (VERBOSE): The following resources would be removed:"
+						Write-Output "Preview Mode: The following resources would be removed:"
 						$resources = (Get-AzureRmResource | foreach {$_} | Where-Object {$groupsToRemove.ResourceGroupName.Contains($_.ResourceGroupName)})
 						foreach ($resource in $resources) {
 							Write-Output $resource
