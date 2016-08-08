@@ -5,7 +5,7 @@
 
 .GUID 
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR AzureAutomationTeam
 
 .COMPANYNAME Microsoft
 
@@ -45,12 +45,12 @@
   Mandatory.
   The type of authentication to use for connection to Azure subscriptions.
   Valid values are AADCREDENTIAL and SERVICEPRINCIPAL.
-    - AADCREDENTIAL = Automation credential asset using an Azure AD user credential. Uses credential asset name "DefaultAzureCredential" if none specified.
+    - AADCREDENTIAL = Automation credential asset using an Azure AD user credential.
     - SERVICEPRINCIPAL = Automation connection asset using an Azure AD service principal. More info at https://azure.microsoft.com/documentation/articles/automation-sec-configure-azure-runas-account/
 
 .PARAMETER AuthenticationAssetName 
   Mandatory. 
-  The name of an authentication asset with authorization for this subscription. 
+  The name of an authentication asset with authorization for this subscription. Uses credential asset name "AzureRunAsConnection" if none specified which is linked to the default name created when you follow the article for ServicePrincipal authentication above.
  
 .PARAMETER ActionType 
   Mandatory. 
@@ -95,7 +95,7 @@ workflow Remove-ResourceGroups
 		[string]$AuthenticationType,
 		
 		[Parameter(Mandatory=$true)]  
-		[string] $AuthenticationAssetName = "DefaultAzureCredential", 
+		[string] $AuthenticationAssetName = "AzureRunAsConnection", 
 		
 		[parameter(Mandatory = $true)]
 		[string]$ActionType,
