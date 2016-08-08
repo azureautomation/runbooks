@@ -28,6 +28,11 @@
 .RELEASENOTES
 
 #>
+
+#Requires -Module Azure
+#Requires -Module AzureRM.Profile
+#Requires -Module AzureRM.Resources
+
 <# 
 .SYNOPSIS 
   Connects to Azure and removes all resource groups which match the name filter
@@ -201,7 +206,7 @@ workflow Remove-ResourceGroups
 					# Remove the resource groups in parallel
 					else {
 						Write-Output "Preparing to remove resource groups in parallel for subscription: $($subscriptionId)"
-						Write-Output "(VERBOSE): The following resources will be removed:"
+						Write-Output "The following resources will be removed:"
 						$resources = (Get-AzureRmResource | foreach {$_} | Where-Object {$groupsToRemove.ResourceGroupName.Contains($_.ResourceGroupName)})
 						foreach ($resource in $resources) {
 							Write-Output $resource
