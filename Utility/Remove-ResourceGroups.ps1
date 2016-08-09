@@ -36,10 +36,11 @@
 <# 
 .SYNOPSIS 
   Connects to Azure and removes all resource groups which match the name filter
- 
+
 .DESCRIPTION 
   This runbook connects to Azure and removes all resource groups which match the name filter. 
-  You can run across multiple subscriptions, delete all resource groups, or run in preview mode. 
+  You can run across multiple subscriptions, delete all resource groups, or run in preview mode.
+  Warning: This will delete all resources, including child resources in a group when preview mode is set to $false.
  
   REQUIRED AUTOMATION ASSETS
     Authorization to targeted Azure subscriptions using one of the following options:
