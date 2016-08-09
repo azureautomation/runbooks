@@ -1,11 +1,11 @@
 ﻿
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.01
 
 .GUID ee49dac3-cdfe-4427-82bb-0c0042a81486
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR AzureAutomationTeam
 
 .COMPANYNAME Microsoft
 
@@ -15,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Set-AzureScheduleWithRunbook.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ASM/Set-AzureScheduleWithRunbook.ps1
 
 .ICONURI 
 

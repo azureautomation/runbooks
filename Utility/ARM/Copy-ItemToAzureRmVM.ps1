@@ -47,8 +47,12 @@
 	files a runbook transfers or creates in the process before the runbook completes. 
 
 #> 
-Param()
 
+#Requires -Module AzureRM.Profile
+#Requires -Module AzureRm.Compute
+#Requires -Module AzureRm.Network
+#Requires -Module Azure.Storage
+#Requires -Module AzureRm.Resources
 
 <#
 .SYNOPSIS 
@@ -101,77 +105,77 @@ Param()
     AUTHOR: System Center Automation Team
     LASTEDIT: Aug 14, 2014  
 #>
-workflow Copy-ItemToAzureVM {
-    param
-    (
-        [parameter(Mandatory=$true)]
-        [String]
-        $AzureSubscriptionName,
+param
+(
+    [parameter(Mandatory=$true)]
+    [String]
+    $AzureSubscriptionName,
 
-		[parameter(Mandatory=$true)]
-        [PSCredential]
-        $AzureOrgIdCredential,
+	[parameter(Mandatory=$true)]
+    [PSCredential]
+    $AzureOrgIdCredential,
         
-        [parameter(Mandatory=$true)]
-        [String]
-        $ServiceName,
+    [parameter(Mandatory=$true)]
+    [String]
+    $ServiceName,
         
-        [parameter(Mandatory=$true)]
-        [String]
-        $VMName,  
+    [parameter(Mandatory=$true)]
+    [String]
+    $VMName,  
         
-        [parameter(Mandatory=$true)]
-        [String]
-        $VMCredentialName,
+    [parameter(Mandatory=$true)]
+    [String]
+    $VMCredentialName,
         
-        [parameter(Mandatory=$true)]
-        [String]
-        $LocalPath,
+    [parameter(Mandatory=$true)]
+    [String]
+    $LocalPath,
         
-        [parameter(Mandatory=$true)]
-        [String]
-        $RemotePath  
-    )
+    [parameter(Mandatory=$true)]
+    [String]
+    $RemotePath  
+)
 
-    # Get credentials to Azure VM
-    $Credential = Get-AutomationPSCredential -Name $VMCredentialName    
-	if ($Credential -eq $null)
-    {
-        throw "Could not retrieve '$VMCredentialName' credential asset. Check that you created this asset in the Automation service."
-    }     
+# Get credentials to Azure VM
+$Credential = Get-AutomationPSCredential -Name $VMCredentialName    
+if ($Credential -eq $null)
+{
+    throw "Could not retrieve '$VMCredentialName' credential asset. Check that you created this asset in the Automation service."
+}     
     
-	# Set up the Azure VM connection by calling the Connect-AzureVM runbook. You should call this runbook after
-	# every CheckPoint-WorkFlow in your runbook to ensure that the connection to the Azure VM is restablished if this runbook
-	# gets interrupted and starts from the last checkpoint.
-    $Uri = Connect-AzureVM -AzureSubscriptionName $AzureSubscriptionName -AzureOrgIdCredential $AzureOrgIdCredential –ServiceName $ServiceName –VMName $VMName
-
-    # Store the file contents on the Azure VM
-    InlineScript {
-        $ConfigurationName = "HighDataLimits"
-
-        # Enable larger data to be sent
-        Invoke-Command -ScriptBlock {
-            $ConfigurationName = $args[0]
-            $Session = Get-PSSessionConfiguration -Name $ConfigurationName
-            
-            if(!$Session) {
-                Write-Verbose "Large data sending is not allowed. Creating PSSessionConfiguration $ConfigurationName"
-
-                Register-PSSessionConfiguration -Name $ConfigurationName -MaximumReceivedDataSizePerCommandMB 500 -MaximumReceivedObjectSizeMB 500 -Force | Out-Null
-            }
-        } -ArgumentList $ConfigurationName -ConnectionUri $Using:Uri -Credential $Using:Credential -ErrorAction SilentlyContinue     
-        
-        # Get the file contents locally
-        $Content = Get-Content –Path $Using:LocalPath –Encoding Byte
-
-        Write-Verbose ("Retrieved local content from $Using:LocalPath")
-        
-        Invoke-Command -ScriptBlock {
-            param($Content, $RemotePath)
-			
-			$Content | Set-Content –Path $RemotePath -Encoding Byte
-        } -ArgumentList $Content, $Using:RemotePath -ConnectionUri $Using:Uri -Credential $Using:Credential -ConfigurationName $ConfigurationName
-
-        Write-Verbose ("Wrote content from $Using:LocalPath to $Using:VMName at $Using:RemotePath")
-    }
+# Set up the Azure VM connection by calling the Connect-AzureVM runbook. You should call this runbook after
+# every CheckPoint-WorkFlow in your runbook to ensure that the connection to the Azure VM is restablished if this runbook
+# gets interrupted and starts from the last checkpoint.
+$IpAddress = .\Connect-AzureRmVM.ps1 -ServicePrincipalConnectionName $ServicePrincipalConnectionName -VMName $VMName  -ResourceGroupName $ResourceGroupName
+if ($IpAddress -eq $null) 
+{
+    throw "IP address could not be found." 
 }
+
+# Store the file contents on the Azure VM
+$ConfigurationName = "HighDataLimits"
+
+# Enable larger data to be sent
+Invoke-Command -ScriptBlock {
+    $ConfigurationName = $args[0]
+    $Session = Get-PSSessionConfiguration -Name $ConfigurationName
+            
+    if(!$Session) {
+        Write-Verbose "Large data sending is not allowed. Creating PSSessionConfiguration $ConfigurationName"
+
+        Register-PSSessionConfiguration -Name $ConfigurationName -MaximumReceivedDataSizePerCommandMB 500 -MaximumReceivedObjectSizeMB 500 -Force | Out-Null
+    }
+} -ArgumentList $ConfigurationName -ConnectionUri $IP -Credential $Credential -ErrorAction SilentlyContinue     
+        
+# Get the file contents locally
+$Content = Get-Content –Path $LocalPath –Encoding Byte
+
+Write-Verbose ("Retrieved local content from $LocalPath")
+        
+Invoke-Command -ScriptBlock {
+    param($Content, $RemotePath)
+			
+	$Content | Set-Content –Path $RemotePath -Encoding Byte
+} -ArgumentList $Content, $RemotePath -ConnectionUri $IP -Credential $Credential -ConfigurationName $ConfigurationName
+
+Write-Verbose ("Wrote content from $LocalPath to $VMName at $RemotePath")

@@ -1,12 +1,13 @@
-﻿<#PSScriptInfo
+﻿
+<#PSScriptInfo
 
 .VERSION 1.0
 
-.GUID f28cf407-b1d9-4a1b-a988-e8ff34e5cf0d
+.GUID 12473dcf-0dc2-4413-aaa9-d0c9eae642fa
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR elcooper_msft
 
-.COMPANYNAME Microsoft
+.COMPANYNAME Microsoft Corporation
 
 .COPYRIGHT 
 
@@ -14,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Copy-ItemFromAzureVM.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Copy-ItemToAzureVM.ps1
 
 .ICONURI 
 
@@ -31,33 +32,18 @@
 
 #Requires -Module Azure
 
-<# 
 
-.DESCRIPTION 
-    This runbook copies a remote file from a Windows Azure virtual machine.
-    Connect-AzureVM must be imported and published in order for this runbook to work. The Connect-AzureVM
-	runbook sets up the connection to the virtual machine where the remote file is copied from.  
-
-	When using this runbook, be aware that the memory and disk space size of the processes running your
-	runbooks is limited. Because of this, we recommened only using runbooks to transfer small files. 
-	All Automation Integration Module assets in your account are loaded into your processes,
-	so be aware that the more Integration Modules you have in your system, the smaller the free space in
-	your processes will be. To ensure maximum disk space in your processes, make sure to clean up any local
-	files a runbook transfers or creates in the process before the runbook completes. 
-
-#> 
-Param()
 <#
 .SYNOPSIS 
-    Copies a file from an Azure VM. 
+    Copies a file to an Azure VM.
 
 .DESCRIPTION
-    This runbook copies a remote file from a Windows Azure virtual machine.
+    This runbook copies a local file to an Azure virtual machine.
     Connect-AzureVM must be imported and published in order for this runbook to work. The Connect-AzureVM
-	runbook sets up the connection to the virtual machine where the remote file is copied from.  
+	runbook sets up the connection to the virtual machine where the local file will be copied to.  
 
 	When using this runbook, be aware that the memory and disk space size of the processes running your
-	runbooks is limited. Because of this, we recommened only using runbooks to transfer small files. 
+	runbooks is limited. Because of this, we recommened only using runbooks to transfer small files.
 	All Automation Integration Module assets in your account are loaded into your processes,
 	so be aware that the more Integration Modules you have in your system, the smaller the free space in
 	your processes will be. To ensure maximum disk space in your processes, make sure to clean up any local
@@ -83,22 +69,21 @@ Param()
 
 .PARAMETER VMCredentialName
     Name of a PowerShell credential asset that is stored in the Automation service.
-    This credential should contain a username and password with access to the virtual machine.
+    This credential should have access to the virtual machine.
  
 .PARAMETER LocalPath
-    The local path where the item should be copied to.
+    The local path to the item to copy to the Azure virtual machine.
 
 .PARAMETER RemotePath
-    The remote path to the item to copy to the local machine.
+    The remote path on the Azure virtual machine where the item should be copied to.
 
 .EXAMPLE
-    Copy-ItemFromAzureVM -AzureSubscriptionName "Visual Studio Ultimate with MSDN" -ServiceName "myService" -VMName "myVM" -VMCredentialName "myVMCred" -LocalPath ".\myFileCopy.txt" -RemotePath "C:\Users\username\myFile.txt" -AzureOrgIdCredential $cred
+    Copy-ItemToAzureVM -AzureSubscriptionName "Visual Studio Ultimate with MSDN" -ServiceName "myService" -VMName "myVM" -VMCredentialName "myVMCred" -LocalPath ".\myFile.txt" -RemotePath "C:\Users\username\myFileCopy.txt" -AzureOrgIdCredential $cred
 
 .NOTES
     AUTHOR: System Center Automation Team
-    LASTEDIT: Aug 14, 2014 
+    LASTEDIT: July 25, 2016  
 #>
-workflow Copy-ItemFromAzureVM {
     param
     (
         [parameter(Mandatory=$true)]
@@ -137,18 +122,35 @@ workflow Copy-ItemFromAzureVM {
         throw "Could not retrieve '$VMCredentialName' credential asset. Check that you created this asset in the Automation service."
     }     
     
-	# Set up the Azure VM connection by calling the Connect-AzureVM runbook. You should call this runbook after
-	# every CheckPoint-WorkFlow in your runbook to ensure that the connection to the Azure VM is restablished if this runbook
-	# gets interrupted and starts from the last checkpoint.
+	# Set up the Azure VM connection by calling the Connect-AzureVM runbook. 
     $Uri = Connect-AzureVM -AzureSubscriptionName $AzureSubscriptionName -AzureOrgIdCredential $AzureOrgIdCredential –ServiceName $ServiceName –VMName $VMName
 
-    # Get the file contents from the Azure VM
-    $Content = Inlinescript {
-        Invoke-Command -ScriptBlock {
-            Get-Content –Path $args[0] –Encoding Byte
-        } -ArgumentList $using:RemotePath -ConnectionUri $using:Uri -Credential $using:Credential
-    }
+    # Store the file contents on the Azure VM
+    InlineScript {
+        $ConfigurationName = "HighDataLimits"
 
-    # Store the file contents locally
-    $Content | Set-Content –Path $LocalPath -Encoding Byte
-}
+        # Enable larger data to be sent
+        Invoke-Command -ScriptBlock {
+            $ConfigurationName = $args[0]
+            $Session = Get-PSSessionConfiguration -Name $ConfigurationName
+            
+            if(!$Session) {
+                Write-Verbose "Large data sending is not allowed. Creating PSSessionConfiguration $ConfigurationName"
+
+                Register-PSSessionConfiguration -Name $ConfigurationName -MaximumReceivedDataSizePerCommandMB 500 -MaximumReceivedObjectSizeMB 500 -Force | Out-Null
+            }
+        } -ArgumentList $ConfigurationName -ConnectionUri $Using:Uri -Credential $Using:Credential -ErrorAction SilentlyContinue     
+        
+        # Get the file contents locally
+        $Content = Get-Content –Path $Using:LocalPath –Encoding Byte
+
+        Write-Verbose ("Retrieved local content from $Using:LocalPath")
+        
+        Invoke-Command -ScriptBlock {
+            param($Content, $RemotePath)
+			
+			$Content | Set-Content –Path $RemotePath -Encoding Byte
+        } -ArgumentList $Content, $Using:RemotePath -ConnectionUri $Using:Uri -Credential $Using:Credential -ConfigurationName $ConfigurationName
+
+        Write-Verbose ("Wrote content from $Using:LocalPath to $Using:VMName at $Using:RemotePath")
+    }

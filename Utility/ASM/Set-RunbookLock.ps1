@@ -1,11 +1,11 @@
 ﻿
 <#PSScriptInfo
 
-.VERSION 1.1
+.VERSION 1.2
 
 .GUID 9e5dbf19-475a-425c-80d0-271240f8d235
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR AzureAutomationTeam
 
 .COMPANYNAME Microsoft
 
@@ -15,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Set-RunbookLock.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ASM/Set-RunbookLock.ps1
 
 .ICONURI 
 

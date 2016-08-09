@@ -5,7 +5,7 @@
 
 .GUID 1a505183-5f4e-4de2-964e-c6514c351841
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR AzureAutomationTeam
 
 .COMPANYNAME Microsoft
 

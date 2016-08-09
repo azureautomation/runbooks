@@ -1,11 +1,11 @@
 ﻿
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.01
 
 .GUID a119dd78-7857-4c5d-9f53-3beb7a61a5f5
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR AzureAutomationTeam
 
 .COMPANYNAME Microsoft
 
@@ -15,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Start-AutomationChildRunbook.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ASM/Start-AutomationChildRunbook.ps1
 
 .ICONURI 
 
