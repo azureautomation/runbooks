@@ -1,52 +1,10 @@
-﻿
-<#PSScriptInfo
-
-.VERSION 1.0
-
-.GUID 013fb541-2b1b-47d1-b446-c3d02b284eef
-
-.AUTHOR AzureAutomationTeam
-
-.COMPANYNAME Microsoft
-
-.COPYRIGHT 
-
-.TAGS 
-
-.LICENSEURI 
-
-.PROJECTURI 
-
-.ICONURI 
-
-.EXTERNALMODULEDEPENDENCIES 
-
-.REQUIREDSCRIPTS
-    Connect-AzureVM 
-
-.EXTERNALSCRIPTDEPENDENCIES 
-
-.RELEASENOTES
-
-
-#>
-
-#Requires -Module AzureRM.Profile
-#Requires -Module AzureRm.Compute
-#Requires -Module AzureRm.Network
-#Requires -Module Azure.Storage
-#Requires -Module AzureRm.Resources
-
-
-<#
+﻿<#
 .SYNOPSIS 
-    Copies a file from an Azure ARM VM. 
-    
-    Use https://gallery.technet.microsoft.com/scriptcenter/Copy-and-Item-from-an-c283405d for v1 ASM VMs.  
+    Copies a file from an Azure VM. 
 
 .DESCRIPTION
-    This runbook copies a remote file from a Windows Azure virtual machine and targets an ARM (Azure v2) VM. 
-    Connect-AzureVM script must be imported and published in order for this runbook to work. The Connect-AzureVM
+    This runbook copies a remote file from a Windows Azure virtual machine.
+    Connect-AzureVM must be imported and published in order for this runbook to work. The Connect-AzureVM
 	runbook sets up the connection to the virtual machine where the remote file is copied from.  
 
 	When using this runbook, be aware that the memory and disk space size of the processes running your
@@ -68,8 +26,8 @@
 	name of an Azure Automation PSCredential asset instead. Azure Automation will automatically grab the asset with
 	that name and pass it into the runbook.
     
-.PARAMETER ResourceGroupNam
-    Name of the Resource Group where the VM is located.
+.PARAMETER ServiceName
+    Name of the cloud service where the VM is located.
 
 .PARAMETER VMName    
     Name of the virtual machine that you want to connect to.  
@@ -85,59 +43,63 @@
     The remote path to the item to copy to the local machine.
 
 .EXAMPLE
-    Copy-ItemFromAzureVM -AzureSubscriptionName "Visual Studio Ultimate with MSDN" -ResourceGroup "myResourceGroup" -VMName "myVM" -VMCredentialName "myVMCred" -LocalPath ".\myFileCopy.txt" -RemotePath "C:\Users\username\myFile.txt" -AzureOrgIdCredential $cred
+    Copy-ItemFromAzureVM -AzureSubscriptionName "Visual Studio Ultimate with MSDN" -ServiceName "myService" -VMName "myVM" -VMCredentialName "myVMCred" -LocalPath ".\myFileCopy.txt" -RemotePath "C:\Users\username\myFile.txt" -AzureOrgIdCredential $cred
 
 .NOTES
     AUTHOR: System Center Automation Team
-    LASTEDIT: June 2, 2016 
+    LASTEDIT: Aug 14, 2014 
 #>
-param
-(
-    [parameter(Mandatory=$true)]
-    [String]
-    $AzureSubscriptionName,
+workflow Copy-ItemFromAzureVM {
+    param
+    (
+        [parameter(Mandatory=$true)]
+        [String]
+        $AzureSubscriptionName,
 
-	[parameter(Mandatory=$true)]
-    [PSCredential]
-    $AzureOrgIdCredential,
+		[parameter(Mandatory=$true)]
+        [PSCredential]
+        $AzureOrgIdCredential,
         
-    [parameter(Mandatory=$true)]
-    [String]
-    $ServiceName,
+        [parameter(Mandatory=$true)]
+        [String]
+        $ServiceName,
         
-    [parameter(Mandatory=$true)]
-    [String]
-    $VMName,  
+        [parameter(Mandatory=$true)]
+        [String]
+        $VMName,  
         
-    [parameter(Mandatory=$true)]
-    [String]
-    $VMCredentialName,
+        [parameter(Mandatory=$true)]
+        [String]
+        $VMCredentialName,
         
-    [parameter(Mandatory=$true)]
-    [String]
-    $LocalPath,
+        [parameter(Mandatory=$true)]
+        [String]
+        $LocalPath,
         
-    [parameter(Mandatory=$true)]
-    [String]
-    $RemotePath  
-)
+        [parameter(Mandatory=$true)]
+        [String]
+        $RemotePath  
+    )
 
-# Get credentials to Azure VM
-$Credential = Get-AutomationPSCredential -Name $VMCredentialName    
-if ($Credential -eq $null)
-{
-    throw "Could not retrieve '$VMCredentialName' credential asset. Check that you created this asset in the Automation service."
-}     
+    # Get credentials to Azure VM
+    $Credential = Get-AutomationPSCredential -Name $VMCredentialName    
+	if ($Credential -eq $null)
+    {
+        throw "Could not retrieve '$VMCredentialName' credential asset. Check that you created this asset in the Automation service."
+    }     
     
-# Set up the Azure VM connection by calling the Connect-AzureVM runbook. 
-$IP = ./Connect-AzureVM -AzureSubscriptionName $AzureSubscriptionName -AzureOrgIdCredential $AzureOrgIdCredential –ServiceName $ServiceName –VMName $VMName
+	# Set up the Azure VM connection by calling the Connect-AzureVM runbook. You should call this runbook after
+	# every CheckPoint-WorkFlow in your runbook to ensure that the connection to the Azure VM is restablished if this runbook
+	# gets interrupted and starts from the last checkpoint.
+    $Uri = Connect-AzureVM -AzureSubscriptionName $AzureSubscriptionName -AzureOrgIdCredential $AzureOrgIdCredential –ServiceName $ServiceName –VMName $VMName
 
-# Get the file contents from the Azure VM
-$Content = Invoke-Command -ScriptBlock {
-        Get-Content –Path $args[0] –Encoding Byte
-    } -ArgumentList $RemotePath -ConnectionUri $IP -Credential $Credential
+    # Get the file contents from the Azure VM
+    $Content = Inlinescript {
+        Invoke-Command -ScriptBlock {
+            Get-Content –Path $args[0] –Encoding Byte
+        } -ArgumentList $using:RemotePath -ConnectionUri $using:Uri -Credential $using:Credential
+    }
 
-
-# Store the file contents locally
-$Content | Set-Content –Path $LocalPath -Encoding Byte
-
+    # Store the file contents locally
+    $Content | Set-Content –Path $LocalPath -Encoding Byte
+}

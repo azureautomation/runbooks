@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.01
 
 .GUID 803969d1-8f13-482b-8345-6b5b503dff25
 
@@ -14,13 +14,13 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Copy-ItemFromAzureRmVM.ps1 
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Copy-ItemFromAzureRmVM.ps1 
 
 .ICONURI 
 
 .EXTERNALMODULEDEPENDENCIES 
 
-.REQUIREDSCRIPTS 
+.REQUIREDSCRIPTS Connect-AzureVM
 
 .EXTERNALSCRIPTDEPENDENCIES 
 
@@ -41,7 +41,8 @@
     
 
 .DESCRIPTION
-    This runbook copies a remote file from a Windows Azure virtual machine and targets an ARM (Azure v2) VM. 
+    This runbook copies a remote file from a Windows Azure virtual machine and targets an ARM (Azure v2) VM to the Azure 
+	Automation host. 
     Connect-AzureVM script must be imported and published in order for this runbook to work. The Connect-AzureVM
 	runbook sets up the connection to the virtual machine where the remote file is copied from.  
 
@@ -69,10 +70,10 @@
     This credential should contain a username and password with access to the virtual machine.
  
 .PARAMETER LocalPath
-    The local path where the item should be copied to.
+    The local path where the item should be copied to.  This path is on the Auotmation host. 
 
 .PARAMETER RemotePath
-    The remote path to the item to copy to the local machine.
+    The remote path to the item to copy.  This path is on the Virtual Machine.  
 
 .EXAMPLE
     Copy-ItemFromAzureRmVM  -ResourceGroup "myResourceGroup" -VMName "myVM" -VMCredentialName "myVMCred" -LocalPath ".\myFileCopy.txt" -RemotePath "C:\Users\username\myFile.txt"
@@ -80,7 +81,7 @@
 
 .NOTES
     AUTHOR: AzureAutomationTeam
-    LASTEDIT: July 25, 2016 
+    LASTEDIT: August 10, 2016 
 #>
 
 param(
@@ -106,32 +107,30 @@ param(
     $RemotePath  	
 )
 
-
 $VMCredential =  Get-AutomationPSCredential -Name $VMCredentialName 
-if ($Credential -eq $null)
+
+if ($VMCredential -eq $null)
 {
     throw "Could not retrieve '$VMCredentialName' credential asset. Check that you created this asset in the Automation service."
 }  
    
-$IpAddress = .\Connect-AzureRmVM.ps1 -ServicePrincipalConnectionName $ServicePrincipalConnectionName -VMName $VMName  -ResourceGroupName $ResourceGroupName
+$IpAddress = .\Connect-AzureVM.ps1 -ServicePrincipalConnectionName $ServicePrincipalConnectionName -VMName $VMName  -ResourceGroupName $ResourceGroupName
 if ($IpAddress -eq $null) 
 {
     throw "IP address could not be found." 
 }
 
-Write-Verbose "The IP Address is $IpAddress. Remoting to VM $VMName..."
+Write-Verbose -Message "The IP Address is $IpAddress. Remoting to VM $VMName..."
     
 #Retrieve the content from the VM    
-$sessionOptions = New-PSSessionOption -SkipCACheck -SkipCNCheck                
-$Results = Invoke-Command -ComputerName $IpAddress -Credential $VMCredential -UseSSL -SessionOption $sessionOptions -ArgumentList $RemotePath -ScriptBlock { 
+$SessionOptions = New-PSSessionOption -SkipCACheck -SkipCNCheck                
+$Content = Invoke-Command -ComputerName $IpAddress -Credential $VMCredential -UseSSL -SessionOption $SessionOptions -ArgumentList $RemotePath -ScriptBlock { 
     Get-Content –Path $args[0] –Encoding Byte
 }
 
-# Get the file contents from the Azure VM
-<#$Content = Invoke-Command -ScriptBlock {
-        Get-Content –Path $args[0] –Encoding Byte
-    } -ArgumentList $RemotePath -ConnectionUri $IP -Credential $Credential
-    #>
-
 # Store the file contents locally. 
 $Content | Set-Content –Path $LocalPath -Encoding Byte
+
+# TODO: Insert your own code here to copy the file out of the Automation runbook host to the end destination
+
+

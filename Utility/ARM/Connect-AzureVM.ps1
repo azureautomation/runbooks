@@ -1,8 +1,8 @@
 <#PSScriptInfo
 
-.VERSION 2.0
+.VERSION 2.01
 
-.GUID 803969d1-8f13-482b-8345-6b5b503dff25
+.GUID b66368a8-dc27-481a-b4f3-dff65a6d42ee
 
 .AUTHOR Rohit Minni, AzureAutomationTeam
 
@@ -14,7 +14,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Connect-AzureVM.ps1 
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Connect-AzureVM.ps1 
 
 .ICONURI 
 
@@ -69,14 +69,14 @@
         [parameter(Mandatory=$true)]
         [String]$VMName      
     )
-
+    
     $SPConnection = Get-AutomationConnection -Name $ServicePrincipalConnectionName   
 
-    Add-AzureRmAccount-ServicePrincipal `
+    Add-AzureRmAccount -ServicePrincipal `
         -TenantId $SPConnection.TenantId `
         -ApplicationId $SPConnection.ApplicationId `
         -CertificateThumbprint $SPConnection.CertificateThumbprint | Write-Verbose
-
+	
 
   function Configure-AzureWinRMHTTPS {
   <#
@@ -105,20 +105,21 @@
  
           ) 
  
-    # define a temporary file in the users TEMP directory
+    # Define a temporary file in the users TEMP directory
     $File = $env:TEMP + "\ConfigureWinRM_HTTPS.ps1"
 
+    # Create the script to configure WinRM
     $String = "param(`$DNSName)" + "`r`n" + "Enable-PSRemoting -Force" + "`r`n" + "New-NetFirewallRule -Name 'WinRM HTTPS' -DisplayName 'WinRM HTTPS' -Enabled True -Profile 'Any' -Action 'Allow' -Direction 'Inbound' -LocalPort 5986 -Protocol 'TCP'" + "`r`n" + "`$thumbprint = (New-SelfSignedCertificate -DnsName `$DNSName -CertStoreLocation Cert:\LocalMachine\My).Thumbprint" + "`r`n" + "`$cmd = `"winrm create winrm/config/Listener?Address=*+Transport=HTTPS @{Hostname=`"`"`$DNSName`"`"; CertificateThumbprint=`"`"`$thumbprint`"`"}`"" + "`r`n" + "cmd.exe /C `$cmd"
 	
     $String | Out-File -FilePath $File -force
- 
   
     # Get the VM we need to configure
     $VM = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Name $VMName
  
     # Get storage account name
     $StorageAccountName = $VM.StorageProfile.OsDisk.Vhd.Uri.Split("//")[2].Split('.')[0]
-    # get storage account key
+    
+    # Get storage account key
     $StorageKey = Get-AzureRmStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName
     try
     {
@@ -135,13 +136,13 @@
             $Key = $StorageKey.Key1
         }
     }
-    # create storage context
+    # Create storage context
     $StorageContext = New-AzureStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $Key
   
-    # create a container called scripts
+    # Create a container called scripts
     $CreateContainer = New-AzureStorageContainer -Name "scripts" -Context $StorageContext -ErrorAction SilentlyContinue
   
-    #upload the file
+    # Upload the file
     $BlobContent = Set-AzureStorageBlobContent -Container "scripts" -File $File -Blob "ConfigureWinRM_HTTPS.ps1" -Context $StorageContext -force
  
     # Create custom script extension from uploaded file

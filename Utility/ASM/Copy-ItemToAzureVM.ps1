@@ -1,39 +1,4 @@
-﻿
-<#PSScriptInfo
-
-.VERSION 1.0
-
-.GUID 12473dcf-0dc2-4413-aaa9-d0c9eae642fa
-
-.AUTHOR elcooper_msft
-
-.COMPANYNAME Microsoft Corporation
-
-.COPYRIGHT 
-
-.TAGS AzureAutomation OMS VirtualMachines Utility
-
-.LICENSEURI 
-
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Copy-ItemToAzureVM.ps1
-
-.ICONURI 
-
-.EXTERNALMODULEDEPENDENCIES 
-
-.REQUIREDSCRIPTS Connect-AzureVM
-
-.EXTERNALSCRIPTDEPENDENCIES 
-
-.RELEASENOTES
-
-
-#>
-
-#Requires -Module Azure
-
-
-<#
+﻿<#
 .SYNOPSIS 
     Copies a file to an Azure VM.
 
@@ -82,8 +47,9 @@
 
 .NOTES
     AUTHOR: System Center Automation Team
-    LASTEDIT: July 25, 2016  
+    LASTEDIT: Aug 14, 2014  
 #>
+workflow Copy-ItemToAzureVM {
     param
     (
         [parameter(Mandatory=$true)]
@@ -122,7 +88,9 @@
         throw "Could not retrieve '$VMCredentialName' credential asset. Check that you created this asset in the Automation service."
     }     
     
-	# Set up the Azure VM connection by calling the Connect-AzureVM runbook. 
+	# Set up the Azure VM connection by calling the Connect-AzureVM runbook. You should call this runbook after
+	# every CheckPoint-WorkFlow in your runbook to ensure that the connection to the Azure VM is restablished if this runbook
+	# gets interrupted and starts from the last checkpoint.
     $Uri = Connect-AzureVM -AzureSubscriptionName $AzureSubscriptionName -AzureOrgIdCredential $AzureOrgIdCredential –ServiceName $ServiceName –VMName $VMName
 
     # Store the file contents on the Azure VM
@@ -154,3 +122,4 @@
 
         Write-Verbose ("Wrote content from $Using:LocalPath to $Using:VMName at $Using:RemotePath")
     }
+}
