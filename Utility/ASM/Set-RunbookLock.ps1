@@ -1,48 +1,4 @@
 ﻿
-<#PSScriptInfo
-
-.VERSION 1.2
-
-.GUID 9e5dbf19-475a-425c-80d0-271240f8d235
-
-.AUTHOR AzureAutomationTeam
-
-.COMPANYNAME Microsoft
-
-.COPYRIGHT 
-
-.TAGS AzureAutomation OMS Utility
-
-.LICENSEURI 
-
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ASM/Set-RunbookLock.ps1
-
-.ICONURI 
-
-.EXTERNALMODULEDEPENDENCIES 
-
-.REQUIREDSCRIPTS 
-
-.EXTERNALSCRIPTDEPENDENCIES 
-
-.RELEASENOTES
-
-
-#>
-
-#Requires -Module Azure
-
-<# 
-
-.DESCRIPTION 
-	This Azure Automation runbook ensures that only one instance of a PowerShell Workflow runbook is running at
-    any one time by suspending and resuming jobs.  It is meant to be called from another runbook as an inline runbook, 
-    not started asynchronously through the web service. 
-
-#> 
-Param()
-
-
 <#
 .SYNOPSIS
     Allows only one instance of a runbook job to run at any one time.

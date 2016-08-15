@@ -1,47 +1,4 @@
 ﻿
-<#PSScriptInfo
-
-.VERSION 1.0
-
-.GUID 1a505183-5f4e-4de2-964e-c6514c351841
-
-.AUTHOR AzureAutomationTeam
-
-.COMPANYNAME Microsoft
-
-.COPYRIGHT 
-
-.TAGS AzureAutomation OMS Utility
-
-.LICENSEURI 
-
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Manage-MonitorRunbook.ps1
-
-.ICONURI 
-
-.EXTERNALMODULEDEPENDENCIES 
-
-.REQUIREDSCRIPTS 
-
-.EXTERNALSCRIPTDEPENDENCIES 
-
-.RELEASENOTES
-
-
-#>
-
-#Requires -Module Azure
-
-<# 
-
-.DESCRIPTION 
-    This Azure Automation runbook is designed to run on scheduled intervals and resume any monitor runbooks
-    that have a specific tag that are suspended 
-
-#> 
-Param()
-
-
 <#
 .SYNOPSIS 
     Utility runbook to control monitor runbooks to run at specific intervals

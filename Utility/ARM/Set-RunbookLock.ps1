@@ -84,8 +84,9 @@ workflow Set-RunbookLock
     $ServicePrincipalConnection = Get-AutomationConnection -Name $ServicePrincipalConnectionName   
     if (!$ServicePrincipalConnection) 
     {
-        $ErrorString = @"
-        Service principal connection AzureRunAsConnection not found.  Make sure you have created it in Assets. 
+        $ErrorString = 
+@"
+        Service principal connection $ServicePrincipalConnectionName not found.  Make sure you have created it in Assets. 
         See http://aka.ms/runasaccount to learn more about creating Run As accounts. 
 "@
         throw $ErrorString

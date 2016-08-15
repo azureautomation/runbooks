@@ -29,6 +29,13 @@
 
 #>
 
+#Requires -Module AzureRm.Profile
+#Requires -Module AzureRm.Compute
+#Requires -Module AzureRm.Network
+#Requires -Module Azure.Storage
+#Requires -Module AzureRm.Storage
+#Requires -Module AzureRm.Resources
+
 <#
 .SYNOPSIS 
     Sets up the connection to an Azure ARM VM

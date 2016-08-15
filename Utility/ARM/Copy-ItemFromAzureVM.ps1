@@ -33,6 +33,7 @@
 #Requires -Module AzureRm.Compute
 #Requires -Module AzureRm.Network
 #Requires -Module Azure.Storage
+#Requires -Module AzureRm.Storage
 #Requires -Module AzureRm.Resources
 
 <#

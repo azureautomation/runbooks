@@ -33,21 +33,13 @@
 #Requires -Module AzureRM.Profile
 #Requires -Module AzureRM.Automation
 
-<# 
-
-.DESCRIPTION 
- This Azure Automation runbook ensures that only one instance of a PowerShell runbook is running at
- any one time. It is meant to be called inline from another runbook at the beginning of the runbook. 
-
-#>
-
 <#
 .SYNOPSIS
     Allows only a certain amount of runbook jobs to run at any one time.
 
 .DESCRIPTION
-    This runbook ensures that only one instance of a runbook is running at
-    any one time. It is meant to be called from another runbook at the beginning of the runbook. 
+     This Azure Automation runbook ensures that only one instance of a PowerShell runbook is running at
+     any one time. It is meant to be called inline from another runbook at the beginning of the runbook. 
 
 .PARAMETER ResourceGroup
     The name of the resource group for this automation accoun
