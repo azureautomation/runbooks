@@ -24,21 +24,139 @@
 
 .PARAMETER IDString
 
-    Optional. A string added to newly generated resources to create unique identifiers, If not specified,
+    Optional. A string added to newly generated resources to create unique identifiers. If not specified,
 
     a random number (Maximum of 99999) is used.
+
  
+.PARAMETER ResourceGroup
+
+    Optional. The name of the resource group to be referenced. If not specified, a new resource group
+
+    is created, referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER SubscriptionID
+
+    Optional. A string containing the SubscriptionID to be used. If not specified, the first subscriptionID
+
+    associated with the account is used.
+
+
+.PARAMETER WorkspaceName
+
+    Optional. The name of the OMS Workspace to be referenced. If not specified, a new OMS workspace 
+
+    is created, referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER Location
+
+    Optional. The region of the OMS workspace and VM to be referenced. If not specified, "westeurope" is used.
+
+
+.PARAMETER AutomationAccountName
+
+    Optional. The name of the Automation account to be referenced. If not specified, a new automation account 
+
+    is created, referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER ApplicationDisplayName
+
+    Optional. The name of the Application Display to be referenced. If not specified, a new application 
+
+    is created with the AutomationAccountName as the name.
+
+
+.PARAMETER CertPlainPassword
+
+    Optional. The password for the AzureRunAs certificate. If not specified,"p@ssw0rdHybrid" is used.
+
+
+.PARAMETER NoOfMonthsUntilExpired
+
+    Optional. The number of months until the Automation key credential expires. If not specified, 12 is used.
+
+
+.PARAMETER OnPremise
+
+    Optional. A boolean to flag the provided machine as an on-premise device. If not specified, the value is
+
+    set to false, and the machine is assumed to be an Azure VM.
+
+
+.PARAMETER MachineName
+
+    Optional. The computer name (Azure VM or on-premise) to be referenced. If not specified, a computer name
+
+    is created, referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER VMUser
+
+    Optional. The username for the provided user machine. If not specified,"hybridUser" is used.
+
+
+.PARAMETER VMPassword
+
+    Optional. The password for the provided user on the machine. If not specified,"p@ssw0rdHybrid" is used.
+
+
+.PARAMETER AvailabilityName
+
+    Optional. The name of the Availability set to be referenced. If not specified, a new availability set 
+
+    is created, referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER StorageName
+
+    Optional. The name of the Storage account to be referenced. If not specified, a new storage account 
+
+    is created, referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER OSDiskName
+
+    Optional. The name of the OS Disk to be referenced. If not specified, a new OS Disk is created, 
+
+    referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER VNetName
+
+    Optional. The name of the virtual network to be referenced. If not specified, a new virtual network
+
+    is created with the Resource Group name as the virtal network name.
+
+
+.PARAMETER PIpName
+
+    Optional. The Public IP address name to be referenced. If not specified, a new public IP address is 
+
+    created with the Resource Group name as the public IP address name.
+
+
+.PARAMETER InterfaceName
+
+    Optional. The name of the network interface to be referenced. If not specified, a new interface is
+
+    created with the Resource Group name as the network interface name.
+
 
 .EXAMPLE
 
     New-HybridWorker
+
+    New-HybridWorker -IDString 12345
 
 
 .NOTES
 
     AUTHOR: Jennifer Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: August 16, 2016  
+    LASTEDIT: August 18, 2016  
 
 #>
 
@@ -48,8 +166,8 @@
 Param (
 # Setup initial variables
 [Parameter(Mandatory=$false)]
-[String] $IDString = "43479",
-#[String] $IDString = (Get-Random -Maximum 99999),
+#[String] $IDString = "49583",
+[String] $IDString = (Get-Random -Maximum 99999),
 
 [Parameter(Mandatory=$false)]
 [String] $ResourceGroup = "hybrid-worker-" + $IDstring,
@@ -63,14 +181,11 @@ Param (
 [String] $WorkspaceName = "hybrid-worker-" + $IDstring,
 
 [Parameter(Mandatory=$false)]
-[String] $Location = "eastus",
+[String] $Location = "westeurope",
 
 # Automation
 [Parameter(Mandatory=$false)]
 [String] $AutomationAccountName = "hybrid-worker-AA-" + $IDstring,
-
-[Parameter(Mandatory=$false)]
-[String] $AutomationLocation = "eastus2",
 
 [Parameter(Mandatory=$false)]
 [String] $ApplicationDisplayName = $AutomationAccountName,
@@ -157,7 +272,7 @@ try {
     Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroup -Name $AutomationAccountName -ErrorAction Stop
 } catch {
 
-    New-AzureRmAutomationAccount -Name $AutomationAccountName -Location $AutomationLocation -ResourceGroupName $ResourceGroup -Plan "Free" -WarningAction SilentlyContinue
+    New-AzureRmAutomationAccount -Name $AutomationAccountName -Location $Location -ResourceGroupName $ResourceGroup -Plan "Free" -WarningAction SilentlyContinue
 }
 
 # Check if the account is configured as a runAs account
