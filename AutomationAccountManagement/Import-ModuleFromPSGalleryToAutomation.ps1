@@ -1,8 +1,8 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.1
 
-.GUID fa658952-8f94-45ac-9c94-f5fe23d0fcf9
+.GUID 15bb25ff-20df-44ab-a4b4-8333818ca084
 
 .AUTHOR Joe Levy
 
@@ -14,13 +14,13 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Update-ModulesInAutomationToLatestVersion.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/AutomationAccountManagement/Import-ModuleFromPSGalleryToAutomation.ps1
 
 .ICONURI 
 
 .EXTERNALMODULEDEPENDENCIES 
 
-.REQUIREDSCRIPTS
+.REQUIREDSCRIPTS 
 
 .EXTERNALSCRIPTDEPENDENCIES 
 
@@ -33,30 +33,32 @@
 
 <#
 .SYNOPSIS 
-    This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an 
-    Automation account.
+    Imports a module on PowerShell Gallery into the Azure/OMS Automation service.
 
 .DESCRIPTION
-    This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an 
-    Automation account. By connecting the runbook to an Automation schedule, you can ensure all modules in
-    your Automation account stay up to date.
+    Imports a module on PowerShell Gallery into the Azure/OMS Automation service.
+
+    Requires that authentication to Azure (Resource Manager) is already established before running.
 
 .PARAMETER ResourceGroupName
-    Required. The name of the Azure Resource Group containing the Automation account to update all modules for.
+    Required. The name of the Azure Resource Group containing the Automation account to import this module to.
 
 .PARAMETER AutomationAccountName
-    Required. The name of the Automation account to update all modules for.
+    Required. The name of the Automation account to import this module to.
+    
+.PARAMETER ModuleName
+    Required. The name of the module to import to Automation.
 
-.PARAMETER AzureConnectionName
-    Optional. The name of the Azure Run As Account connection asset to use to authenticate to Azure. If not specified,
-    the default name of "AzureRunAsConnection" is used.  
+.PARAMETER ModuleVersion
+    Optional. The version of the module to import to Automation. If not specified, the latest version of the
+    module will be imported.
     
 .EXAMPLE
-    Update-ModulesInAutomationToLatestVersion -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" 
+    Import-ModuleFromPSGalleryToAutomation -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -ModuleName "AzureRM.Storage" 
 
 .NOTES
     AUTHOR: Azure/OMS Automation Team
-    LASTEDIT: June 5, 2016  
+    LASTEDIT: May 21, 2016  
 #>
 
 param(
@@ -65,9 +67,12 @@ param(
 
     [Parameter(Mandatory=$true)]
     [String] $AutomationAccountName,
+    
+    [Parameter(Mandatory=$true)]
+    [String] $ModuleName,
 
     [Parameter(Mandatory=$false)]
-    [String] $AzureConnectionName = "AzureRunAsConnection"
+    [String] $ModuleVersion
 )
 
 $ModulesImported = @()
@@ -189,68 +194,8 @@ function _doImport {
     }
 }
 
-try {
-    $ServicePrincipalConnection = Get-AutomationConnection -Name $AzureConnectionName         
-
-    "Logging in to Azure..."
-    Add-AzureRmAccount `
-        -ServicePrincipal `
-        -TenantId $servicePrincipalConnection.TenantId `
-        -ApplicationId $servicePrincipalConnection.ApplicationId `
-        -CertificateThumbprint $servicePrincipalConnection.CertificateThumbprint 
-}
-catch {
-    if(!$ServicePrincipalConnection) {
-        throw "Connection $AzureConnectionName not found."
-    }
-    else {
-        throw $_.Exception
-    }
-}
-
-$Modules = Get-AzureRmAutomationModule `
+_doImport `
     -ResourceGroupName $ResourceGroupName `
-    -AutomationAccountName $AutomationAccountName
-
-foreach($Module in $Modules) {
-
-    $Module = Get-AzureRmAutomationModule `
-        -ResourceGroupName $ResourceGroupName `
-        -AutomationAccountName $AutomationAccountName `
-        -Name $Module.Name
-    
-    $ModuleName = $Module.Name
-    $ModuleVersionInAutomation = $Module.Version
-
-    Write-Output "Checking if module '$ModuleName' is up to date in your automation account"
-
-    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$ModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
-    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
-
-    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
-        $SearchResult = $SearchResult | Where-Object -FilterScript {
-            return $_.properties.title -eq $ModuleName
-        }
-    }
-
-    if(!$SearchResult) {
-        Write-Error "Could not find module '$ModuleName' on PowerShell Gallery."
-    }
-    else {
-        $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id 
-        $LatestModuleVersionOnPSGallery = $PackageDetails.entry.properties.version
-
-        if($ModuleVersionInAutomation -ne $LatestModuleVersionOnPSGallery) {
-            Write-Output "Module '$ModuleName' is not up to date. Latest version on PS Gallery is '$LatestModuleVersionOnPSGallery' but this automation account has version '$ModuleVersionInAutomation'"
-            Write-Output "Importing latest version of '$ModuleName' into your automation account"
-
-            _doImport `
-                -ResourceGroupName $ResourceGroupName `
-                -AutomationAccountName $AutomationAccountName `
-                -ModuleName $ModuleName
-        }
-        else {
-            Write-Output "Module '$ModuleName' is up to date."
-        }
-   }
-}
+    -AutomationAccountName $AutomationAccountName `
+    -ModuleName $ModuleName `
+    -ModuleVersion $ModuleVersion

@@ -1,46 +1,4 @@
 ﻿
-<#PSScriptInfo
-
-.VERSION 1.0
-
-.GUID a119dd78-7857-4c5d-9f53-3beb7a61a5f5
-
-.AUTHOR Azure-Automation-Team
-
-.COMPANYNAME Microsoft
-
-.COPYRIGHT 
-
-.TAGS AzureAutomation OMS Utility
-
-.LICENSEURI 
-
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Start-AutomationChildRunbook.ps1
-
-.ICONURI 
-
-.EXTERNALMODULEDEPENDENCIES 
-
-.REQUIREDSCRIPTS 
-
-.EXTERNALSCRIPTDEPENDENCIES 
-
-.RELEASENOTES
-
-
-#>
-
-#Requires -Module Azure
-
-<# 
-
-.DESCRIPTION 
-	This runbook starts an Azure Automation runbook job and either returns the job id or waits for the job
-    to complete and returns the job output. 
-#> 
-Param()
-
-
 <#
 .SYNOPSIS 
      Starts an Azure Automation runbook job and either returns the job id or waits for the job
