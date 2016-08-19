@@ -166,8 +166,8 @@
 Param (
 # Setup initial variables
 [Parameter(Mandatory=$false)]
-#[String] $IDString = "49583",
-[String] $IDString = (Get-Random -Maximum 99999),
+[String] $IDString = "69819",
+#[String] $IDString = (Get-Random -Maximum 99999),
 
 [Parameter(Mandatory=$false)]
 [String] $ResourceGroup = "hybrid-worker-" + $IDstring,
@@ -366,7 +366,7 @@ Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup
 if (!$OnPremise) {
 # Create a new VM if needed
     try {
-        Get-AzureRmVM -ResourceGroupName $ResourceGroup -Name $MachineName -ErrorAction Stop
+        $VM = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Name $MachineName -ErrorAction Stop
     } catch {
     
         # Create a new availability set if needed
@@ -632,32 +632,31 @@ if (!$OnPremise) {
     ##########################
     #>
 
-    # Enable the DSC extension if needed
+    # Register the VM as a DSC node if needed
     try {
-        Get-AzureRMVMDscExtension -ResourceGroupName $ResourceGroup -VMName $VMachineName -Name 'DSC'-ErrorAction Stop
+        $DscNode = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup
     } catch {
-        # Install the necessary modules
-        Install-Module -Name xPSDesiredStateConfiguration  
-        Install-Module -Name HybridRunbookWorker  
-
-    
-        # Enable the DSC extension on the VM
-        Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'DSC' -Publisher 'Microsoft.Powershell' -ExtensionType 'DSC' -TypeHandlerVersion '2.20' -Location $location
+        $DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
     }
 
-    # Register the VM as a DSC Node
-    #$DscNode = 
-    Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup
+    # Install necessary modules
+    Install-Module HybridRunbookWorker
+    Import-Module Azure
 
     # Publish DSC Configuration within storage account
     #Publish-AzureRmVMDscConfiguration -ConfigurationPath .\HybridWorkerConfiguration.ps1 -ResourceGroupName $ResourceGroup -StorageAccountName $StorageName
 
     # Configure the DSC node
-    #Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridRunbookWorkerConfig" -Id $DscNode.Id
+    #Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "OnboardHybridWorker" -Id $DscNode.Id
 
+    #Update the configuration of an Azure Virtual Machine
+    #$VM | Update-AzureRmVM -Verbose
+
+    # Check on status
+    #Get-AzureRmVMDscExtensionStatus -VM $VM -Verbose
 
 } else {
-    # Do some on-premise stuff
+    # Do same things but for on-premise machines
 }
 
 <#
