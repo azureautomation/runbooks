@@ -166,8 +166,8 @@
 Param (
 # Setup initial variables
 [Parameter(Mandatory=$false)]
-[String] $IDString = "69819",
-#[String] $IDString = (Get-Random -Maximum 99999),
+#[String] $IDString = "56396",
+[String] $IDString = (Get-Random -Maximum 99999),
 
 [Parameter(Mandatory=$false)]
 [String] $ResourceGroup = "hybrid-worker-" + $IDstring,
@@ -446,221 +446,54 @@ if (!$OnPremise) {
         Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
 
     }
-       
 
-    # Add the HybridRunbookWorker Module to the Automation Account
-    # The below code is based off of code written by Joe Levy at https://github.com/azureautomation/runbooks/blob/master/Utility/Update-ModulesInAutomationToLatestVersion.ps1
-    ######################################
-    <#
-    $ModulesImported = @()
-
-    function _doImport {
-        param(
-            [Parameter(Mandatory=$true)]
-            [String] $ResourceGroupName,
-
-            [Parameter(Mandatory=$true)]
-            [String] $AutomationAccountName,
-    
-            [Parameter(Mandatory=$true)]
-            [String] $ModuleName,
-
-            # if not specified latest version will be imported
-            [Parameter(Mandatory=$false)]
-            [String] $ModuleVersion
-        )
-
-        $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$ModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
-        $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
-
-        if($SearchResult.Length -and $SearchResult.Length -gt 1) {
-
-            $SearchResult = $SearchResult | Where-Object -FilterScript {
-                return $_.properties.title -eq $ModuleName
-            }
-        }
-
-        if(!$SearchResult) {
-
-            Write-Error "Could not find module '$ModuleName' on PowerShell Gallery."
-        }
-        else {
-            $ModuleName = $SearchResult.properties.title # get correct casing for the module name
-            $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id 
-    
-            if(!$ModuleVersion) {
-                # get latest version
-                $ModuleVersion = $PackageDetails.entry.properties.version
-            }
-
-            $ModuleContentUrl = "https://www.powershellgallery.com/api/v2/package/$ModuleName/$ModuleVersion"
-
-            # Make sure module dependencies are imported
-            $Dependencies = $PackageDetails.entry.properties.dependencies
-
-            if($Dependencies -and $Dependencies.Length -gt 0) {
-                $Dependencies = $Dependencies.Split("|")
-
-                # parse depencencies, which are in the format: module1name:module1version:|module2name:module2version:
-                $Dependencies | ForEach-Object {
-
-                    if($_ -and $_.Length -gt 0) {
-
-                        $Parts = $_.Split(":")
-                        $DependencyName = $Parts[0]
-                        $DependencyVersion = $Parts[1]
-
-                        # check if we already imported this dependency module during execution of this script
-                        if(!$ModulesImported.Contains($DependencyName)) {
-
-                            $AutomationModule = Get-AzureRmAutomationModule `
-                                -ResourceGroupName $ResourceGroupName `
-                                -AutomationAccountName $AutomationAccountName `
-                                -Name $DependencyName `
-                                -ErrorAction SilentlyContinue
-    
-                            # check if Automation account already contains this dependency module of the right version
-                            if((!$AutomationModule) -or $AutomationModule.Version -ne $DependencyVersion) {
-                                
-                                Write-Output "Importing dependency module $DependencyName of version $DependencyVersion first."
-
-                                # this dependency module has not been imported, import it first
-                                _doImport `
-                                    -ResourceGroupName $ResourceGroupName `
-                                    -AutomationAccountName $AutomationAccountName `
-                                    -ModuleName $DependencyName `
-                                    -ModuleVersion $DependencyVersion
-
-                                $ModulesImported += $DependencyName
-                            }
-                        }
-                    }
-                }
-            }
-            
-            # Find the actual blob storage location of the module
-            do {
-
-                $ActualUrl = $ModuleContentUrl
-                $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location 
-            } while(!$ModuleContentUrl.Contains(".nupkg"))
-
-            $ActualUrl = $ModuleContentUrl
-
-            Write-Output "Importing $ModuleName module of version $ModuleVersion from $ActualUrl to Automation"
-
-            $AutomationModule = New-AzureRmAutomationModule `
-                -ResourceGroupName $ResourceGroup `
-                -AutomationAccountName $AutomationAccountName `
-                -Name $ModuleName `
-                -ContentLink $ActualUrl
-
-            while(
-
-                $AutomationModule.ProvisioningState -ne "Created" -and
-                $AutomationModule.ProvisioningState -ne "Succeeded" -and
-                $AutomationModule.ProvisioningState -ne "Failed"
-            )
-            {
-                Write-Verbose -Message "Polling for module import completion"
-                Start-Sleep -Seconds 10
-                $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule
-            }
-
-            if($AutomationModule.ProvisioningState -eq "Failed") {
-
-                Write-Error "Importing $ModuleName module to Automation failed."
-            }
-            else {
-
-                Write-Output "Importing $ModuleName module to Automation succeeded."
-            }
-        }
-    }
-
-    if(!$ServicePrincipalConnection) {
-
-        throw "Connection $ConnectionAssetName not found."
-    }
-
-    $Module = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "HybridRunbookWorker"
-
-    $ModuleName = $Module.Name
-
-    $ModuleVersionInAutomation = $Module.Version
-
-    Write-Output "Checking if module '$ModuleName' is up to date in your automation account"
-
-
-    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$ModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
-
-    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
-
-
-
-    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
-
-        $SearchResult = $SearchResult | Where-Object -FilterScript {
-
-            return $_.properties.title -eq $ModuleName
-        }
-    }
-
-    if(!$SearchResult) {
-
-        Write-Error "Could not find module '$ModuleName' on PowerShell Gallery."
-    }
-
-    else {
-        $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id 
-        $LatestModuleVersionOnPSGallery = $PackageDetails.entry.properties.version
-
-        if($ModuleVersionInAutomation -ne $LatestModuleVersionOnPSGallery) {
-
-            Write-Output "Module '$ModuleName' is not up to date. Latest version on PS Gallery is '$LatestModuleVersionOnPSGallery' but this automation account has version '$ModuleVersionInAutomation'"
-
-            Write-Output "Importing latest version of '$ModuleName' into your automation account"
-
-            _doImport -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ModuleName $ModuleName
-        }
-
-        else {
-
-            Write-Output "Module '$ModuleName' is up to date."
-        }
-    }
-    ##########################
-    #>
 
     # Register the VM as a DSC node if needed
     try {
-        $DscNode = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup
-    } catch {
-        $DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
-    }
+        
+        Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup -ErrorAction Stop
+          
+    } catch {}
+
+    $DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
+
 
     # Install necessary modules
     Install-Module HybridRunbookWorker
     Import-Module Azure
 
-    # Publish DSC Configuration within storage account
-    #Publish-AzureRmVMDscConfiguration -ConfigurationPath .\HybridWorkerConfiguration.ps1 -ResourceGroupName $ResourceGroup -StorageAccountName $StorageName
+    # Create a hashtable of paramters for the DSC configuration
+    $ConfigParameters = @{
+        "Endpoint" = $AutomationEndpoint
+        "Token" = $AutomationPrimaryKey
+        "GroupName" = $MachineName
+    }
 
+    # Import the DSC configuration to the automation account
+    Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -SourcePath "C:\Users\jehunte\Documents\GitHub\runbooks\Utility\HybridWorkerConfiguration.ps1" -Published -Force
+
+    # Compile the DSC configuration
+    try {
+        $CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ErrorAction Stop
+    
+        while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $null)           
+        {
+            $CompilationJob = $CompilationJob | Get-AzureRmAutomationDscCompilationJob
+            Start-Sleep -Seconds 3
+        }
+    
+    } catch {}
+
+    
     # Configure the DSC node
-    #Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "OnboardHybridWorker" -Id $DscNode.Id
+    Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridWorkerConfiguration" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
 
-    #Update the configuration of an Azure Virtual Machine
-    #$VM | Update-AzureRmVM -Verbose
+    # Update the configuration of an Azure Virtual Machine
+    Update-AzureRmVM -ResourceGroupName $ResourceGroup -Location $Location -VM $VM -Verbose
 
     # Check on status
-    #Get-AzureRmVMDscExtensionStatus -VM $VM -Verbose
+    Get-AzureRmVMDscExtensionStatus -VM $VM -ResourceGroupName $ResourceGroup -Verbose 
 
 } else {
     # Do same things but for on-premise machines
 }
-
-<#
-# Register Hybrid Worker
-Import-Module ./HybridResgitration.ps1
-Add-HybridRunbookWorker -Name $MachineName -EndPoint $EndPoint -Token $Token
-#>
