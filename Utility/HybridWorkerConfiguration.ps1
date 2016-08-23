@@ -1,23 +1,29 @@
 ﻿Configuration HybridWorkerConfiguration {
-    Import-DscResource -ModuleName HybridRunbookWorker
+    
 
     param(
 
-        [Parameter(Mandatory=$true)]
-        [String] $Endpoint,
+       # [Parameter(Mandatory=$true)]
+        [string] $Endpoint,
 
-        [Parameter(Mandatory=$true)]
-        [String] $Token,
+        #[Parameter(Mandatory=$true)]
+        [string] $Token,
 
-        [Parameter(Mandatory=$false)]
-        [String] $GroupName = "MyHybridWorker"
+        #[Parameter(Mandatory=$false)]
+        [string] $GroupName = "MyHybridWorker"
 
     )
 
-    HybridRunbookWorker Onboard {
-        Ensure = 'Present'
-        Endpoint = $Endpoint
-        Token = $Token
-        GroupName = $GroupName
+    Import-DscResource -ModuleName HybridRunbookWorker
+
+    Node "HybridVM" {
+        HybridRunbookWorker Onboard {
+            Ensure = 'Present'
+            Endpoint = $Endpoint
+            Token = $Token
+            GroupName = $GroupName
+        }
     }
 }
+
+HybridWorkerConfiguration
