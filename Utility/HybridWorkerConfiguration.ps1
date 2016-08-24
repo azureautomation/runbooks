@@ -4,28 +4,25 @@
     param(
 
         [Parameter(Mandatory=$true)]
-        [string] $Endpoint,
+        [System.String] $AutomationEndpoint,
 
-        [Parameter(Mandatory=$true)]
-        [PSCredential] $Token,
+        #[Parameter(Mandatory=$true)]
+        #[System.Management.Automation.PSCredential] $AutomationToken,
 
         [Parameter(Mandatory=$false)]
-        [string] $GroupName = "MyHybridWorker"
+        [System.String] $HybridGroupName = "MyHybridWorker"
 
     )
 
     Import-DscResource -ModuleName HybridRunbookWorker
-    Import-DscResource -ModuleName @{ModuleName='xPSDesiredStateConfiguration'; ModuleVersion='3.9.0.0'}
 
 
     Node $AllNodes.NodeName {
         HybridRunbookWorker Onboard {
             Ensure    = 'Present'
-            Endpoint  = $Endpoint
-            Token     = $Token
-            GroupName = $GroupName
+            Endpoint  = $AutomationEndpoint
+            Token     = Get-AutomationPSCredential -Name "TokenCredential"
+            GroupName = $HybridGroupName
         }
     }
 }
-
-#HybridWorkerConfiguration -Endpoint $AutomationEndpoint -Token $DscCredential -Verbose

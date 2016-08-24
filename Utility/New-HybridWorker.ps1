@@ -52,7 +52,9 @@
 
 .PARAMETER Location
 
-    Optional. The region of the OMS workspace and VM to be referenced. If not specified, "westeurope" is used.
+    Optional. The region of the OMS workspace, Automation account, and VM to be referenced. If not specified,
+    
+    "westeurope" is used.
 
 
 .PARAMETER AutomationAccountName
@@ -156,7 +158,7 @@
 
     AUTHOR: Jennifer Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: August 23, 2016  
+    LASTEDIT: August 24, 2016  
 
 #>
 
@@ -166,7 +168,7 @@
 Param (
 # Setup initial variables
 [Parameter(Mandatory=$false)]
-#[String] $IDString = "58529",
+#[String] $IDString = "43547",
 [String] $IDString = (Get-Random -Maximum 99999),
 
 [Parameter(Mandatory=$false)]
@@ -343,9 +345,6 @@ $AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $Reso
 $AutomationPrimaryKey = $AutomationInfo.PrimaryKey
 $AutomationEndpoint = $AutomationInfo.Endpoint
 
-Write-Output $AutomationEndpoint
-Write-Output $AutomationPrimaryKey
-
 # Create a new OMS workspace if needed
 try {
     $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -ErrorAction Stop
@@ -458,11 +457,6 @@ if (!$OnPremise) {
 
     # Get a reference to the DSC node
     $DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
-
-    # Install necessary modules
-    Install-Module HybridRunbookWorker
-    Install-Module xPSDesiredStateConfiguration -MinimumVersion 3.9.0.0 -MaximumVersion 3.9.0.0 -Force
-    Import-Module Azure
 
     # Add the HybridRunbookWorker Module to the Automation Account
     # The below code is based off of code written by Joe Levy at https://github.com/azureautomation/runbooks/blob/master/Utility/Update-ModulesInAutomationToLatestVersion.ps1
@@ -654,22 +648,20 @@ if (!$OnPremise) {
 
     
     # Create credential paramters for the DSC configuration
-    $DscUser = "Token"
     $DscPassword = ConvertTo-SecureString $AutomationPrimaryKey -AsPlainText -Force
-    $DscCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $DscUser, $DscPassword
+    $DscCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $VMUser, $DscPassword
     
     # Make an automation credential if needed
     try {
-        Get-AzureRmAutomationCredential -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "Token" -ErrorAction Stop
+        $AutomationCredential = Get-AzureRmAutomationCredential -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "TokenCredential" -ErrorAction Stop
     } catch {
-        New-AzureRmAutomationCredential -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "Token" -Value $DscCredential
+        $AutomationCredential = New-AzureRmAutomationCredential -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "TokenCredential" -Value $DscCredential
     }
 
     # Create a hashtable of paramters for the DSC configuration
     $ConfigParameters = @{
-        "Endpoint" = $AutomationEndpoint
-        "Token" = $DscCredential
-        "GroupName" = $MachineName
+        "AutomationEndpoint" = $AutomationEndpoint
+        "HybridGroupName" = $MachineName
     }
 
     # Use configuration data to bypass storing credentials as plain text
@@ -687,20 +679,16 @@ if (!$OnPremise) {
     Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -SourcePath "C:\Users\jehunte\Documents\Github\runbooks\Utility\HybridWorkerConfiguration.ps1" -Published -Force
  
     # Compile the DSC configuration
-    #try {
-        $CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
+    $CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
     
-        while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $null)           
-        {
-            $CompilationJob = $CompilationJob | Get-AzureRmAutomationDscCompilationJob
-            Start-Sleep -Seconds 3
-        }
+    while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $null)           
+    {
+        $CompilationJob = $CompilationJob | Get-AzureRmAutomationDscCompilationJob
+        Start-Sleep -Seconds 3
+    }
 
-        $CompilationJob | Get-AzureRmAutomationDscCompilationJobOutput –Stream Any 
-
-    #} catch {}
-
-    
+    $CompilationJob | Get-AzureRmAutomationDscCompilationJobOutput –Stream Any 
+  
     # Configure the DSC node
     Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridWorkerConfiguration.HybridVM" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
 
