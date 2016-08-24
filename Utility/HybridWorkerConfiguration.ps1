@@ -6,9 +6,6 @@
         [Parameter(Mandatory=$true)]
         [System.String] $AutomationEndpoint,
 
-        #[Parameter(Mandatory=$true)]
-        #[System.Management.Automation.PSCredential] $AutomationToken,
-
         [Parameter(Mandatory=$false)]
         [System.String] $HybridGroupName = "MyHybridWorker"
 
