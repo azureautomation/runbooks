@@ -1,5 +1,4 @@
 ﻿Configuration HybridWorkerConfiguration {
-    
 
     param(
 
