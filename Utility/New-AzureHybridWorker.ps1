@@ -158,7 +158,7 @@
 
     AUTHOR: Jennifer Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: August 25, 2016  
+    LASTEDIT: August 26, 2016  
 
 #>
 
@@ -556,7 +556,6 @@ if (!$OnPremise) {
         }
     }
     ##########################
-
     
     # Create credential paramters for the DSC configuration
     $DscPassword = ConvertTo-SecureString $AutomationPrimaryKey -AsPlainText -Force
@@ -585,6 +584,19 @@ if (!$OnPremise) {
             }
         )
     } 
+
+    
+    # Download the DSC configuration file
+    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/HybridWorkerConfiguration.ps1"
+    $Destination = "$env:temp\HybridWorkerConfiguration.ps1"
+
+    Invoke-WebRequest -uri $Source -OutFile $Destination
+    Unblock-File $Destination
+
+
+    # Import the DSC configuration to the automation account
+    Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -SourcePath $Destination -Published -Force
+
 
     # Compile the DSC configuration
     $CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData

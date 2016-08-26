@@ -158,7 +158,7 @@
 
     AUTHOR: Jennifer Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: August 24, 2016  
+    LASTEDIT: August 26, 2016  
 
 #>
 
@@ -168,8 +168,8 @@
 Param (
 # Setup initial variables
 [Parameter(Mandatory=$false)]
-#[String] $IDString = "43547",
-[String] $IDString = (Get-Random -Maximum 99999),
+[String] $IDString = "88202",
+#[String] $IDString = (Get-Random -Maximum 99999),
 
 [Parameter(Mandatory=$false)]
 [String] $ResourceGroup = "hybrid-worker-" + $IDstring,
@@ -347,10 +347,10 @@ $AutomationEndpoint = $AutomationInfo.Endpoint
 
 # Create a new OMS workspace if needed
 try {
-    $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -ErrorAction Stop
+    $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
 } catch {
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $Location -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -WarningAction SilentlyContinue
+    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $Location -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
 }
 
 # Get the workspace ID
@@ -365,6 +365,7 @@ Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup
 
 # Check if the machine was flagged as an on-premise device
 if (!$OnPremise) {
+
 # Create a new VM if needed
     try {
         $VM = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Name $MachineName -ErrorAction Stop
@@ -675,9 +676,17 @@ if (!$OnPremise) {
         )
     } 
 
+    # Download the DSC configuration file
+    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/HybridWorkerConfiguration.ps1"
+    $Destination = "$env:temp\HybridWorkerConfiguration.ps1"
+
+    Invoke-WebRequest -uri $Source -OutFile $Destination
+    Unblock-File $Destination
+
+
     # Import the DSC configuration to the automation account
-    Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -SourcePath "C:\Users\jehunte\Documents\Github\runbooks\Utility\HybridWorkerConfiguration.ps1" -Published -Force
- 
+    Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -SourcePath $Destination -Published -Force
+
     # Compile the DSC configuration
     $CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
     
