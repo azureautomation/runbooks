@@ -48,6 +48,7 @@
 
 .EXAMPLE
 
+    New-HybridWorker -MachineName "ContosoVM"
 
 
 .NOTES
