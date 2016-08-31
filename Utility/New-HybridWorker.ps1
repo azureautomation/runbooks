@@ -2,14 +2,12 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, OMS workspace, 
-    and VM will all be generated if needed.
+    This Azure/OMS Automation runbook onboards a hybrid worker.
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, OMS workspace,
-    and VM will all be generated if needed. The major steps of the script are outlined below.
+    This Azure/OMS Automation runbook onboards a hybrid worker. The major steps of the script are outlined below.
     
     1) Login to an Azure account
     2) Create reference to resource group
@@ -102,12 +100,12 @@ foreach ($Automation in $AutomationResource) {
 }
 
 # Create refernce to the resource group
-Get-AzureRmResourceGroup -Name $ResourceGroup -ErrorAction Stop
+$RG = Get-AzureRmResourceGroup -Name $ResourceGroup -ErrorAction Stop
 
 #Create a new automation account if needed 
-Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroup -Name $AutomationAccountName -ErrorAction Stop
+$AA = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroup -Name $AutomationAccountName -ErrorAction Stop
 
-# Add the HybridRunbookWorker Module to the Automation Account
+# Add and update modules on the Automation account
 # The below code is based off of code written by Joe Levy at https://github.com/azureautomation/runbooks/blob/master/Utility/Update-ModulesInAutomationToLatestVersion.ps1
 ######################################
 $ModulesImported = @()
@@ -240,15 +238,9 @@ $Modules = Get-AzureRmAutomationModule `
 # Create an empty list to hold module names
 $ModuleNames = @()
 
-# Update the list of module names
-foreach ($Module in $Modules) {
-
-    $ModuleNames+= $Module.Name
-}
-
 # Add the names of the modules necessary to register a hybrid worker
 $ModuleNames += "HybridRunbookWorker"
-$ModuleNames += "AzureRM.OperationalInsights"
+
 
 foreach ($ModuleName in $ModuleNames) {
     try {
@@ -272,16 +264,12 @@ foreach ($ModuleName in $ModuleNames) {
     if($SearchResult.Length -and $SearchResult.Length -gt 1) {
 
         $SearchResult = $SearchResult | Where-Object -FilterScript {
-    $DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
 
             return $_.properties.title -eq $ModuleName
         }
     }
 
-    if(!$SearchResult) {
-        Write-Error "Could not find module '$ModuleName' on PowerShell Gallery."
-
-    } else {
+    if($SearchResult) {
         $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id 
         $LatestModuleVersionOnPSGallery = $PackageDetails.entry.properties.version
 
@@ -302,7 +290,6 @@ foreach ($ModuleName in $ModuleNames) {
 
 }
 ##########################
-
 
 # Get Azure Automation Primary Key and Endpoint
 $AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName
@@ -400,8 +387,8 @@ while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $
     $CompilationJob = $CompilationJob | Get-AzureRmAutomationDscCompilationJob
     Start-Sleep -Seconds 3
 }
-
-$CompilationJob | Get-AzureRmAutomationDscCompilationJobOutput –Stream Any 
   
 # Configure the DSC node
 Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridWorkerConfiguration.HybridVM" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
+
+Write-Output "Complete: Please wait one configuration cycle (approximately 30 minutes) for the DSC configuration to be pulled from the server and the Hybrid Worker Group to be created."
