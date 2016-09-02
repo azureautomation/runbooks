@@ -1,10 +1,10 @@
-﻿<#PSScriptInfo
+<#PSScriptInfo
 
 .VERSION 1.01
 
 .GUID fa658952-8f94-45ac-9c94-f5fe23d0fcf9
 
-.AUTHOR Joe Levy
+.AUTHOR Automation Team
 
 .COMPANYNAME Microsoft
 
@@ -34,12 +34,15 @@
 <#
 .SYNOPSIS 
     This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an 
-    Automation account.
+    Automation account.If a new module to import is specified, it will import that module from the PowerShell Gallery
+    after all other modules are updated from the gallery.
 
 .DESCRIPTION
     This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an 
     Automation account. By connecting the runbook to an Automation schedule, you can ensure all modules in
     your Automation account stay up to date.
+    If a new module to import is specified, it will import that module from the PowerShell Gallery
+    after all other modules are updated from the gallery.
 
 .PARAMETER ResourceGroupName
     Required. The name of the Azure Resource Group containing the Automation account to update all modules for.
@@ -47,16 +50,17 @@
 .PARAMETER AutomationAccountName
     Required. The name of the Automation account to update all modules for.
 
-.PARAMETER AzureConnectionName
-    Optional. The name of the Azure Run As Account connection asset to use to authenticate to Azure. If not specified,
-    the default name of "AzureRunAsConnection" is used.  
+
+.PARAMETER NewModuleName
+    Optional. The name of a module in the PowerShell gallery to import after all existing modules are updated
+
     
 .EXAMPLE
-    Update-ModulesInAutomationToLatestVersion -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" 
+    Update-ModulesInAutomationToLatestVersion -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -NewModuleName "AzureRM.Batch"
 
 .NOTES
-    AUTHOR: Azure/OMS Automation Team
-    LASTEDIT: June 5, 2016  
+    AUTHOR: Automation Team
+    LASTEDIT: September 2nd, 2016  
 #>
 
 param(
@@ -67,7 +71,7 @@ param(
     [String] $AutomationAccountName,
 
     [Parameter(Mandatory=$false)]
-    [String] $AzureConnectionName = "AzureRunAsConnection"
+    [String] $NewModuleName
 )
 
 $ModulesImported = @()
@@ -98,7 +102,7 @@ function _doImport {
     }
 
     if(!$SearchResult) {
-        Write-Error "Could not find module '$ModuleName' on PowerShell Gallery."
+        Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module you imported from a different location"
     }
     else {
         $ModuleName = $SearchResult.properties.title # get correct casing for the module name
@@ -161,7 +165,7 @@ function _doImport {
 
         $ActualUrl = $ModuleContentUrl
 
-        Write-Output "Importing $ModuleName module of version $ModuleVersion from $ActualUrl to Automation"
+        Write-Output "Importing $ModuleName module of version $ModuleVersion to Automation"
 
         $AutomationModule = New-AzureRmAutomationModule `
             -ResourceGroupName $ResourceGroupName `
@@ -190,18 +194,20 @@ function _doImport {
 }
 
 try {
-    $ServicePrincipalConnection = Get-AutomationConnection -Name $AzureConnectionName         
+    $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"         
 
-    "Logging in to Azure..."
+    Write-Output ("Logging in to Azure...")
     Add-AzureRmAccount `
         -ServicePrincipal `
-        -TenantId $servicePrincipalConnection.TenantId `
-        -ApplicationId $servicePrincipalConnection.ApplicationId `
-        -CertificateThumbprint $servicePrincipalConnection.CertificateThumbprint 
+        -TenantId $RunAsConnection.TenantId `
+        -ApplicationId $RunAsConnection.ApplicationId `
+        -CertificateThumbprint $RunAsConnection.CertificateThumbprint 
+
+    Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose 
 }
 catch {
-    if(!$ServicePrincipalConnection) {
-        throw "Connection $AzureConnectionName not found."
+    if(!$RunAsConnection) {
+        throw "Connection AzureRunAsConnection not found. Please create one"
     }
     else {
         throw $_.Exception
@@ -234,7 +240,7 @@ foreach($Module in $Modules) {
     }
 
     if(!$SearchResult) {
-        Write-Error "Could not find module '$ModuleName' on PowerShell Gallery."
+        Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module you imported from a different location"
     }
     else {
         $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id 
@@ -254,3 +260,36 @@ foreach($Module in $Modules) {
         }
    }
 }
+
+# Import module if specified
+if (!([string]::IsNullOrEmpty($NewModuleName)))
+{
+     # Check if module exists in the gallery
+    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$NewModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
+    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
+
+    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
+        $SearchResult = $SearchResult | Where-Object -FilterScript {
+            return $_.properties.title -eq $NewModuleName
+        }
+    }
+
+    if(!$SearchResult) {
+        throw "Could not find module '$NewModuleName' on PowerShell Gallery."
+    }  
+    
+    if ($NewModuleName -notin $Modules.Name)
+    {
+        Write-Output "Importing latest version of '$NewModuleName' into your automation account"
+
+        _doImport `
+            -ResourceGroupName $ResourceGroupName `
+            -AutomationAccountName $AutomationAccountName `
+            -ModuleName $NewModuleName
+    }
+    else
+    {
+        Write-Output ("Module $NewModuleName is already in the automation account")
+    }
+}
+ 
