@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.01
+.VERSION 1.02
 
 .GUID fa658952-8f94-45ac-9c94-f5fe23d0fcf9
 
@@ -45,10 +45,14 @@
     after all other modules are updated from the gallery.
 
 .PARAMETER ResourceGroupName
-    Required. The name of the Azure Resource Group containing the Automation account to update all modules for.
+    Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
+    If a resource group is not specified, then it will use the current one for the automation account
+    if it is run from the automation service
 
 .PARAMETER AutomationAccountName
-    Required. The name of the Automation account to update all modules for.
+    Optional. The name of the Automation account to update all modules for.
+    If an automation account is not specified, then it will use the current one for the automation account
+    if it is run from the automation service
 
 
 .PARAMETER NewModuleName
@@ -64,10 +68,10 @@
 #>
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [String] $ResourceGroupName,
 
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [String] $AutomationAccountName,
 
     [Parameter(Mandatory=$false)]
@@ -204,6 +208,28 @@ try {
         -CertificateThumbprint $RunAsConnection.CertificateThumbprint 
 
     Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose 
+
+    # Find the automation account or resource group is not specified
+    if  (([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+    {
+       Write-Output ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
+       if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid))
+       {
+                throw "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters"
+       }
+       $AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+        foreach ($Automation in $AutomationResource)
+        {
+            $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+            if (!([string]::IsNullOrEmpty($Job)))
+            {
+                    $ResourceGroupName = $Job.ResourceGroupName
+                    $AutomationAccountName = $Job.AutomationAccountName
+                    break;
+            }
+        }
+    }
 }
 catch {
     if(!$RunAsConnection) {
