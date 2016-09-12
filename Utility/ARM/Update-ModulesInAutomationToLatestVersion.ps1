@@ -77,7 +77,7 @@ param(
     [Parameter(Mandatory=$false)]
     [String] $NewModuleName
 )
-
+$ErrorActionPreference = 'stop'
 $ModulesImported = @()
 
 function _doImport {
@@ -178,6 +178,7 @@ function _doImport {
             -ContentLink $ActualUrl
 
         while(
+            (!([string]::IsNullOrEmpty($AutomationModule))) -and
             $AutomationModule.ProvisioningState -ne "Created" -and
             $AutomationModule.ProvisioningState -ne "Succeeded" -and
             $AutomationModule.ProvisioningState -ne "Failed"
