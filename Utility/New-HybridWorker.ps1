@@ -11,19 +11,13 @@
     
     1) Login to an Azure account
     2) Import/Update the necessary modules
-    4) Create an OMS Workspace if needed
-    5) Enable the Azure Automation solution in OMS
-    6) Create reference to the VM 
-    7) Download the DSC agent
-    8) Submit the configuration to register the machine as a hybrid worker
+    3) Create a run the runbook with the next steps
 
 
 
 .PARAMETER MachineName
 
-    Mandatory. The computer name (Azure VM or on-premise) to be referenced. If not specified, a computer name
-
-    is created, referencing the IDString in order to create a unique identifier.
+    Mandatory. The computer name (Azure VM or on-premise) to be referenced.
 
 
 
@@ -52,7 +46,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 1, 2016  
+    LASTEDIT: September 14, 2016  
 
 #>
 
@@ -138,7 +132,7 @@ function _doImport {
     }
 
     if(!$SearchResult) {
-        Write-Output "Could not find module '$ModuleName' on PowerShell Gallery."
+        Write-Output "     Could not find module '$ModuleName' on PowerShell Gallery."
     }
     else {
         $ModuleName = $SearchResult.properties.title # get correct casing for the module name
@@ -146,7 +140,7 @@ function _doImport {
     
         if(!$ModuleVersion) {
             # get latest version
-            $ModuleVersion = $PackageDetails.entry.properties.version
+            $ModuleVersion = ($PackageDetails.entry.properties.version -replace '\[', '') -replace '\]', ''
         }
 
         $ModuleContentUrl = "https://www.powershellgallery.com/api/v2/package/$ModuleName/$ModuleVersion"
@@ -179,7 +173,7 @@ function _doImport {
             $Dependencies = $PackageDetails.entry.properties.dependencies
             $Parts = $Dependencies.Split(":")
             $DependencyName = $Parts[0]
-            $DependencyVersion = $Parts[1]
+            $DependencyVersion = ($Parts[1] -replace '\[', '') -replace '\]', ''
 
             if($Dependencies -and $Dependencies.Length -gt 0) {
                 $Dependencies = $Dependencies.Split("|")
@@ -190,7 +184,7 @@ function _doImport {
                     if($_ -and $_.Length -gt 0) {
                         $Parts = $_.Split(":")
                         $DependencyName = $Parts[0]
-                        $DependencyVersion = $Parts[1]
+                        $DependencyVersion = ($Parts[1] -replace '\[', '') -replace '\]', ''
 
                         # check if we already imported this dependency module during execution of this script
                         if(!$ModulesImported.Contains($DependencyName)) {
@@ -250,24 +244,45 @@ function _doImport {
                 Write-Error "Importing $ModuleName module to Automation failed."
             }
             else {
-                Write-Verbose "Importing $ModuleName module to Automation succeeded."
+                Write-Output "     Importing $ModuleName module to Automation succeeded."
             }
         }
     }
 }
 
-
 # Create an empty list to hold module names
 $ModuleNames = @()
+
+# Add existing Azure RM modules to the update list since all modules must be on the same version
+$ExistingModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
+                    | where {$_.Name -match "AzureRM"} | select Name
+
+foreach ($ModuleName in $ExistingModules) 
+{
+    _doImport `
+        -ResourceGroupName $ResourceGroup `
+        -AutomationAccountName $AutomationAccountName `
+        -ModuleName $ModuleName.Name `
+        -ModuleVersion $ModuleVersion
+}
+
+
+# Add known dependencies first
+$ModuleNames += "AzureRM.Profile"
+$ModuleNames += "Azure.Storage"
+$ModuleNames += "Azure"
 
 # Add the names of the modules necessary to register a hybrid worker
 $ModuleNames += "AzureRM.OperationalInsights"
 $ModuleNames += "HybridRunbookWorker"
 
+# Create a reference to the VM's temp folder
+$ModuleBase = $env:temp
 
+# Import modules
 foreach ($AzureRMModule in $ModuleNames) {
-
-    # Check if module exists in the gallery
+    
+    # Check if module exists in the gallery and import to the automation account
     $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$AzureRMModule%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
     $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
 
@@ -277,8 +292,9 @@ foreach ($AzureRMModule in $ModuleNames) {
         }
     }
 
+
     if(!$SearchResult) {
-        Write-Output "Could not find module '$AzureRMModule' on PowerShell Gallery."
+        Write-Output "     Could not find module '$AzureRMModule' on PowerShell Gallery."
     } else {
 
         # If the new module is not already imported, then import it now
@@ -292,135 +308,37 @@ foreach ($AzureRMModule in $ModuleNames) {
                 -ModuleVersion $ModuleVersion
        
         }
-
     }
-}
 
-# Update existing Azure RM modules since all modules must be on the same version
-$ExistingModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
-                    | where {$_.Name -match "AzureRM"} | select Name
-
-foreach ($ModuleName in $ExistingModules) 
-{
-
-    Write-Verbose ("Updating existing module $ModuleName to latest version...")
-
-    _doImport `
-        -ResourceGroupName $ResourceGroup `
-        -AutomationAccountName $AutomationAccountName `
-        -ModuleName $ModuleName.Name `
-        -ModuleVersion $ModuleVersion
     
 }
-##########################
 
-$null = Get-Command *AzureRmOperationalInsights*
-
-# Get Azure Automation Primary Key and Endpoint
-$AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName
-$AutomationPrimaryKey = $AutomationInfo.PrimaryKey
-$AutomationEndpoint = $AutomationInfo.Endpoint
-
-# Create a new OMS workspace if needed
-Write-Output "Acquiring OMS workspace..."
 try {
-    $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
-} catch {
-    # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $Location -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
-}
+    
+    Get-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "Install-HybridWorker" -ErrorAction Stop
 
-# Get the workspace ID
-$WorkspaceId = $Workspace.CustomerId
-
-# Get the primary key for the OMS workspace
-$WorkspaceSharedKeys = Get-AzureRmOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $ResourceGroup -Name $WorkspaceName
-$WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
-
-# Activate the Azure Automation solution in the workspace
-Write-Output "Activating Automation solution in OMS..."
-$null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
-
-# Create a reference to the VM
-$VM = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Name $MachineName -ErrorAction Stop
-
-# Enable the MMAgent extension if needed
-Write-Output "Acquiring the VM monitoring agent..."
-try {
-
-    $null = Get-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
 } catch {
 
-    $null = Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
+    # Download Install-HybridWorker
+    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/Install-HybridWorker.ps1"
+    $Destination = "$env:temp\Install-HybridWorker.ps1"
+
+    $null = Invoke-WebRequest -uri $Source -OutFile $Destination
+    $null = Unblock-File $Destination
+
+
+    # Import the DSC configuration to the automation account
+    Write-Output "Importing Install-HybridWorker to complete the next steps..."
+    $null = Import-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Path $Destination -Type Powershell -Force
+
+    # Publish the runbook so it is runnable
+    Publish-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-HybridWorker" -ResourceGroupName $ResourceGroup
 
 }
 
-# Register the VM as a DSC node if needed
-Write-Output "Registering DSC Node..."
-try {
-        
-    $null = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup -ErrorAction Stop
-          
-} catch {}
+$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$Location}
 
-# Get a reference to the DSC node
-$DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
-    
-# Create credential paramters for the DSC configuration
-$DscPassword = ConvertTo-SecureString $AutomationPrimaryKey -AsPlainText -Force
-$DscCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList "User", $DscPassword
-    
-# Make an automation credential if needed
-try {
-    $AutomationCredential = Get-AzureRmAutomationCredential -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "TokenCredential" -ErrorAction Stop
-} catch {
-    $AutomationCredential = New-AzureRmAutomationCredential -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "TokenCredential" -Value $DscCredential
-}
+# Start the next runbook job
+Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-HybridWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 
 
-# Create a hashtable of paramters for the DSC configuration
-$ConfigParameters = @{
-    "AutomationEndpoint" = $AutomationEndpoint
-    "HybridGroupName" = $MachineName
-}
-
-# Use configuration data to bypass storing credentials as plain text
-$ConfigData = @{
-    AllNodes = @(
-        @{
-            NodeName = 'HybridVM'
-            PSDscAllowPlainTextPassword = $true
-
-        }
-    )
-} 
-
-    
-# Download the DSC configuration file
-$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/HybridWorkerConfiguration.ps1"
-$Destination = "$env:temp\HybridWorkerConfiguration.ps1"
-
-$null = Invoke-WebRequest -uri $Source -OutFile $Destination
-$null = Unblock-File $Destination
-
-
-# Import the DSC configuration to the automation account
-Write-Output "Importing Hybird Worker DSC file..."
-$null = Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -SourcePath $Destination -Published -Force
-
-
-# Compile the DSC configuration
-$CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
-
-Write-Output "Compiling DSC Job..."
-
-while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $null)           
-{
-    $CompilationJob = $CompilationJob | Get-AzureRmAutomationDscCompilationJob
-    Start-Sleep -Seconds 3
-}
-  
-# Configure the DSC node
-Write-Output "Setting the configuration for the DSC node..."
-$null = Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridWorkerConfiguration.HybridVM" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
-
-Write-Output "Complete: Please wait one configuration cycle (approximately 30 minutes) for the DSC configuration to be pulled from the server and the Hybrid Worker Group to be created."
+Write-Output "Starting Install-HybridWorker..."
