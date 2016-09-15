@@ -37,23 +37,19 @@
 
 .PARAMETER WorkspaceName
 
-    Optional. The name of the OMS Workspace to be referenced. If not specified, a new OMS workspace 
-
-    is created, referencing the IDString in order to create a unique identifier.
+    Mandatory. The name of the OMS Workspace to be referenced.
 
 
 
 .PARAMETER Location
 
-    Optional. The region of the OMS workspace, Automation account, and VM to be referenced. If not specified,
-    
-    "westeurope" is used.
+    Mandatory. The region of the OMS workspace, Automation account, and VM to be referenced.
 
 
 
 .EXAMPLE
 
-    Install-HybridWorker -MachineName "ContosoVM" -ResourceGroup "ContosoResources" -AutomationAccountName "ContosoAA"
+    Install-HybridWorker -MachineName "ContosoVM" -ResourceGroup "ContosoResources" -AutomationAccountName "ContosoAA" -WorkspaceName "ContosoSpace" -Location "westeurope"
 
 
 .NOTES
@@ -78,11 +74,11 @@ Param (
 [String] $MachineName,
 
 # OMS Workspace
-[Parameter(Mandatory=$false)]
-[String] $WorkspaceName = "hybrid-worker",
+[Parameter(Mandatory=$true)]
+[String] $WorkspaceName,
 
-[Parameter(Mandatory=$false)]
-[String] $Location = "westeurope"
+[Parameter(Mandatory=$true)]
+[String] $Location
 
 )
 
