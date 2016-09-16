@@ -66,9 +66,9 @@ Param (
 $ErrorActionPreference = "Stop"
 
 # Check that the provided region is a supported OMS region
-$validRegions = "eastus", "westeurope", "southeastasia", "australiasoutheast"
-if ($validRegions -notcontains $Location) {
-    throw "Currently, only East US, West Europe, Southeast Asia, amd Australia Southeast are OMS supported regions. There will be compataibility issues if the VM Location and OMS Location do not match."
+$validRegions = "westeurope", "southeastasia"
+if ($validRegions -notcontains $VmLocation) {
+    throw "Currently, only the West Europe and Southeast Asia regions are supported for both OMS and Automation. There will be compataibility issues when registering the DSC node if the Automation Account region, VM region, and OMS region do not match."
 }
 
 # Connect to the current Azure account
