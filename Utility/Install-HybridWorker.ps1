@@ -43,7 +43,7 @@
 
 .PARAMETER Location
 
-    Mandatory. The region of the OMS workspace, Automation account, and VM to be referenced.
+    Mandatory. The region of the OMS workspace and VM to be referenced.
 
 
 
@@ -56,7 +56,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 142, 2016  
+    LASTEDIT: September 16, 2016  
 
 #>
 
@@ -81,6 +81,9 @@ Param (
 [String] $Location
 
 )
+
+# Stop the runbook if any errors occur
+$ErrorActionPreference = "Stop"
 
 Write-Output "Pulling account credentials..."
 
@@ -112,6 +115,13 @@ try {
 
 # Create a new OMS workspace if needed
 Write-Output "Acquiring OMS workspace..."
+
+# Check that the provided region is a supported OMS region; if not, use West Europe
+$validRegions = "eastus", "westeurope", "southeastasia", "australiasoutheast"
+if ($validRegions -notcontains $Location) {
+    throw "Currently, only East US, West Europe, Southeast Asia, amd Australia Southeast are OMS supported regions. There will be compataibility issues if the VM Location and OMS Location do not match."
+}
+
 try {
     $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
 } catch {
