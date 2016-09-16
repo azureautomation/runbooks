@@ -65,9 +65,15 @@ Param (
 # Stop the runbook if any errors occur
 $ErrorActionPreference = "Stop"
 
-Write-Output "Pulling account credentials..."
+# Check that the provided region is a supported OMS region
+$validRegions = "eastus", "westeurope", "southeastasia", "australiasoutheast"
+if ($validRegions -notcontains $Location) {
+    throw "Currently, only East US, West Europe, Southeast Asia, amd Australia Southeast are OMS supported regions. There will be compataibility issues if the VM Location and OMS Location do not match."
+}
 
 # Connect to the current Azure account
+Write-Output "Pulling account credentials..."
+
 $Conn = Get-AutomationConnection -Name AzureRunAsConnection 
 $null = Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint 
 
@@ -244,51 +250,6 @@ function _doImport {
     }
 }
 
-# Create an empty list to hold module names
-$ModuleNames = @()
-
-# Add the names of the modules necessary to register a hybrid worker
-$ModuleNames += "AzureRM.Profile"
-$ModuleNames += "HybridRunbookWorker"
-$ModuleNames += "AzureRM.OperationalInsights"
-
-# Create a reference to the VM's temp folder
-$ModuleBase = $env:temp
-
-# Import modules
-foreach ($NewModuleName in $ModuleNames) {
-     
-     # Check if module exists in the gallery
-    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$NewModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
-    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
-
-    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
-        $SearchResult = $SearchResult | Where-Object -FilterScript {
-
-            return $_.properties.title -eq $NewModuleName
-
-        }
-    }
-
-    if(!$SearchResult) {
-        throw "Could not find module '$NewModuleName' on PowerShell Gallery."
-    }      
-
-    if ($NewModuleName -notin $ExistingModules.Name) {
-
-        _doImport `
-            -ResourceGroupName $ResourceGroup `
-            -AutomationAccountName $AutomationAccountName `
-            -ModuleName $NewModuleName
-
-    } else {
-
-        Write-Output ("     Module $NewModuleName is already in the automation account")
-
-    }
-
-}
-
 # Add existing Azure RM modules to the update list since all modules must be on the same version
 $ExistingModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
                     | where {$_.Name -match "AzureRM"} | select Name
@@ -338,6 +299,48 @@ foreach ($Module in $ExistingModules)
 
         }
    }
+}
+
+# Create an empty list to hold module names
+$ModuleNames = @()
+
+# Add the names of the modules necessary to register a hybrid worker
+$ModuleNames += "AzureRM.Profile"
+$ModuleNames += "HybridRunbookWorker"
+$ModuleNames += "AzureRM.OperationalInsights"
+
+# Import modules
+foreach ($NewModuleName in $ModuleNames) {
+     
+     # Check if module exists in the gallery
+    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$NewModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
+    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
+
+    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
+        $SearchResult = $SearchResult | Where-Object -FilterScript {
+
+            return $_.properties.title -eq $NewModuleName
+
+        }
+    }
+
+    if(!$SearchResult) {
+        throw "Could not find module '$NewModuleName' on PowerShell Gallery."
+    }      
+
+    if ($NewModuleName -notin $ExistingModules.Name) {
+
+        _doImport `
+            -ResourceGroupName $ResourceGroup `
+            -AutomationAccountName $AutomationAccountName `
+            -ModuleName $NewModuleName
+
+    } else {
+
+        Write-Output ("     Module $NewModuleName is already in the automation account")
+
+    }
+
 }
 
 # Check for the Install-HybridWorker runbook in the automation account, import if not there

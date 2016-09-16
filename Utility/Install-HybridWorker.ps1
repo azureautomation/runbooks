@@ -116,12 +116,6 @@ try {
 # Create a new OMS workspace if needed
 Write-Output "Acquiring OMS workspace..."
 
-# Check that the provided region is a supported OMS region; if not, use West Europe
-$validRegions = "eastus", "westeurope", "southeastasia", "australiasoutheast"
-if ($validRegions -notcontains $Location) {
-    throw "Currently, only East US, West Europe, Southeast Asia, amd Australia Southeast are OMS supported regions. There will be compataibility issues if the VM Location and OMS Location do not match."
-}
-
 try {
     $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
 } catch {
@@ -150,7 +144,7 @@ try {
     $null = Get-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
 } catch {
 
-    $null = Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
+    $null = Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
 
 }
 
