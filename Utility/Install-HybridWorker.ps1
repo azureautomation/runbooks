@@ -108,8 +108,6 @@ try {
     $null = Get-Command New-AzureRmOperationalInsightsWorkspace -CommandType Cmdlet -ErrorAction Stop
     Write-Output "OMS cmdlets successfully retrieved."
 } catch {
-    # Stop the runbook if you hit an error
-    $ErrorActionPreference  = Stop
     Write-Error "Could not retrieve OMS cmdlets."
 }
 
