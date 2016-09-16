@@ -11,8 +11,7 @@
     
     1) Login to an Azure account
     2) Import/Update the necessary modules
-    3) Create a run the runbook with the next steps
-
+    3) Import Install-HybridWorker for next steps
 
 
 .PARAMETER MachineName
@@ -29,7 +28,7 @@
 
 
 
-.PARAMETER VmLocation
+.PARAMETER Location
 
     Optional. The region of the OMS workspace and VM to be referenced. If not specified, "westeurope" is used.
 
@@ -58,7 +57,7 @@ Param (
 [String] $WorkspaceName = "hybrid-workspace-" + (Get-Random -Maximum 99999),
 
 [Parameter(Mandatory=$false)]
-[String] $VmLocation = "westeurope"
+[String] $Location = "westeurope"
 
 )
 
@@ -67,7 +66,7 @@ $ErrorActionPreference = "Stop"
 
 # Check that the provided region is a supported OMS region
 $validRegions = "westeurope", "southeastasia"
-if ($validRegions -notcontains $VmLocation) {
+if ($validRegions -notcontains $Location) {
     throw "Currently, only the West Europe and Southeast Asia regions are supported for both OMS and Automation. There will be compataibility issues when registering the DSC node if the Automation Account region, VM region, and OMS region do not match."
 }
 
@@ -367,7 +366,7 @@ try {
 
 }
 
-$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$VmLocation}
+$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$Location}
 
 # Start the next runbook job
 $null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-HybridWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 
