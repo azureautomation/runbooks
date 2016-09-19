@@ -48,12 +48,12 @@
 
 .PARAMETER VMUser
 
-    Mandatory. The username for the provided user machine.
+    Mandatory. The username for the provided user machine. 
 
 
-.PARAMETER VMPassword
+.PARAMETER VMSecurePassword
 
-    Mandatory. The password for the provided user on the machine.
+    Mandatory. The encrypted password for the provided user on the machine.
 
 
 .PARAMETER AvailabilityName
@@ -118,7 +118,7 @@ Param (
 [String] $VMUser,
 
 [Parameter(Mandatory=$true)]
-[String] $VMPassword,
+[System.Security.SecureString] $VMSecurePassword,
 
 [Parameter(Mandatory=$true)]
 [String] $AvailabilityName,
@@ -192,6 +192,9 @@ $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $Resou
 
 
 # Create a new VM
+# Create a credential with the username and password
+$VMCredential = New-Object System.Management.Automation.PSCredential ($VMUser, $VMSecurePassword);
+
 # Create a new availability set if needed
 try {
 
@@ -205,7 +208,6 @@ try {
 $VM = New-AzureRmVMConfig -VMName $MachineName -VMSize "Standard_A1" -AvailabilitySetID $AvailabilitySet.Id
     
 # Set the Operating System for the new VM
-# Create a new Windows VM
 $VM = Set-AzureRmVMOperatingSystem -VM $VM -Windows -Credential $VMCredential -ComputerName $MachineName
 $VM = Set-AzureRmVMSourceImage -VM $VM -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2012-R2-Datacenter -Version "latest"
 

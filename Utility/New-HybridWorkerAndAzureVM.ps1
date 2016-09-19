@@ -155,7 +155,6 @@ Param (
 
 # Parameter adjustment
 $VMSecurePassword = ConvertTo-SecureString $VMPassword -AsPlainText -Force;
-$VMCredential = New-Object System.Management.Automation.PSCredential ($VMUser, $VMSecurePassword);
 
 # Stop the runbook if any errors occur
 $ErrorActionPreference = "Stop"
@@ -463,7 +462,7 @@ try {
 }
 
 $runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$Location; `
-    "VMUser" = $VMuser; "VMPassword" = $VMPassword; "AvailabilityName" = $AvailabilityName; "StorageName" = $StorageName;`
+    "VMUser" = $VMUser; "VMSecurePassword" = $VMSecurePassword; "AvailabilityName" = $AvailabilityName; "StorageName" = $StorageName;`
     "OSDiskName" = $OSDiskName; "VNetName" = $VNetName; "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
 
 # Start the next runbook job
