@@ -459,7 +459,7 @@ try {
 }
 
 $runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$Location; `
-    "VMCredential" = $VMCredential; "AvailabilityName" = $AvailabilityName; "StorageName" = $StorageName; "OSDiskName" = $OSDiskName; "VNetName" = $VNetName;`
+    "VMUser" = $VMUser; "VMPassword" = $VMPassword; "AvailabilityName" = $AvailabilityName; "StorageName" = $StorageName; "OSDiskName" = $OSDiskName; "VNetName" = $VNetName;`
     "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
 
 # Start the next runbook job
