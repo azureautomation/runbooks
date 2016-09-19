@@ -350,7 +350,7 @@ try {
 } catch {
 
     # Download Install-HybridWorker
-    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/Install-HybridWorker.ps1"
+    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Install-HybridWorker.ps1"
     $Destination = "$env:temp\Install-HybridWorker.ps1"
 
     $null = Invoke-WebRequest -uri $Source -OutFile $Destination

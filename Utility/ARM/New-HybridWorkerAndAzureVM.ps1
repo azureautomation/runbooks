@@ -442,7 +442,7 @@ try {
 } catch {
 
     # Download Install-NewVmWorker
-    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/Install-NewVmWorker.ps1"
+    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Install-NewVmWorker.ps1"
     $Destination = "$env:temp\Install-NewVmWorker.ps1"
 
     $null = Invoke-WebRequest -uri $Source -OutFile $Destination

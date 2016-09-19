@@ -317,7 +317,7 @@ $ConfigData = @{
 
     
 # Download the DSC configuration file
-$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/HybridWorkerConfiguration.ps1"
+$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/HybridWorkerConfiguration.ps1"
 $Destination = "$env:temp\HybridWorkerConfiguration.ps1"
 
 $null = Invoke-WebRequest -uri $Source -OutFile $Destination
