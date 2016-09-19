@@ -432,7 +432,7 @@ foreach ($NewModuleName in $ModuleNames) {
 
     } else {
 
-        Write-Output ("     Module $NewModuleName is already in the automation account")
+        Write-Output ("     Module $NewModuleName is up to date.")
 
     }
 
