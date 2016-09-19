@@ -192,6 +192,7 @@ $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $Resou
 
 
 # Create a new VM
+Write-Output "Creating a new VM..."
 # Convert the vm password to a secure string
 $VMSecurePassword = ConvertTo-SecureString $VMPassword -AsPlainText -Force
 # Create a credential with the username and password
@@ -276,7 +277,7 @@ try {
 }
 
 # Register the VM as a DSC node if needed
-Write-Output "Registering DSC Node..."
+Write-Output "Registering the DSC Node..."
 try {
         
     $null = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup -ErrorAction Stop
