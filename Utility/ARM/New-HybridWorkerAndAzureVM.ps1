@@ -437,24 +437,24 @@ foreach ($NewModuleName in $ModuleNames) {
 # Check for the Install-NewVmWorker runbook in the automation account, import if not there
 try {
     
-    $null = Get-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "Install-NewVmWorker" -ErrorAction Stop
+    $null = Get-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "Install-VmAndWorker" -ErrorAction Stop
 
 } catch {
 
     # Download Install-NewVmWorker
-    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Install-NewVmWorker.ps1"
-    $Destination = "$env:temp\Install-NewVmWorker.ps1"
+    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Install-VmAndWorker.ps1"
+    $Destination = "$env:temp\Install-VmAndWorker.ps1"
 
     $null = Invoke-WebRequest -uri $Source -OutFile $Destination
     $null = Unblock-File $Destination
 
 
     # Import the DSC configuration to the automation account
-    Write-Output "Importing Install-NewVmWorker to complete the next steps..."
+    Write-Output "Importing Install-VmAndWorker to complete the next steps..."
     $null = Import-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Path $Destination -Type "PowerShell"
 
     # Publish the runbook so it is runnable
-    $null = Publish-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-NewVmWorker" -ResourceGroupName $ResourceGroup
+    $null = Publish-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-VmAndWorker" -ResourceGroupName $ResourceGroup
 
 }
 
@@ -463,6 +463,6 @@ $runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$Autom
     "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
 
 # Start the next runbook job
-$null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-NewVmWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 
+$null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-VmAndWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 
 
-Write-Output "Starting Install-NewVmWorker..."
+Write-Output "Starting Install-VmAndWorker..."
