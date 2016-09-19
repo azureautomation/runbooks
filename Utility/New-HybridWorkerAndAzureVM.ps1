@@ -153,9 +153,6 @@ Param (
     [String] $InterfaceName = $MachineName + $IDString
 )
 
-# Parameter adjustment
-$VMSecurePassword = ConvertTo-SecureString $VMPassword -AsPlainText -Force;
-
 # Stop the runbook if any errors occur
 $ErrorActionPreference = "Stop"
 
@@ -462,8 +459,8 @@ try {
 }
 
 $runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$Location; `
-    "VMUser" = $VMUser; "VMSecurePassword" = $VMSecurePassword; "AvailabilityName" = $AvailabilityName; "StorageName" = $StorageName;`
-    "OSDiskName" = $OSDiskName; "VNetName" = $VNetName; "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
+    "VMCredential" = $VMCredential; "AvailabilityName" = $AvailabilityName; "StorageName" = $StorageName; "OSDiskName" = $OSDiskName; "VNetName" = $VNetName;`
+    "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
 
 # Start the next runbook job
 $null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-NewVmWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 

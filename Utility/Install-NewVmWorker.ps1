@@ -51,9 +51,9 @@
     Mandatory. The username for the provided user machine. 
 
 
-.PARAMETER VMSecurePassword
+.PARAMETER VMPassword
 
-    Mandatory. The encrypted password for the provided user on the machine.
+   Mandatory. The password for the provided user on the machine.
 
 
 .PARAMETER AvailabilityName
@@ -118,7 +118,7 @@ Param (
 [String] $VMUser,
 
 [Parameter(Mandatory=$true)]
-[System.Security.SecureString] $VMSecurePassword,
+[String] $VMPassword,
 
 [Parameter(Mandatory=$true)]
 [String] $AvailabilityName,
@@ -192,6 +192,8 @@ $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $Resou
 
 
 # Create a new VM
+# Convert the vm password to a secure string
+$VMSecurePassword = ConvertTo-SecureString $VMPassword -AsPlainText -Force
 # Create a credential with the username and password
 $VMCredential = New-Object System.Management.Automation.PSCredential ($VMUser, $VMSecurePassword);
 
