@@ -400,6 +400,9 @@ foreach ($Module in $ExistingModules)
 $ModuleNames = @()
 
 # Add the names of the modules necessary to register a hybrid worker
+$ModuleNames += "AzureRM.Network"
+$ModuleNames += "AzureRM.OperationalInsights"
+$ModuleNames += "HybridRunbookWorker"
 
 # Import modules
 foreach ($NewModuleName in $ModuleNames) {
