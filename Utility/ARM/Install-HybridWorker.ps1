@@ -153,10 +153,10 @@ $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $Resou
 Write-Output "Acquiring the VM monitoring agent..."
 try {
 
-    $null = Get-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
+    $null = Get-AzureRMVMExtension -ResourceGroupName $VM.ResourceGroupName -VMName $VmName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
 } catch {
 
-    $null = Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $VM.Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
+    $null = Set-AzureRMVMExtension -ResourceGroupName $VM.ResourceGroupName -VMName $VmName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $VM.Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
 
 }
 
