@@ -2,12 +2,13 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook onboards a hybrid worker.
+    This Azure/OMS Automation runbook onboards a pre-exisiting VM as a hybrid worker. (1/2)
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. The major steps of the script are outlined below.
+    This Azure/OMS Automation runbook onboards a hybrid worker.  An OMS workspace will be generated
+    if needed. The major steps of the script are outlined below.
     
     1) Login to an Azure account
     2) Import/Update the necessary modules
@@ -38,7 +39,7 @@
 
 .PARAMETER OmsLocation
 
-    Optional. The region of the OMS Workspace to be referenced.
+    Optional. The region of the OMS Workspace to be referenced. If not specified, "eastus" is used.
 
 
 
