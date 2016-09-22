@@ -14,9 +14,17 @@
     3) Import Install-HybridWorker for next steps
 
 
-.PARAMETER MachineName
+.PARAMETER VMName
 
-    Mandatory. The computer name (Azure VM or on-premise) to be referenced.
+    Mandatory. The computer name of the Azure VM to be referenced.
+
+
+
+.PARAMETER VmResourceGroup
+
+    Optional. The resource group of the VM to be referenced. If not specified, resource group of the Automation
+    
+    account is used.
 
 
 
@@ -28,9 +36,9 @@
 
 
 
-.PARAMETER Location
+.PARAMETER OmsLocation
 
-    Optional. The region of the OMS workspace and VM to be referenced. If not specified, "westeurope" is used.
+    Optional. The region of the OMS Workspace to be referenced.
 
 
 
@@ -43,31 +51,35 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 19, 2016  
+    LASTEDIT: September 22, 2016  
 
 #>
 
 Param (
 # VM
 [Parameter(Mandatory=$true)]
-[String] $MachineName,
+[String] $VmName,
+
+# VM Resource Group
+[Parameter(Mandatory=$false)]
+[String] $VMResourceGroup = "",
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
 [String] $WorkspaceName = "hybrid-workspace-" + (Get-Random -Maximum 99999),
 
+# OMS Region
 [Parameter(Mandatory=$false)]
-[String] $Location = "westeurope"
-
+[String] $OmsLocation = "eastus"
 )
 
 # Stop the runbook if any errors occur
 $ErrorActionPreference = "Stop"
 
 # Check that the provided region is a supported OMS region
-$validRegions = "westeurope", "southeastasia"
-if ($validRegions -notcontains $Location) {
-    throw "Currently, only the West Europe and Southeast Asia regions are supported for both OMS and Automation. There will be compataibility issues when registering the DSC node if the Automation Account region, VM region, and OMS region do not match."
+$validRegions = "westeurope", "southeastasia", "eastus", "australiasoutheast"
+if ($validRegions -notcontains $OmsLocation) {
+    throw "Currently, only the West Europe, East US, Australia Southeast, and Southeast Asia regions are supported for OMS."
 }
 
 # Connect to the current Azure account
@@ -102,6 +114,11 @@ foreach ($Automation in $AutomationResource) {
 
 # Check that the resource group name is valid
 $null = Get-AzureRmResourceGroup -Name $ResourceGroup -ErrorAction Stop
+
+# If the VM resource group variable is empty, set it to be the same as the automation acount
+if ([string]::IsNullOrEmpty($VMResourceGroup)) {
+    $VMResourceGroup = $ResourceGroup
+}
 
 # Check that the automation account name is valid
 $null = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroup -Name $AutomationAccountName -ErrorAction Stop
@@ -304,7 +321,6 @@ foreach ($Module in $ExistingModules)
 $ModuleNames = @()
 
 # Add the names of the modules necessary to register a hybrid worker
-$ModuleNames += "AzureRM.Profile"
 $ModuleNames += "HybridRunbookWorker"
 $ModuleNames += "AzureRM.OperationalInsights"
 
@@ -366,7 +382,7 @@ try {
 
 }
 
-$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$Location}
+$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"VmName"=$VmName; "VmResourceGroup" = $VMResourceGroup;"WorkspaceName"=$WorkspaceName; "OmsLocation"=$OmsLocation}
 
 # Start the next runbook job
 $null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-HybridWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 

@@ -10,9 +10,9 @@
     This Azure/OMS Automation runbook onboards a hybrid worker. The major steps of the script are outlined below.
     
     1) Login to an Azure account
-    2) Create an OMS Workspace if needed
-    3) Enable the Azure Automation solution in OMS
-    4) Create reference to the VM 
+    2) Create reference to the VM 
+    3) Create an OMS Workspace if needed
+    4) Enable the Azure Automation solution in OMS
     5) Download the DSC agent
     6) Submit the configuration to register the machine as a hybrid worker
 
@@ -29,9 +29,15 @@
 
 
 
-.PARAMETER MachineName
+.PARAMETER VMName
 
-    Mandatory. The computer name (Azure VM or on-premise) to be referenced.
+    Mandatory. The computer name of the Azure VM to be referenced.
+
+
+
+.PARAMETER VMResourceGroup
+
+    Mandatory. The resource group of the Azure VM to be referenced.
 
 
 
@@ -41,9 +47,10 @@
 
 
 
-.PARAMETER Location
 
-    Mandatory. The region of the OMS workspace and VM to be referenced.
+.PARAMETER OmsLocation
+
+    Mandatory. The region of the OMS Workspace to be referenced.
 
 
 
@@ -56,7 +63,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 19, 2016  
+    LASTEDIT: September 22, 2016  
 
 #>
 
@@ -71,15 +78,19 @@ Param (
 
 # VM
 [Parameter(Mandatory=$true)]
-[String] $MachineName,
+[String] $VmName,
+
+# VM
+[Parameter(Mandatory=$true)]
+[String] $VmResourceGroup,
 
 # OMS Workspace
 [Parameter(Mandatory=$true)]
 [String] $WorkspaceName,
 
+# OMS Workspace Region
 [Parameter(Mandatory=$true)]
-[String] $Location
-
+[String] $OmsLocation
 )
 
 # Stop the runbook if any errors occur
@@ -111,6 +122,9 @@ try {
     Write-Error "Could not retrieve OMS cmdlets."
 }
 
+# Create a reference to the VM
+$VM = Get-AzureRmVM -ResourceGroupName $VmResourceGroup -Name $VmName -ErrorAction Stop
+
 # Create a new OMS workspace if needed
 Write-Output "Acquiring OMS workspace..."
 
@@ -118,7 +132,7 @@ try {
     $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
 } catch {
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $Location -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
+    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
 }
 
 # Get the workspace ID
@@ -132,30 +146,27 @@ $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 Write-Output "Activating Automation solution in OMS..."
 $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
 
-# Create a reference to the VM
-$VM = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Name $MachineName -ErrorAction Stop
+
 
 # Enable the MMAgent extension if needed
 Write-Output "Acquiring the VM monitoring agent..."
 try {
 
-    $null = Get-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
+    $null = Get-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
 } catch {
 
-    $null = Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
+    $null = Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $VM.Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
 
 }
 
 # Register the VM as a DSC node if needed
 Write-Output "Registering DSC Node..."
-try {
-        
-    $null = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup -ErrorAction Stop
-          
-} catch {}
+   
+$null = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $VmName -ResourceGroupName $ResourceGroup -AzureVMLocation $VM.Location -AzureVMResourceGroup $VM.ResourceGroupName
+
 
 # Get a reference to the DSC node
-$DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
+$DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $VmName
     
 # Create credential paramters for the DSC configuration
 $DscPassword = ConvertTo-SecureString $AutomationPrimaryKey -AsPlainText -Force
@@ -171,7 +182,7 @@ try {
 # Create a hashtable of paramters for the DSC configuration
 $ConfigParameters = @{
     "AutomationEndpoint" = $AutomationEndpoint
-    "HybridGroupName" = $MachineName
+    "HybridGroupName" = $VmName
 }
 
 # Use configuration data to bypass storing credentials as plain text
@@ -200,9 +211,8 @@ $null = Import-AzureRmAutomationDscConfiguration -AutomationAccountName $Automat
 
 
 # Compile the DSC configuration
-$CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
-
 Write-Output "Compiling DSC Job..."
+$CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
 
 while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $null)           
 {
