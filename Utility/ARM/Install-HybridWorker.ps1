@@ -20,7 +20,7 @@
 
 .PARAMETER ResourceGroup
 
-    Mandatory. The name of the resource group to be referenced.
+    Mandatory. The name of the resource group of the automation account to be referenced.
 
 
 
