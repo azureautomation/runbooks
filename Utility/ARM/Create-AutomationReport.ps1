@@ -1,11 +1,11 @@
 ﻿
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.01
 
 .GUID 2087b5d3-09d2-4b6a-b174-73c77f270188
 
-.AUTHOR Azure-Automation-Team
+.AUTHOR AzureAutomationTeam
 
 .COMPANYNAME Microsoft
 
@@ -15,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Create-AutomationReport.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Create-AutomationReport.ps1
 
 .ICONURI 
 
@@ -30,17 +30,9 @@
 
 #>
 
-#Requires -Module Azure
+#Requires -Module AzureRm.Profile
+#Requires -Module AzureRm.Automation 
 
-<# 
-
-.DESCRIPTION 
-         This runbook creates a report on Azure Automation jobs and runbook modifications over the past X days.
-    The report can be in HTML or text format and can be sent via email.  You may want to
-    set this runbook to run on a recurring schedule (for example, daily). 
-
-#> 
-Param()
 
 
 <#
@@ -53,12 +45,9 @@ Param()
     set this runbook to run on a recurring schedule (for example, daily).
 
     Requirements:
-       1. Credential asset that contains an Azure AD credential with administrative access 
-          to the Azure subscription. For more info see http://aka.ms/runbookauthor/authentication
-       2. Variable asset with the Azure Subscription name
-       3. Variable asset with the Automation Account name
-       4. Credential asset that contains the PowerShell credential for the email SMTP service
-       5. Configure SMTP email properties below
+       1. Azure Service Principal. For more information see http://aka.ms/runasaccount. 
+       2. Credential asset that contains the PowerShell credential for the email SMTP service
+       3. Configure SMTP email properties below
 
 .PARAMETER NumberOfDaysForReport
     An integer to indicate the time period of the report in the number of days before now.
@@ -72,136 +61,164 @@ Param()
     A boolean to indicate if the report should be sent by email.
     The default is to send the report by email.
 
+.PARAMETER ResourceGroupName
+    The name of the resource group the Automation account is located in
+
+.PARAMETER AutomationAccountName
+    The name of the Automation account to create the report for
+
 .EXAMPLE
     Create-AutomationReport `
         -NumberOfDaysForReport 7 `
         -OutputHTML $true `
         -SendReportByEmail $true
+        -AutomationAccountName "MyAutomationAccount"
+        -ResourceGroupName "MyResourceGroup"
 
 .NOTES
     AUTHOR: System Center Automation Team
-    LASTEDIT: January 16, 2015
+    LASTEDIT: August 12, 2016
 #>
 
-workflow Create-AutomationReport
-{   
-    param
-    (
-        [Parameter (Mandatory=$false)]
-        [int] $NumberOfDaysForReport = 1,
+param
+(
+    [Parameter (Mandatory=$false)]
+    [int] $NumberOfDaysForReport = 1,
         
-        [Parameter (Mandatory=$false)]
-        [bool] $OutputHTML = $true,
+    [Parameter (Mandatory=$false)]
+    [bool] $OutputHTML = $true,
         
-        [Parameter (Mandatory=$false)]
-        [bool] $SendReportByEmail = $true
-    )
+    [Parameter (Mandatory=$false)]
+    [bool] $SendReportByEmail = $true,
+
+    [Parameter (Mandatory=$true)]
+    [string] $AutomationAccountName, 
+
+    [Parameter (Mandatory=$true)]
+    [string] $ResourceGroupName
+)
     
-    # Get Automation assets
-    # IMPORTANT: The assets must be created before running this runbook.
-    $AzureSubscriptionName = Get-AutomationVariable -Name 'AzureSubscriptionName'
-    $AutomationAccountName = Get-AutomationVariable -Name 'AutomationAccountName'
-	$AzureOrgIdCredential = Get-AutomationPSCredential -Name 'AzureOrgIdCredential'
-    if ($SendReportByEmail) {$EmailCredential = Get-AutomationPSCredential -Name 'LiveEmailCredential'}
-    
-    # Initialize variables
-    $Out = ""
-    $DateTimeNow = Get-Date
-    $DateTimeStart = InlineScript{($using:DateTimeNow).AddDays(-$using:NumberOfDaysForReport)}
-    
-    # Set email parameters if sending report by email
-    if ($SendReportByEmail)
+# Get Automation assets
+# IMPORTANT: The assets must be created before running this runbook.
+$ServicePrincipalConnection = Get-AutomationConnection -Name 'AzureRunAsConnection'   
+if (!$ServicePrincipalConnection) 
+{
+    $ErrorString = @"
+    Service principal connection AzureRunAsConnection not found.  Make sure you have created it in Assets. 
+    See http://aka.ms/runasaccount to learn more about creating Run As accounts." 
+"@
+    throw $ErrorString
+}  	
+
+if ($SendReportByEmail) 
+{
+    $EmailCredential = Get-AutomationPSCredential -Name 'LiveEmailCredential'
+    if (!$EmailCredential) 
     {
-        $EmailInfo = @{"ToAddress"="you@yours.com";`
-                        "FromAddress"="me@mine.com";`
-                        "SmtpServer"="smtp.abcd.com";`
-                        "SmtpPort"=587;`
-                        "UseSsl"=$true}
+        throw "Email credential LiveEmailCredential not found.  Make sure that you have created it in Assets." 
     }
-
-    # Connect to Azure so cmdlets will work and select the subscription to use
-    Add-AzureAccount -Credential $AzureOrgIdCredential | Write-Verbose
-    Select-AzureSubscription -SubscriptionName $AzureSubscriptionName | Write-Verbose
-
-    # Get the subscription and automation account info
-    $SubscriptionInfo = Get-AzureSubscription
-    $AccountInfo = Get-AzureAutomationAccount -Name $AutomationAccountName
+}
     
-    # Get the jobs and runbooks in the time period
-    $Jobs = Get-AzureAutomationJob -AutomationAccountName $AutomationAccountName -StartTime $DateTimeStart
-    $Runbooks = Get-AzureAutomationRunbook -AutomationAccountName $AutomationAccountName
+# Initialize variables
+$Out = ""
+$DateTimeNow = Get-Date
+$DateTimeStart = ($DateTimeNow).AddDays(-$NumberOfDaysForReport)
+    
+# Set email parameters if sending report by email
+if ($SendReportByEmail)
+{
+    $EmailInfo = @{"ToAddress"="you@yours.com";`
+                    "FromAddress"="me@mine.com";`
+                    "SmtpServer"="smtp.abcd.com";`
+                    "SmtpPort"=587;`
+                    "UseSsl"=$true}
+}
 
-    # Adjust the status of jobs that were completed but with errors
-    foreach ($Job in $Jobs)
+# Connect to Azure so cmdlets using the run as account 
+Add-AzureRmAccount `
+        -ServicePrincipal `
+        -TenantId $ServicePrincipalConnection.TenantId `
+        -ApplicationId $ServicePrincipalConnection.ApplicationId `
+        -CertificateThumbprint $ServicePrincipalConnection.Certificate | Write-Verbose
+
+# Get the subscription and automation account info
+$SubscriptionInfo = Get-AzureRmSubscription
+$AccountInfo = Get-AzureRmAutomationAccount -Name $AutomationAccountName -ResourceGroupName $ResourceGroupName
+    
+# Get the jobs and runbooks in the time period
+$Jobs = Get-AzureRmAutomationJob -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -StartTime $DateTimeStart
+$Runbooks = Get-AzureRmAutomationRunbook -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName
+
+# Adjust the status of jobs that were completed but with errors
+foreach ($Job in $Jobs)
+{
+    if ($Job.Status -eq "Completed")
     {
-        if ($Job.Status -eq "Completed")
-        {
-            # See if the job has anything written to the error stream
-            $errors = Get-AzureAutomationJobOutput `
-                            -Id $Job.Id `
-                            -AutomationAccountName $AutomationAccountName `
-                            -Stream Error
-            if ($errors) {$e='yes'} else {$e='no'}
-            Add-Member -InputObject $Job -NotePropertyName 'HasErrors' -NotePropertyValue $e
-        }
+        # See if the job has anything written to the error stream
+        $errors = Get-AzureRmAutomationJobOutput `
+                        -Id $Job.Id `
+                        -ResourceGroupName $ResourceGroupName `
+                        -AutomationAccountName $AutomationAccountName `
+                        -Stream Error
+        if ($errors) {$e='yes'} else {$e='no'}
+        Add-Member -InputObject $Job -NotePropertyName 'HasErrors' -NotePropertyValue $e
     }
+}
 
-    # Checkpoint (so jobs and runbooks do not get retrieved again if the runbook is suspended and resumed)
-    Checkpoint-Workflow
 
-    # =======================================================================================
-    # Create the Report Output (call a function for each section of the report)
-    # =======================================================================================
+# =======================================================================================
+# Create the Report Output (call a function for each section of the report)
+# =======================================================================================
 
-    if ($OutputHTML) { $Out += Write-HTMLReportBegin }
+if ($OutputHTML) { $Out += Write-HTMLReportBegin }
 
-    $Out += Report-ReportParameters `
-        -DateTimeStart $DateTimeStart `
-        -DateTimeNow $DateTimeNow `
-        -AzureSubscriptionInfo $SubscriptionInfo `
-        -AutomationAccountInfo $AccountInfo `
-        -OutputHTML $OutputHTML
+$Out += Report-ReportParameters `
+    -DateTimeStart $DateTimeStart `
+    -DateTimeNow $DateTimeNow `
+    -AzureSubscriptionInfo $SubscriptionInfo `
+    -AutomationAccountInfo $AccountInfo `
+    -OutputHTML $OutputHTML
     
-    $Out += Report-RunbooksWithJobs `
-                -Jobs $Jobs `
-                -OutputHTML $OutputHTML
+$Out += Report-RunbooksWithJobs `
+            -Jobs $Jobs `
+            -OutputHTML $OutputHTML
             
-    $Out += Report-Jobs `
-                -Jobs $Jobs `
-                -OutputHTML $OutputHTML
+$Out += Report-Jobs `
+            -Jobs $Jobs `
+            -OutputHTML $OutputHTML
     
-    $Out += Report-JobsWithActionableStatus `
-                -Jobs $Jobs `
-                -OutputHTML $OutputHTML
+$Out += Report-JobsWithActionableStatus `
+            -Jobs $Jobs `
+            -OutputHTML $OutputHTML
 
-    $Out += Report-ModifiedRunbooks `
-                -Runbooks $Runbooks `
+$Out += Report-ModifiedRunbooks `
+            -Runbooks $Runbooks `
+            -OutputHTML $OutputHTML `
+            -DateTimeStart $DateTimeStart
+
+$Out += Report-ScheduledRunbooks `
+            -Runbooks $Runbooks `
+            -OutputHTML $OutputHTML `
+
+if ($OutputHTML) { $Out += Write-HTMLReportEnd }
+
+
+if ($SendReportByEmail)
+{        
+    # Send report email, but checkpoint first so that in case of email failure can resume and try again
+    Checkpoint-Workflow
+    Send-ReportEmail `
+                -Body $Out `
                 -OutputHTML $OutputHTML `
-                -DateTimeStart $DateTimeStart
-
-    $Out += Report-ScheduledRunbooks `
-                -Runbooks $Runbooks `
-                -OutputHTML $OutputHTML `
-
-    if ($OutputHTML) { $Out += Write-HTMLReportEnd }
-
-
-    if ($SendReportByEmail)
-    {        
-        # Send report email, but checkpoint first so that in case of email failure can resume and try again
-        Checkpoint-Workflow
-        Send-ReportEmail `
-                    -Body $Out `
-                    -OutputHTML $OutputHTML `
-                    -EmailCredential $EmailCredential `
-                    -DateTimeStart $DateTimeStart `
-                    -DateTimeNow $DateTimeNow `
-                    -AutomationAccountName $AutomationAccountName `
-                    -EmailInfo $EmailInfo
-    }
+                -EmailCredential $EmailCredential `
+                -DateTimeStart $DateTimeStart `
+                -DateTimeNow $DateTimeNow `
+                -AutomationAccountName $AutomationAccountName `
+                -EmailInfo $EmailInfo
+}
         
-    # Write the output
-    Write-Output $Out
+# Write the output
+Write-Output $Out
 
     # -----------------
     # FUNCTIONS
@@ -826,4 +843,4 @@ color: red;
 
     } # end function
 
-} # end workflow
+

@@ -1,11 +1,11 @@
 ﻿
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.01
 
 .GUID d8707af6-8ba7-4c3b-97d8-37eb99531982
 
-.AUTHOR elcooper_msft
+.AUTHOR AzureAutomationTeam
 
 .COMPANYNAME 
 
@@ -15,7 +15,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/SQL/Update-SQLIndexRunbook.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ASM/SQL/Update-SQLIndexRunbook.ps1
 
 .ICONURI 
 

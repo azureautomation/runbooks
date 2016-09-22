@@ -12,7 +12,7 @@
     1) Login to an Azure account
     2) Create an OMS Workspace if needed
     3) Enable the Azure Automation solution in OMS
-    4) Create reference to the VM 
+    4) Create a new VM 
     5) Download the DSC agent
     6) Submit the configuration to register the machine as a hybrid worker
 
@@ -46,17 +46,51 @@
     Mandatory. The region of the OMS workspace and VM to be referenced.
 
 
+.PARAMETER VMUser
 
-.EXAMPLE
+    Mandatory. The username for the provided user machine. 
 
-    Install-HybridWorker -MachineName "ContosoVM" -ResourceGroup "ContosoResources" -AutomationAccountName "ContosoAA" -WorkspaceName "ContosoSpace" -Location "westeurope"
+
+.PARAMETER VMPassword
+
+   Mandatory. The password for the provided user on the machine.
+
+
+.PARAMETER AvailabilityName
+
+    Mandatory. The name of the Availability set to be referenced.
+
+
+.PARAMETER StorageName
+
+    Mandatory. The name of the Storage account to be referenced. 
+
+
+.PARAMETER OSDiskName
+
+    Mandatory. The name of the OS Disk to be referenced.
+
+
+.PARAMETER VNetName
+
+    Mandatory. The name of the virtual network to be referenced. 
+
+
+.PARAMETER PIpName
+
+    Mandatory. The Public IP address name to be referenced.
+
+
+.PARAMETER InterfaceName
+
+    Mandatory. The name of the network interface to be referenced. 
 
 
 .NOTES
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 16, 2016  
+    LASTEDIT: September 19, 2016  
 
 #>
 
@@ -69,17 +103,40 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $AutomationAccountName,
 
-# VM
-[Parameter(Mandatory=$true)]
-[String] $MachineName,
-
 # OMS Workspace
 [Parameter(Mandatory=$true)]
 [String] $WorkspaceName,
 
 [Parameter(Mandatory=$true)]
-[String] $Location
+[String] $Location,
 
+# VM
+[Parameter(Mandatory=$true)]
+[String] $MachineName,
+
+[Parameter(Mandatory=$true)]
+[String] $VMUser,
+
+[Parameter(Mandatory=$true)]
+[String] $VMPassword,
+
+[Parameter(Mandatory=$true)]
+[String] $AvailabilityName,
+
+[Parameter(Mandatory=$true)]
+[String] $StorageName,
+
+[Parameter(Mandatory=$true)]
+[String] $OSDiskName,
+
+[Parameter(Mandatory=$true)]
+[String] $VNetName,
+
+[Parameter(Mandatory=$true)]
+[String] $PIpName,
+
+[Parameter(Mandatory=$true)]
+[String] $InterfaceName
 )
 
 # Stop the runbook if any errors occur
@@ -132,8 +189,81 @@ $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 Write-Output "Activating Automation solution in OMS..."
 $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
 
-# Create a reference to the VM
-$VM = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Name $MachineName -ErrorAction Stop
+
+
+# Create a new VM
+Write-Output "Creating a new VM..."
+# Convert the vm password to a secure string
+$VMSecurePassword = ConvertTo-SecureString $VMPassword -AsPlainText -Force
+# Create a credential with the username and password
+$VMCredential = New-Object System.Management.Automation.PSCredential ($VMUser, $VMSecurePassword);
+
+# Create a new availability set if needed
+try {
+
+    $AvailabilitySet = Get-AzureRmAvailabilitySet -ResourceGroupName $ResourceGroup -Name $AvailabilityName -ErrorAction Stop
+} catch {
+
+    $AvailabilitySet = New-AzureRmAvailabilitySet -ResourceGroupName $ResourceGroup -Name $AvailabilityName -Location $Location -WarningAction SilentlyContinue 
+}
+    
+# Create a new VM configurable object
+$VM = New-AzureRmVMConfig -VMName $MachineName -VMSize "Standard_A1" -AvailabilitySetID $AvailabilitySet.Id
+    
+# Set the Operating System for the new VM
+$VM = Set-AzureRmVMOperatingSystem -VM $VM -Windows -Credential $VMCredential -ComputerName $MachineName
+$VM = Set-AzureRmVMSourceImage -VM $VM -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2012-R2-Datacenter -Version "latest"
+
+# Storage - create a new storage accounot if needed
+try {
+
+    $StorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $ResourceGroup -Name $StorageName -ErrorAction Stop
+} catch {
+
+    $StorageAccount = New-AzureRmStorageAccount -ResourceGroupName $ResourceGroup -Name $StorageName -Type "Standard_LRS" -Location $Location -WarningAction SilentlyContinue
+}
+
+#Network - create new network attributes if needed
+try {
+
+    $PIp = Get-AzureRmPublicIpAddress -Name $PIpName -ResourceGroupName $ResourceGroup -ErrorAction Stop
+} catch {
+
+    $PIp = New-AzureRmPublicIpAddress -Name $PIpName -ResourceGroupName $ResourceGroup -Location $Location -AllocationMethod Dynamic -WarningAction SilentlyContinue
+}
+
+try {
+
+    $SubnetConfig = Get-AzureRmVirtualNetworkSubnetConfig -Name "default" -VirtualNetwork $VNetName -ErrorAction Stop
+} catch {
+
+    $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name "default" -AddressPrefix "10.0.0.0/24" -WarningAction SilentlyContinue
+}
+
+try {
+
+    $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroup -ErrorAction Stop
+} catch {
+
+    $VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroup -Location $Location -AddressPrefix "10.0.0.0/16" -Subnet $SubnetConfig -WarningAction SilentlyContinue
+}
+
+try {
+    $Interface = Get-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroup -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id -ErrorAction Stop
+} catch {
+
+    $Interface = New-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroup -Location $Location -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id -WarningAction SilentlyContinue
+}
+   
+$VM = Add-AzureRmVMNetworkInterface -VM $VM -Id $Interface.Id
+
+# Setup local VM Object
+$OSDiskUri = $StorageAccount.PrimaryEndpoints.Blob.ToString() + "vhds/" + $OSDiskName + ".vhd"
+$VM = Set-AzureRmVMOSDisk -VM $VM -Name $OSDiskName -VhdUri $OSDiskUri -CreateOption FromImage
+
+# Create the new VM
+$null = New-AzureRmVM -ResourceGroupName $ResourceGroup -Location $Location -VM $VM -WarningAction SilentlyContinue
+
 
 # Enable the MMAgent extension if needed
 Write-Output "Acquiring the VM monitoring agent..."
@@ -147,7 +277,7 @@ try {
 }
 
 # Register the VM as a DSC node if needed
-Write-Output "Registering DSC Node..."
+Write-Output "Registering the DSC Node..."
 try {
         
     $null = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup -ErrorAction Stop
@@ -187,7 +317,7 @@ $ConfigData = @{
 
     
 # Download the DSC configuration file
-$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/HybridWorkerConfiguration.ps1"
+$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/HybridWorkerConfiguration.ps1"
 $Destination = "$env:temp\HybridWorkerConfiguration.ps1"
 
 $null = Invoke-WebRequest -uri $Source -OutFile $Destination

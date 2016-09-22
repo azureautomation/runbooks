@@ -14,7 +14,7 @@
 
 .LICENSEURI 
 
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Import-ModuleFromPSGalleryToAutomation.ps1
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/AutomationAccountManagement/Import-ModuleFromPSGalleryToAutomation.ps1
 
 .ICONURI 
 

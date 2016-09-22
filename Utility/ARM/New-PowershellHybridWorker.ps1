@@ -158,7 +158,7 @@
 
     AUTHOR: Jennifer Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: August 26, 2016  
+    LASTEDIT: September 19, 2016  
 
 #>
 
@@ -677,7 +677,7 @@ if (!$OnPremise) {
     } 
 
     # Download the DSC configuration file
-    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/HybridWorkerConfiguration.ps1"
+    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/HybridWorkerConfiguration.ps1"
     $Destination = "$env:temp\HybridWorkerConfiguration.ps1"
 
     Invoke-WebRequest -uri $Source -OutFile $Destination
