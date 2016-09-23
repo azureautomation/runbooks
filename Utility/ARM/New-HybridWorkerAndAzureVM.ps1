@@ -2,19 +2,17 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, OMS workspace, 
-    and VM will all be generated if needed.
+    This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. (1/2)
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, OMS workspace,
-    and VM will all be generated if needed. The major steps of the script are outlined below.
+    This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. An OMS 
+    workspace will be generated if needed. The major steps of the script are outlined below.
     
     1) Login to an Azure account
     2) Import/Update the necessary modules
-    3) Create a VM
-    3) Import Install-HybridWorker for next steps
+    3) Import Install-VmAndWorker for next steps
 
 
 .PARAMETER IDString
@@ -31,18 +29,28 @@
     is created, referencing the IDString in order to create a unique identifier.
 
 
-.PARAMETER Location
+.PARAMETER OmsLocation
 
-    Optional. The region of the OMS workspace, Automation account, and VM to be referenced. If not specified,
-    
-    "westeurope" is used.
+    Optional. The region of the OMS Workspace to be referenced. If not specified, "eastus" is used.
 
 
-.PARAMETER MachineName
+.PARAMETER VMName
 
-    Optional. The computer name (Azure VM or on-premise) to be referenced. If not specified, a computer name
+    Optional. The computer name of the Azure VM to be referenced. If not specified, a computer name
 
     is created, referencing the IDString in order to create a unique identifier.
+
+
+.PARAMETER VmLocation
+
+    Optional. The region of the Azure VM. If not specified, "eastus" is used.
+
+
+.PARAMETER VmResourceGroup
+
+    Optional. The resource group of the VM to be referenced. If not specified, resource group of the 
+    
+    Automation account is used.
 
 
 .PARAMETER VMUser
@@ -108,7 +116,7 @@
 
     AUTHOR: Jennifer Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 19, 2016  
+    LASTEDIT: September 22, 2016  
 
 #>
 
@@ -122,11 +130,17 @@ Param (
     [String] $WorkspaceName = "hybrid-worker-" + $IDstring,
 
     [Parameter(Mandatory=$false)]
-    [String] $Location = "westeurope",
+    [String] $OmsLocation = "eastus",
 
     # VM
     [Parameter(Mandatory=$false)]
-    [String] $MachineName = "hybridVM" + $IDstring,
+    [String] $VmName = "hybridVM" + $IDstring,
+
+    [Parameter(Mandatory=$false)]
+    [String] $VmLocation = "eastus",
+
+    [Parameter(Mandatory=$false)]
+    [String] $VmResourceGroup = "",
 
     [Parameter(Mandatory=$false)]
     [String] $VMUser = "hybridUser",
@@ -135,31 +149,31 @@ Param (
     [String] $VMPassword = "p@ssw0rdHybrid",
 
     [Parameter(Mandatory=$false)]
-    [String] $AvailabilityName = $MachineName + "-availability" + $IDstring,
+    [String] $AvailabilityName = $VmName + "-availability" + $IDstring,
 
     [Parameter(Mandatory=$false)]
-    [String] $StorageName = $MachineName + "disks" + $IDstring,
+    [String] $StorageName = $VmName + "disks" + $IDstring,
 
     [Parameter(Mandatory=$false)]
-    [String] $OSDiskName = $MachineName + "osdisk",
+    [String] $OSDiskName = $VmName + "osdisk",
 
     [Parameter(Mandatory=$false)]
-    [String] $VNetName = $MachineName + "-vnet",
+    [String] $VNetName = $VmName + "-vnet",
 
     [Parameter(Mandatory=$false)]
-    [String] $PIpName = $MachineName + "-ip",
+    [String] $PIpName = $VmName + "-ip",
 
     [Parameter(Mandatory=$false)]
-    [String] $InterfaceName = $MachineName + $IDString
+    [String] $InterfaceName = $VmName + $IDString
 )
 
 # Stop the runbook if any errors occur
 $ErrorActionPreference = "Stop"
 
 # Check that the provided region is a supported OMS region
-$validRegions = "westeurope", "southeastasia"
-if ($validRegions -notcontains $Location) {
-    throw "Currently, only the West Europe and Southeast Asia regions are supported for both OMS and Automation. There will be compataibility issues when registering the DSC node if the Automation Account region, VM region, and OMS region do not match."
+$validRegions = "westeurope", "southeastasia", "eastus", "australiasoutheast"
+if ($validRegions -notcontains $OmsLocation) {
+    throw "Currently, only the West Europe, East US, Australia Southeast, and Southeast Asia regions are supported for OMS."
 }
 
 # Connect to the current Azure account
@@ -194,6 +208,11 @@ foreach ($Automation in $AutomationResource) {
 
 # Check that the resource group name is valid
 $null = Get-AzureRmResourceGroup -Name $ResourceGroup -ErrorAction Stop
+
+# If the VM resource group variable is empty, set it to be the same as the automation acount
+if ([string]::IsNullOrEmpty($VMResourceGroup)) {
+    $VMResourceGroup = $ResourceGroup
+}
 
 # Check that the automation account name is valid
 $null = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroup -Name $AutomationAccountName -ErrorAction Stop
@@ -458,9 +477,9 @@ try {
 
 }
 
-$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"MachineName"=$MachineName;"WorkspaceName"=$WorkspaceName;"Location"=$Location; `
-    "VMUser" = $VMUser; "VMPassword" = $VMPassword; "AvailabilityName" = $AvailabilityName; "StorageName" = $StorageName; "OSDiskName" = $OSDiskName; "VNetName" = $VNetName;`
-    "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
+$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"VmName"=$VmName;"WorkspaceName"=$WorkspaceName;"OmsLocation"=$OmsLocation; `
+    "VmLocation" = $VmLocation; "VmResourceGroup" = $VmResourceGroup;"VMUser" = $VMUser; "VMPassword" = $VMPassword; "AvailabilityName" = $AvailabilityName; ` 
+    "StorageName" = $StorageName; "OSDiskName" = $OSDiskName; "VNetName" = $VNetName; "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
 
 # Start the next runbook job
 $null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-VmAndWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 

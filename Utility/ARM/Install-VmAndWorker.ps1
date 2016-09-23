@@ -2,13 +2,14 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook onboards a hybrid worker.
+        This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. (1/2)
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. The major steps of the script are outlined below.
-    
+    This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. An OMS 
+    workspace will be generated if needed. The major steps of the script are outlined below.
+        
     1) Login to an Azure account
     2) Create an OMS Workspace if needed
     3) Enable the Azure Automation solution in OMS
@@ -19,7 +20,7 @@
 
 .PARAMETER ResourceGroup
 
-    Mandatory. The name of the resource group to be referenced.
+    Mandatory. The name of the resource group of the AutomationAccount to be referenced.
 
 
 
@@ -29,9 +30,19 @@
 
 
 
-.PARAMETER MachineName
+.PARAMETER VmName
 
-    Mandatory. The computer name (Azure VM or on-premise) to be referenced.
+    Mandatory. The computer name of the Azure VM.
+
+
+.PARAMETER VmLocation
+
+    Mandatory. The region of the Azure VM.
+
+
+.PARAMETER VmResourceGroup
+
+    Mandatory. The resource group of the VM to be referenced
 
 
 
@@ -41,9 +52,9 @@
 
 
 
-.PARAMETER Location
+.PARAMETER OmsLocation
 
-    Mandatory. The region of the OMS workspace and VM to be referenced.
+    Mandatory. The region of the OMS workspace to be referenced.
 
 
 .PARAMETER VMUser
@@ -90,7 +101,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 19, 2016  
+    LASTEDIT: September 22, 2016  
 
 #>
 
@@ -108,11 +119,17 @@ Param (
 [String] $WorkspaceName,
 
 [Parameter(Mandatory=$true)]
-[String] $Location,
+[String] $OmsLocation,
 
 # VM
 [Parameter(Mandatory=$true)]
-[String] $MachineName,
+[String] $VmName,
+
+[Parameter(Mandatory=$true)]
+[String] $VmLocation,
+
+[Parameter(Mandatory=$true)]
+[String] $VmResourceGroup,
 
 [Parameter(Mandatory=$true)]
 [String] $VMUser,
@@ -175,7 +192,7 @@ try {
     $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
 } catch {
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $Location -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
+    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
 }
 
 # Get the workspace ID
@@ -201,35 +218,35 @@ $VMCredential = New-Object System.Management.Automation.PSCredential ($VMUser, $
 # Create a new availability set if needed
 try {
 
-    $AvailabilitySet = Get-AzureRmAvailabilitySet -ResourceGroupName $ResourceGroup -Name $AvailabilityName -ErrorAction Stop
+    $AvailabilitySet = Get-AzureRmAvailabilitySet -ResourceGroupName $VmResourceGroup -Name $AvailabilityName -ErrorAction Stop
 } catch {
 
-    $AvailabilitySet = New-AzureRmAvailabilitySet -ResourceGroupName $ResourceGroup -Name $AvailabilityName -Location $Location -WarningAction SilentlyContinue 
+    $AvailabilitySet = New-AzureRmAvailabilitySet -ResourceGroupName $VmResourceGroup -Name $AvailabilityName -Location $VmLocation -WarningAction SilentlyContinue 
 }
     
 # Create a new VM configurable object
-$VM = New-AzureRmVMConfig -VMName $MachineName -VMSize "Standard_A1" -AvailabilitySetID $AvailabilitySet.Id
+$VM = New-AzureRmVMConfig -VMName $VmName -VMSize "Standard_A1" -AvailabilitySetID $AvailabilitySet.Id
     
 # Set the Operating System for the new VM
-$VM = Set-AzureRmVMOperatingSystem -VM $VM -Windows -Credential $VMCredential -ComputerName $MachineName
+$VM = Set-AzureRmVMOperatingSystem -VM $VM -Windows -Credential $VMCredential -ComputerName $VmName
 $VM = Set-AzureRmVMSourceImage -VM $VM -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2012-R2-Datacenter -Version "latest"
 
 # Storage - create a new storage accounot if needed
 try {
 
-    $StorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $ResourceGroup -Name $StorageName -ErrorAction Stop
+    $StorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $VmResourceGroup -Name $StorageName -ErrorAction Stop
 } catch {
 
-    $StorageAccount = New-AzureRmStorageAccount -ResourceGroupName $ResourceGroup -Name $StorageName -Type "Standard_LRS" -Location $Location -WarningAction SilentlyContinue
+    $StorageAccount = New-AzureRmStorageAccount -ResourceGroupName $VmResourceGroup -Name $StorageName -Type "Standard_LRS" -Location $VmLocation -WarningAction SilentlyContinue
 }
 
 #Network - create new network attributes if needed
 try {
 
-    $PIp = Get-AzureRmPublicIpAddress -Name $PIpName -ResourceGroupName $ResourceGroup -ErrorAction Stop
+    $PIp = Get-AzureRmPublicIpAddress -Name $PIpName -ResourceGroupName $VmResourceGroup -ErrorAction Stop
 } catch {
 
-    $PIp = New-AzureRmPublicIpAddress -Name $PIpName -ResourceGroupName $ResourceGroup -Location $Location -AllocationMethod Dynamic -WarningAction SilentlyContinue
+    $PIp = New-AzureRmPublicIpAddress -Name $PIpName -ResourceGroupName $VmResourceGroup -Location $VmLocation -AllocationMethod Dynamic -WarningAction SilentlyContinue
 }
 
 try {
@@ -242,17 +259,17 @@ try {
 
 try {
 
-    $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroup -ErrorAction Stop
+    $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $VmResourceGroup -ErrorAction Stop
 } catch {
 
-    $VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroup -Location $Location -AddressPrefix "10.0.0.0/16" -Subnet $SubnetConfig -WarningAction SilentlyContinue
+    $VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $VmResourceGroup -Location $VmLocation -AddressPrefix "10.0.0.0/16" -Subnet $SubnetConfig -WarningAction SilentlyContinue
 }
 
 try {
-    $Interface = Get-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroup -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id -ErrorAction Stop
+    $Interface = Get-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $VmResourceGroup -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id -ErrorAction Stop
 } catch {
 
-    $Interface = New-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroup -Location $Location -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id -WarningAction SilentlyContinue
+    $Interface = New-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $VmResourceGroup -Location $VmLocation -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id -WarningAction SilentlyContinue
 }
    
 $VM = Add-AzureRmVMNetworkInterface -VM $VM -Id $Interface.Id
@@ -262,30 +279,26 @@ $OSDiskUri = $StorageAccount.PrimaryEndpoints.Blob.ToString() + "vhds/" + $OSDis
 $VM = Set-AzureRmVMOSDisk -VM $VM -Name $OSDiskName -VhdUri $OSDiskUri -CreateOption FromImage
 
 # Create the new VM
-$null = New-AzureRmVM -ResourceGroupName $ResourceGroup -Location $Location -VM $VM -WarningAction SilentlyContinue
-
+$VM = New-AzureRmVM -ResourceGroupName $VmResourceGroup -Location $VmLocation -VM $VM -WarningAction SilentlyContinue
 
 # Enable the MMAgent extension if needed
 Write-Output "Acquiring the VM monitoring agent..."
 try {
 
-    $null = Get-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
+    $null = Get-AzureRMVMExtension -ResourceGroupName $VmResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
 } catch {
 
-    $null = Set-AzureRMVMExtension -ResourceGroupName $ResourceGroup -VMName $MachineName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
+    $null = Set-AzureRMVMExtension -ResourceGroupName $VmResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $VMLocation -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
 
 }
 
 # Register the VM as a DSC node if needed
-Write-Output "Registering the DSC Node..."
-try {
-        
-    $null = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $MachineName -ResourceGroupName $ResourceGroup -ErrorAction Stop
-          
-} catch {}
+Write-Output "Registering DSC Node..."
+   
+$null = Register-AzureRmAutomationDscNode -AutomationAccountName $AutomationAccountName -AzureVMName $VmName -ResourceGroupName $ResourceGroup -AzureVMLocation $VmLocation -AzureVMResourceGroup $VmResourceGroup
 
 # Get a reference to the DSC node
-$DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
+$DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $VmName
     
 # Create credential paramters for the DSC configuration
 $DscPassword = ConvertTo-SecureString $AutomationPrimaryKey -AsPlainText -Force
@@ -301,7 +314,7 @@ try {
 # Create a hashtable of paramters for the DSC configuration
 $ConfigParameters = @{
     "AutomationEndpoint" = $AutomationEndpoint
-    "HybridGroupName" = $MachineName
+    "HybridGroupName" = $VmName
 }
 
 # Use configuration data to bypass storing credentials as plain text
