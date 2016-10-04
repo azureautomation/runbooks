@@ -96,7 +96,7 @@ function _doImport {
     $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$ModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
     $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
 
-    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
+    if($SearchResult -ne $null) {
         $SearchResult = $SearchResult | Where-Object -FilterScript {
             return $_.properties.title -eq $ModuleName
         }
