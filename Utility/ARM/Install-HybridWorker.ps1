@@ -148,18 +148,6 @@ Write-Output "Activating Automation solution in OMS..."
 $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
 
 
-
-# Enable the MMAgent extension if needed
-Write-Output "Acquiring the VM monitoring agent..."
-try {
-
-    $null = Get-AzureRMVMExtension -ResourceGroupName $VM.ResourceGroupName -VMName $VmName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
-} catch {
-
-    $null = Set-AzureRMVMExtension -ResourceGroupName $VM.ResourceGroupName -VMName $VmName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $VM.Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
-
-}
-
 # Register the VM as a DSC node if needed
 Write-Output "Registering DSC Node..."
    

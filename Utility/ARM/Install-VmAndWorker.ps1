@@ -281,17 +281,6 @@ $VM = Set-AzureRmVMOSDisk -VM $VM -Name $OSDiskName -VhdUri $OSDiskUri -CreateOp
 # Create the new VM
 $VM = New-AzureRmVM -ResourceGroupName $VmResourceGroup -Location $VmLocation -VM $VM -WarningAction SilentlyContinue
 
-# Enable the MMAgent extension if needed
-Write-Output "Acquiring the VM monitoring agent..."
-try {
-
-    $null = Get-AzureRMVMExtension -ResourceGroupName $VmResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
-} catch {
-
-    $null = Set-AzureRMVMExtension -ResourceGroupName $VmResourceGroup -VMName $VmName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $VMLocation -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
-
-}
-
 # Register the VM as a DSC node if needed
 Write-Output "Registering DSC Node..."
    
