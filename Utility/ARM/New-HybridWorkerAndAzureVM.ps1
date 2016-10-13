@@ -361,10 +361,10 @@ function _doImport {
 }
 
 # Add existing Azure RM modules to the update list since all modules must be on the same version
-$ExistingModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
+$ExistingAzureRmModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
                     | where {$_.Name -match "AzureRM"} | select Name
 
-foreach ($Module in $ExistingModules) 
+foreach ($Module in $ExistingAzureRmModules) 
 {
    $Module = Get-AzureRmAutomationModule `
         -ResourceGroupName $ResourceGroup `
@@ -411,6 +411,9 @@ foreach ($Module in $ExistingModules)
    }
 }
 
+# Check against what modules are already up to date and installed
+$ExistingModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
+                    | select Name
 # Create an empty list to hold module names
 $ModuleNames = @()
 
@@ -440,10 +443,20 @@ foreach ($NewModuleName in $ModuleNames) {
 
     if ($NewModuleName -notin $ExistingModules.Name) {
 
-        _doImport `
-            -ResourceGroupName $ResourceGroup `
-            -AutomationAccountName $AutomationAccountName `
-            -ModuleName $NewModuleName
+        if ($NewModuleName -notcontains "HybridRunbookWorker") {
+             _doImport `
+                -ResourceGroupName $ResourceGroup `
+                -AutomationAccountName $AutomationAccountName `
+                -ModuleName $NewModuleName
+        } else {
+             _doImport `
+                -ResourceGroupName $ResourceGroup `
+                -AutomationAccountName $AutomationAccountName `
+                -ModuleName $NewModuleName `
+                -ModuleVersion "1.1"
+        }
+
+       
 
     } else {
 
