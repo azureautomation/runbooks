@@ -130,10 +130,10 @@ $VM = Get-AzureRmVM -ResourceGroupName $VmResourceGroup -Name $VmName -ErrorActi
 Write-Output "Acquiring OMS workspace..."
 
 try {
-    $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
+    $Workspace = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -ErrorAction Stop
 } catch {
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
+    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -WarningAction SilentlyContinue
 }
 
 # Get the workspace ID
