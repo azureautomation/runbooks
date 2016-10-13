@@ -2,13 +2,14 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook removes an exisiting hybrid worker that is also configured as a DSC node.
+    This Azure/OMS Automation runbook removes an exisiting hybrid worker. It assumes that the machine is
+    
+    configured as a DSC node and utilizes DSC to unregister the hybrid worker.
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook removes a hybrid worker.  =The major steps of the script are outlined below.
-   
+    This Azure/OMS Automation runbook removes a hybrid worker.
 
 
 .PARAMETER MachineName
@@ -30,7 +31,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 11, 2016  
+    LASTEDIT: October 13, 2016  
 
 #>
 
@@ -231,48 +232,48 @@ function _doImport {
     }
 }
 
-# Create an empty list to hold module names
-$ModuleNames = @()
+# Add existing Azure RM modules to the update list since all modules must be on the same version
+$ExistingModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
+                        | select Name
 
 # Add the names of the modules necessary to unregister a hybrid worker
-$ModuleNames += "HybridRunbookWorker"
+$NewModuleName = "HybridRunbookWorker"
+$ModuleVersion = "1.1"
 
 # Import modules
-foreach ($NewModuleName in $ModuleNames) {
-     
-     # Check if module exists in the gallery
-    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$NewModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
-    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
+# Check if module exists in the gallery
+$Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$NewModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
+$SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
 
-    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
-        $SearchResult = $SearchResult | Where-Object -FilterScript {
+if($SearchResult.Length -and $SearchResult.Length -gt 1) {
+    $SearchResult = $SearchResult | Where-Object -FilterScript {
 
-            return $_.properties.title -eq $NewModuleName
-
-        }
-    }
-
-    if(!$SearchResult) {
-        throw "Could not find module '$NewModuleName' on PowerShell Gallery."
-    }      
-
-    if ($NewModuleName -notin $ExistingModules.Name) {
-
-        _doImport `
-            -ResourceGroupName $ResourceGroup `
-            -AutomationAccountName $AutomationAccountName `
-            -ModuleName $NewModuleName
-
-    } else {
-
-        Write-Output ("     Module $NewModuleName is up to date.")
+        return $_.properties.title -eq $NewModuleName
 
     }
+}
+
+if(!$SearchResult) {
+    throw "Could not find module '$NewModuleName' on PowerShell Gallery."
+}      
+
+if ($NewModuleName -notin $ExistingModules.Name) {
+
+    _doImport `
+        -ResourceGroupName $ResourceGroup `
+        -AutomationAccountName $AutomationAccountName `
+        -ModuleName $NewModuleName `
+        -ModuleVersion $ModuleVersion
+
+} else {
+
+    Write-Output ("     Module $NewModuleName is up to date.")
 
 }
 
+
 # Get a reference to the DSC node
-$DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $VmName
+$DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name $MachineName
     
 # Create credential paramters for the DSC configuration
 $DscPassword = ConvertTo-SecureString $AutomationPrimaryKey -AsPlainText -Force
@@ -304,7 +305,7 @@ $ConfigData = @{
 
     
 # Download the DSC configuration file
-$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/RemoveHybridWorker.ps1"
+$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/jhunter-msft-dev/Utility/ARM/RemoveHybridWorker.ps1"
 $Destination = "$env:temp\RemoveHybridWorker.ps1"
 
 $null = Invoke-WebRequest -uri $Source -OutFile $Destination
