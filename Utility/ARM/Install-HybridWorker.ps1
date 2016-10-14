@@ -64,7 +64,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 22, 2016  
+    LASTEDIT: October 14, 2016  
 
 #>
 
@@ -130,10 +130,10 @@ $VM = Get-AzureRmVM -ResourceGroupName $VmResourceGroup -Name $VmName -ErrorActi
 Write-Output "Acquiring OMS workspace..."
 
 try {
-    $Workspace = Get-AzureRmOperationalInsightWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -Force -ErrorAction Stop
+    $Workspace = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroup -ErrorAction Stop
 } catch {
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -Force -WarningAction SilentlyContinue
+    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku Standard -ResourceGroupName $ResourceGroup -WarningAction SilentlyContinue
 }
 
 # Get the workspace ID
@@ -143,22 +143,19 @@ $WorkspaceId = $Workspace.CustomerId
 $WorkspaceSharedKeys = Get-AzureRmOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $ResourceGroup -Name $WorkspaceName
 $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 
+# Create automation variables for the workspace id and key
+try {
+    $null = Get-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "HybridWorkspaceKey"
+    $null = Get-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "HybridWorkspaceId"
+} catch {
+    $null = New-AzureRmAutomationVariable -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "HybridWorkspaceKey" -Value $WorkspaceKey -Encrypted $True
+    $null = New-AzureRmAutomationVariable -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "HybridWorkspaceId" -Value $WorkspaceId -Encrypted $True
+}
+
 # Activate the Azure Automation solution in the workspace
 Write-Output "Activating Automation solution in OMS..."
 $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
 
-
-
-# Enable the MMAgent extension if needed
-Write-Output "Acquiring the VM monitoring agent..."
-try {
-
-    $null = Get-AzureRMVMExtension -ResourceGroupName $VM.ResourceGroupName -VMName $VmName -Name 'MicrosoftMonitoringAgent' -ErrorAction Stop
-} catch {
-
-    $null = Set-AzureRMVMExtension -ResourceGroupName $VM.ResourceGroupName -VMName $VmName -Name 'MicrosoftMonitoringAgent' -Publisher 'Microsoft.EnterpriseCloud.Monitoring' -ExtensionType 'MicrosoftMonitoringAgent' -TypeHandlerVersion '1.0' -Location $VM.Location -SettingString "{'workspaceId':  '$workspaceId'}" -ProtectedSettingString "{'workspaceKey': '$workspaceKey' }"
-
-}
 
 # Register the VM as a DSC node if needed
 Write-Output "Registering DSC Node..."
