@@ -14,8 +14,8 @@
     Import-DscResource -ModuleName xPSDesiredStateConfiguration -ModuleVersion 4.0.0.0
 
     $OIPackageLocalPath = "C:\MMASetup-AMD64.exe"
-    $WorkspaceID = Get-AutomationVariable -Name "WorkspaceId" 
-    $WorkspaceKey = Get-AutomationVariable -Name "WorkspaceKey"
+    $WorkspaceID = Get-AutomationVariable -Name "HybridWorkspaceId" 
+    $WorkspaceKey = Get-AutomationVariable -Name "HybridWorkspaceKey"
 
 
 

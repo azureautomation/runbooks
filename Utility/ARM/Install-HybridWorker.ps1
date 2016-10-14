@@ -143,6 +143,15 @@ $WorkspaceId = $Workspace.CustomerId
 $WorkspaceSharedKeys = Get-AzureRmOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $ResourceGroup -Name $WorkspaceName
 $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 
+# Create automation variables for the workspace id and key
+try {
+    $null = Get-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "HybridWorkspaceKey"
+    $null = Get-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -Name "HybridWorkspaceId"
+} catch {
+    $null = New-AzureRmAutomationVariable -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "HybridWorkspaceKey" -Value $WorkspaceKey -Encrypted $True
+    $null = New-AzureRmAutomationVariable -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "HybridWorkspaceId" -Value $WorkspaceId -Encrypted $True
+}
+
 # Activate the Azure Automation solution in the workspace
 Write-Output "Activating Automation solution in OMS..."
 $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroup -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
