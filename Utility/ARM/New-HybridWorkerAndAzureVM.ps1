@@ -114,9 +114,9 @@
 
 .NOTES
 
-    AUTHOR: Jennifer Hunter, Azure/OMS Automation Team
+    AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: September 22, 2016  
+    LASTEDIT: Octoper 14, 2016  
 
 #>
 
@@ -130,17 +130,17 @@ Param (
     [String] $WorkspaceName = "hybrid-worker-" + $IDstring,
 
     [Parameter(Mandatory=$false)]
-    [String] $OmsLocation = "eastus",
+    [String] $OmsLocation,
 
     # VM
     [Parameter(Mandatory=$false)]
     [String] $VmName = "hybridVM" + $IDstring,
 
     [Parameter(Mandatory=$false)]
-    [String] $VmLocation = "eastus",
+    [String] $VmLocation,
 
     [Parameter(Mandatory=$false)]
-    [String] $VmResourceGroup = "",
+    [String] $VmResourceGroup,
 
     [Parameter(Mandatory=$false)]
     [String] $VMUser = "hybridUser",
@@ -149,10 +149,10 @@ Param (
     [String] $VMPassword = "p@ssw0rdHybrid",
 
     [Parameter(Mandatory=$false)]
-    [String] $AvailabilityName = $VmName + "-availability" + $IDstring,
+    [String] $AvailabilityName = $VmName + "-availability",
 
     [Parameter(Mandatory=$false)]
-    [String] $StorageName = $VmName + "disks" + $IDstring,
+    [String] $StorageName = $VmName + "disks",
 
     [Parameter(Mandatory=$false)]
     [String] $OSDiskName = $VmName + "osdisk",
@@ -164,17 +164,11 @@ Param (
     [String] $PIpName = $VmName + "-ip",
 
     [Parameter(Mandatory=$false)]
-    [String] $InterfaceName = $VmName + $IDString
+    [String] $InterfaceName = $VmName
 )
 
 # Stop the runbook if any errors occur
 $ErrorActionPreference = "Stop"
-
-# Check that the provided region is a supported OMS region
-$validRegions = "westeurope", "southeastasia", "eastus", "australiasoutheast"
-if ($validRegions -notcontains $OmsLocation) {
-    throw "Currently, only the West Europe, East US, Australia Southeast, and Southeast Asia regions are supported for OMS."
-}
 
 # Connect to the current Azure account
 Write-Output "Pulling account credentials..."
@@ -215,7 +209,32 @@ if ([string]::IsNullOrEmpty($VMResourceGroup)) {
 }
 
 # Check that the automation account name is valid
-$null = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroup -Name $AutomationAccountName -ErrorAction Stop
+$AA = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroup -Name $AutomationAccountName -ErrorAction Stop
+$AALocation = $AA.Location
+
+# If the VM location variable is empty, set it to be the same as the automation acount
+if ([string]::IsNullOrEmpty($VMLocation)) {
+    $VMLocation = $AALocation
+}
+
+# If not provided, select an OMS workspace region
+if ([string]::IsNullOrEmpty($OmsLocation)) {
+    if ($AALocation -contains "europe") {
+        $OmsLocation = "westeurope"
+    } elseif ($AALocation -contains "asia") {
+        $OmsLocation = "southeastasia"
+    } elseif ($AALocation -contains "australia") {
+        $OmsLocation = "australiasoutheast"
+    } else {
+        $OmsLocation = "eastus"
+    }
+}
+
+# Check that the provided region is a supported OMS region
+$validRegions = "westeurope", "southeastasia", "eastus", "australiasoutheast"
+if ($validRegions -notcontains $OmsLocation) {
+    throw "Currently, only the West Europe, East US, Australia Southeast, and Southeast Asia regions are supported for OMS."
+}
 
 # Add and update modules on the Automation account
 ######
@@ -411,69 +430,84 @@ foreach ($Module in $ExistingAzureRmModules)
    }
 }
 
-# Check against what modules are already up to date and installed
-$ExistingModules = Get-AzureRmAutomationModule -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName `
-                    | select Name
 # Create an empty list to hold module names
-$ModuleNames = @()
+$Modules = @()
 
 # Add the names of the modules necessary to register a hybrid worker
-$ModuleNames += "AzureRM.Network"
-$ModuleNames += "AzureRM.OperationalInsights"
-$ModuleNames += "HybridRunbookWorker"
+$Modules += @{"Name" = "AzureRM.Network"; "Version" = ""}
+$Modules += @{"Name" = "AzureRM.OperationalInsights"; "Version" = ""}
+$Modules += @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
+$Modules += @{"Name" = "xPSDesiredStateConfiguration"; "Version" = "4.0.0.0"}
 
 # Import modules
-foreach ($NewModuleName in $ModuleNames) {
+foreach ($NewModule in $Modules) {
+    $ModuleName = $NewModule.Name
+    $ModuleVersion = $NewModule.Version
+
+    # Check if the version of the module if it is already in the automation account
+    try {
+
+        $ModuleInAutomation = Get-AzureRmAutomationModule `
+            -ResourceGroupName $ResourceGroup `
+            -AutomationAccountName $AutomationAccountName `
+            -Name $ModuleName
+
+        $ModuleVersionInAutomation = $ModuleInAutomation.Version
+    } catch {
+
+        $ModuleVersionInAutomation = "0.0"
+
+    }
+
      
      # Check if module exists in the gallery
-    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$NewModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
+    $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$ModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
     $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
 
     if($SearchResult.Length -and $SearchResult.Length -gt 1) {
         $SearchResult = $SearchResult | Where-Object -FilterScript {
 
-            return $_.properties.title -eq $NewModuleName
+            return $_.properties.title -eq $ModuleName
 
         }
     }
 
     if(!$SearchResult) {
-        throw "Could not find module '$NewModuleName' on PowerShell Gallery."
-    }      
+        
+        throw "Could not find module '$ModuleName' on PowerShell Gallery."
+    }   else {
+        
+        if (!$ModuleVersion) {
 
-    if ($NewModuleName -notin $ExistingModules.Name) {
+            $PackageDetails = Invoke-RestMethod -Method Get -UseBasicParsing -Uri $SearchResult.id 
+            $ModuleVersion = $PackageDetails.entry.properties.version
 
-        if ($NewModuleName -notcontains "HybridRunbookWorker") {
-             _doImport `
-                -ResourceGroupName $ResourceGroup `
-                -AutomationAccountName $AutomationAccountName `
-                -ModuleName $NewModuleName
-        } else {
-             _doImport `
-                -ResourceGroupName $ResourceGroup `
-                -AutomationAccountName $AutomationAccountName `
-                -ModuleName $NewModuleName `
-                -ModuleVersion "1.1"
         }
+        
+        if(($ModuleVersionInAutomation -ne $ModuleVersion)) {
 
-       
+             _doImport `
+                -ResourceGroupName $ResourceGroup `
+                -AutomationAccountName $AutomationAccountName `
+                -ModuleName $ModuleName `
+                -ModuleVersion $ModuleVersion
 
-    } else {
+        } else {
 
-        Write-Output ("     Module $NewModuleName is up to date.")
+            Write-Output ("     Module '$ModuleName' is up to date.")
 
+        }
     }
-
 }
 
-# Check for the Install-NewVmWorker runbook in the automation account, import if not there
+# Check for the Install-NewVmAndWorker runbook in the automation account, import if not there
 try {
     
     $null = Get-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "Install-VmAndWorker" -ErrorAction Stop
 
 } catch {
 
-    # Download Install-NewVmWorker
+    # Download Install-NewVmAndWorker
     $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Install-VmAndWorker.ps1"
     $Destination = "$env:temp\Install-VmAndWorker.ps1"
 
