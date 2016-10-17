@@ -2,14 +2,14 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, & OMS workspace 
+    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. An OMS workspace 
     will all be generated if needed.
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, OMS workspace,
-    and VM will all be generated if needed. The major steps of the script are outlined below.
+    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. The major steps of
+    the script are outlined below.
     
     1) Login to an Azure account
     2) Check for the resource group and automation account
@@ -51,7 +51,7 @@
 
 .PARAMETER MachineName
 
-    Mandatory. The computer name  to be referenced. If not specified, a computer name is created, referencing
+    Optional. The computer name  to be referenced. If not specified, a computer name is created, referencing
     
     the IDString in order to create a unique identifier.
 
@@ -82,7 +82,7 @@ Param (
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
-[String] $WorkspaceName = "hybridWorkerWorkspace" + (Get-Random -Maximum 99999),
+[String] $WorkspaceName = "hybridWorkspace" + (Get-Random -Maximum 99999),
 
 # Automation
 [Parameter(Mandatory=$true)]
