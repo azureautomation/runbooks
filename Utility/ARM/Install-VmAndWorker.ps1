@@ -2,7 +2,7 @@
 
 .SYNOPSIS 
 
-        This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. (1/2)
+    This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. (2/2)
 
 
 .DESCRIPTION
@@ -15,7 +15,7 @@
     3) Enable the Azure Automation solution in OMS
     4) Create a new VM 
     5) Download the DSC agent
-    6) Submit the configuration to register the machine as a hybrid worker
+    6) Submit the DSC configuration to register the machine as a hybrid worker
 
 
 .PARAMETER ResourceGroup

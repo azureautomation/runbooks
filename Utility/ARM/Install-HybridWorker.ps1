@@ -57,14 +57,14 @@
 
 .EXAMPLE
 
-    Install-HybridWorker -MachineName "ContosoVM" -ResourceGroup "ContosoResources" -AutomationAccountName "ContosoAA" -WorkspaceName "ContosoSpace" -Location "westeurope"
+    Install-HybridWorker -MachineName "ContosoVM" -ResourceGroup "ContosoResources" -AutomationAccountName "ContosoAA" -WorkspaceName "ContosoSpace" -OmsLocation "westeurope"
 
 
 .NOTES
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 14, 2016  
+    LASTEDIT: October 17, 2016  
 
 #>
 

@@ -14,10 +14,10 @@
     1) Login to an Azure account
     2) Check for the resource group and automation account
     3) Create references to automation account attributes
-    4) Download the necessary modules
+    4) Install the necessary modules
     5) Create an OMS Workspace if needed
     6) Enable the Azure Automation solution in OMS
-    7) Download and install the Microsoft Monitoring agent
+    7) Download and install the Microsoft Monitoring Agent
     8) Register the machine as hybrid worker
 
  
@@ -125,10 +125,10 @@ if ([string]::IsNullOrEmpty($SubscriptionID)) {
 # Set the active subscription
 $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
 
-# Create the resource group if needed
+# Check that the resource group is valid
 $null = Get-AzureRmResourceGroup -Name $ResourceGroupName
 
-# Create a new automation account if needed 
+# Check that the automation account is valid
 $AutomationAccount = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName
 
 # Find the automation account region

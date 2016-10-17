@@ -31,7 +31,9 @@
 
 .PARAMETER OmsLocation
 
-    Optional. The region of the OMS Workspace to be referenced. If not specified, "eastus" is used.
+    Optional. The region of the OMS Workspace to be referenced. If not specified, the closest valid
+
+    region to the Automation account is chosen.
 
 
 .PARAMETER VMName
@@ -116,7 +118,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: Octoper 14, 2016  
+    LASTEDIT: Octoper 17, 2016  
 
 #>
 
@@ -127,7 +129,7 @@ Param (
 
     # OMS Workspace
     [Parameter(Mandatory=$false)]
-    [String] $WorkspaceName = "hybrid-worker-" + $IDstring,
+    [String] $WorkspaceName = "hybridworker" + $IDstring,
 
     [Parameter(Mandatory=$false)]
     [String] $OmsLocation,
@@ -500,14 +502,14 @@ foreach ($NewModule in $Modules) {
     }
 }
 
-# Check for the Install-NewVmAndWorker runbook in the automation account, import if not there
+# Check for the Install-VmAndWorker runbook in the automation account, import if not there
 try {
     
     $null = Get-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "Install-VmAndWorker" -ErrorAction Stop
 
 } catch {
 
-    # Download Install-NewVmAndWorker
+    # Download Install-VmAndWorker
     $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Install-VmAndWorker.ps1"
     $Destination = "$env:temp\Install-VmAndWorker.ps1"
 
