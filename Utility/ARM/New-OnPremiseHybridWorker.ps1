@@ -11,10 +11,10 @@
     This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. The major steps of
     the script are outlined below.
     
-    1) Login to an Azure account
-    2) Check for the resource group and automation account
-    3) Create references to automation account attributes
-    4) Install the necessary modules
+    1) Install the necessary modules
+    2) Login to an Azure account
+    3) Check for the resource group and automation account
+    4) Create references to automation account attributes
     5) Create an OMS Workspace if needed
     6) Enable the Azure Automation solution in OMS
     7) Download and install the Microsoft Monitoring Agent
@@ -65,7 +65,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 14, 2016  
+    LASTEDIT: October 17, 2016  
 
 #>
 
@@ -96,8 +96,47 @@ Param (
 # Stop the script if any errors occur
 $ErrorActionPreference = "Stop"
 
+# Add and update modules on the Automation account
+Write-Output "Importing necessary modules..."
+
+# Create a list of the modules necessary to register a hybrid worker
+$AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
+$HybridModule = @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
+$Modules = @($AzureRmModule; $HybridModule)
+
+
+# Import modules
+foreach ($Module in $Modules) {
+
+    $ModuleName = $Module.Name
+
+    # Find the module version
+    if ([string]::IsNullOrEmpty($Module.Version)){
+        
+        # Find the latest module version if a version wasn't provided
+        $ModuleVersion = (Find-Module -Name $ModuleName).Version
+
+    } else {
+
+        $ModuleVersion = $Module.Version
+
+    }
+
+    # Check if the required module is already installed
+    $CurrentModule = Get-Module -Name $ModuleName -ListAvailable | where "Version" -eq $ModuleVersion
+
+    if (!$CurrentModule) {
+
+        $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force
+        Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
+
+    } else {
+        Write-Output "     Required version $ModuleVersion of $ModuleName is installed..."
+    }
+}
+
 # Connect to the current Azure account
-Write-Output "Pulling account credentials..."
+Write-Output "Pulling Azure account credentials..."
 
 # Login to Azure account
 $Account = Add-AzureRmAccount
@@ -138,45 +177,6 @@ $AALocation = $AutomationAccount.Location
 $AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName
 $AutomationPrimaryKey = $AutomationInfo.PrimaryKey
 $AutomationEndpoint = $AutomationInfo.Endpoint
-
-# Add and update modules on the Automation account
-Write-Output "Importing necessary modules..."
-
-# Create a list of the modules necessary to register a hybrid worker
-$AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
-$HybridModule = @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
-$Modules = @($AzureRmModule; $HybridModule)
-
-
-# Import modules
-foreach ($Module in $Modules) {
-
-    $ModuleName = $Module.Name
-
-    # Find the module version
-    if ([string]::IsNullOrEmpty($Module.Version)){
-        
-        # Find the latest module version if a version wasn't provided
-        $ModuleVersion = (Find-Module -Name $ModuleName).Version
-
-    } else {
-
-        $ModuleVersion = $Module.Version
-
-    }
-
-    # Check if the required module is already installed
-    $CurrentModule = Get-Module -Name $ModuleName -ListAvailable | where "Version" -eq $ModuleVersion
-
-    if (!$CurrentModule) {
-
-        $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force
-        Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
-
-    } else {
-        Write-Output "     Required version $ModuleVersion of $ModuleName is installed..."
-    }
-}
 
 # Create a new OMS workspace if needed
 try {
