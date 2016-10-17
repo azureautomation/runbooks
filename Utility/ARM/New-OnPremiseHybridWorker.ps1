@@ -187,11 +187,12 @@ try {
 
 } catch {
 
-    if ($AALocation -contains "europe") {
+    # Select an OMS workspace region
+    if ($AALocation -match "europe") {
         $OmsLocation = "westeurope"
-    } elseif ($AALocation -contains "asia") {
+    } elseif ($AALocation -match "asia") {
         $OmsLocation = "southeastasia"
-    } elseif ($AALocation -contains "australia") {
+    } elseif ($AALocation -match "australia") {
         $OmsLocation = "australiasoutheast"
     } else {
         $OmsLocation = "eastus"

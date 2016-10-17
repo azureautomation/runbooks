@@ -219,11 +219,11 @@ if ([string]::IsNullOrEmpty($VMLocation)) {
 
 # If not provided, select an OMS workspace region
 if ([string]::IsNullOrEmpty($OmsLocation)) {
-    if ($AALocation -contains "europe") {
+    if ($AALocation -match "europe") {
         $OmsLocation = "westeurope"
-    } elseif ($AALocation -contains "asia") {
+    } elseif ($AALocation -match "asia") {
         $OmsLocation = "southeastasia"
-    } elseif ($AALocation -contains "australia") {
+    } elseif ($AALocation -match "australia") {
         $OmsLocation = "australiasoutheast"
     } else {
         $OmsLocation = "eastus"
