@@ -102,7 +102,6 @@ $AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
 $HybridModule = @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
 $Modules = @($AzureRmModule; $HybridModule)
 
-
 # Import modules
 foreach ($Module in $Modules) {
 
@@ -203,7 +202,7 @@ try {
 }
 
 # Provide warning if the Automation account and OMS regions are different
-if ($AALocation -match $OmsLocation) {
+if (!($AALocation -match $OmsLocation)) {
     Write-Output "Warning: Your Automation account and OMS workspace are in different regions and will not be compatible for future linking."
 }
 
