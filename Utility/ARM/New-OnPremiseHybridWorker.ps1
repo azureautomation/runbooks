@@ -8,9 +8,10 @@
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. The major steps of
-    the script are outlined below.
+    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. NOTE: This script is
+    intended to be run with administrator privileges and on a machine with WMF 5.
     
+    The major steps of the script are outlined below. 
     1) Install the necessary modules
     2) Login to an Azure account
     3) Check for the resource group and automation account
@@ -179,8 +180,8 @@ $AutomationEndpoint = $AutomationInfo.Endpoint
 try {
 
     $Workspace = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroupName  -ErrorAction Stop
-    Write-Output "Referencing existing OMS Workspace named $WorkspaceName..."
     $OmsLocation = $Workspace.Location
+    Write-Output "Referencing existing OMS Workspace named $WorkspaceName in region $OmsLocation..."
 
 } catch {
 
@@ -227,11 +228,13 @@ $null = Unblock-File $Destination
 cd $env:temp
 
 # Install the MMA
-./MMASetup-AMD64.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID= + $WorkspaceID + OPINSIGHTS_WORKSPACE_KEY= + $WorkspaceKey + AcceptEndUserLicenseAgreement=1 
+.\MMASetup-AMD64.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID= + $WorkspaceID + OPINSIGHTS_WORKSPACE_KEY= + $WorkspaceKey + AcceptEndUserLicenseAgreement=1 
 
 # Check for the HybridRegistration module
 Write-Output "Checking for the HybridRegistration module..."
-$null = Get-Module -Name HybridRegistration -ListAvailable
+if (!(Get-Module -Name HybridRegistration -ListAvailable)) {
+    throw "The HybridRegistration module was not found. Please ensure the Microsoft Monitoring Agent was correctly installed."
+}
 
 # Register the hybrid runbook worker
 Write-Output "Registering the hybrid runbook worker..."
