@@ -49,11 +49,9 @@
     is created, referencing the IDString in order to create a unique identifier.
 
 
-.PARAMETER MachineName
+.PARAMETER GroupName
 
-    Optional. The computer name  to be referenced. If not specified, a computer name is created, referencing
-    
-    the IDString in order to create a unique identifier.
+    Mandatory. The hybrid worker group name to be referenced.
 
 
 .EXAMPLE
@@ -89,8 +87,8 @@ Param (
 [String] $AutomationAccountName ,
 
 # Machine
-[Parameter(Mandatory=$false)]
-[String] $MachineName = $env:computername
+[Parameter(Mandatory=$true)]
+[String] $GroupName
 )
 
 # Stop the script if any errors occur
@@ -230,7 +228,7 @@ $null = Unblock-File $Destination
 cd $env:temp
 
 # Install the MMA
-MMASetup-AMD64.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID= + $WorkspaceID + OPINSIGHTS_WORKSPACE_KEY= + $WorkspaceKey + AcceptEndUserLicenseAgreement=1 
+./MMASetup-AMD64.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID= + $WorkspaceID + OPINSIGHTS_WORKSPACE_KEY= + $WorkspaceKey + AcceptEndUserLicenseAgreement=1 
 
 # Check for the HybridRegistration module
 Write-Output "Checking for the HybridRegistration module..."
@@ -238,4 +236,4 @@ $null = Get-Module -Name HybridRegistration -ListAvailable
 
 # Register the hybrid runbook worker
 Write-Output "Registering the hybrid runbook worker..."
-Add-HybridRunbookWorker -Name $MachineName -EndPoint $AutomationEndpoint -Token $AutomationPrimaryKey
+Add-HybridRunbookWorker -Name $GroupName -EndPoint $AutomationEndpoint -Token $AutomationPrimaryKey
