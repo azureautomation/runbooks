@@ -101,8 +101,7 @@ Write-Output "Importing necessary modules..."
 
 # Create a list of the modules necessary to register a hybrid worker
 $AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
-$HybridModule = @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
-$Modules = @($AzureRmModule; $HybridModule)
+$Modules = @($AzureRmModule)
 
 # Import modules
 foreach ($Module in $Modules) {
@@ -254,27 +253,37 @@ try {
 
 # Sleep until the MMA object has been registered
 Write-Output "Waiting for agent registration to complete..."
-# Timeout = 120 seconds
-$i = 12
-while (!$mma -and ($i -gt 0)) {
+
+# Timeout = 180 seconds = 3 minutes
+$i = 18
+
+do {
     
+    # Check for the MMA folders
+    try {
+        # Change the directory to the location of the hybrid registration module
+        cd "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AzureAutomation"
+        $version = (ls | Select -First 1).Name
+        cd "$version\HybridRegistration"
+
+        # Import the module
+        Import-Module (Resolve-Path('HybridRegistration.psd1'))
+
+        # Mark the flag as true
+        $hybrid = $true
+    } catch{
+
+        $hybrid = $false
+
+    }
+    # Sleep for 10 seconds
     Start-Sleep -s 10
     $i--
 
-    # Check for the MMA object
-    try {
-        $mma = New-Object -ComObject 'AgentConfigManager.MgmtSvcCfg'
-    } catch{
-        $mma = $null
-    }
+} until ($hybrid -or ($i -le 0))
 
-} 
-
-# Check for the HybridRegistration module
-Write-Output "Checking for the HybridRegistration module..."
-
-if (!(Get-Module -Name HybridRegistration -ListAvailable)) {
-    throw "The HybridRegistration module was not found. Please restart your machine to reload the module list."
+if ($i -le 0) {
+    throw "The HybridRegistration module was not found. Please ensure the Microsoft Monitoring Agent was correctly installed."
 }
 
 # Register the hybrid runbook worker
