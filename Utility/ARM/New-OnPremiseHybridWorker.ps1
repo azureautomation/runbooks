@@ -64,7 +64,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 17, 2016  
+    LASTEDIT: October 18, 2016  
 
 #>
 
@@ -91,6 +91,7 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $GroupName
 )
+
 
 # Stop the script if any errors occur
 $ErrorActionPreference = "Stop"
@@ -217,22 +218,62 @@ $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 # Activate the Azure Automation solution in the workspace
 $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
 
-# Download the Microsoft monitoring agent
-$Source = "https://download.microsoft.com/download/8/4/3/84312DF3-5111-4C13-9192-EBF2DF81B19B/MMASetup-AMD64.exe"
-$Destination = "$env:temp\MMASetup-AMD64.exe"
+# Check for the MMA on the machine
+try {
 
-$null = Invoke-WebRequest -uri $Source -OutFile $Destination
-$null = Unblock-File $Destination
+    $mma = New-Object -ComObject 'AgentConfigManager.MgmtSvcCfg'
+    
+    Write-Output "Configuring the MMA..."
+    $mma.AddCloudWorkspace($WorkspaceId, $WorkspaceKey)
+    $mma.ReloadConfiguration()
 
-# Change directory to location of the downloaded MMA
-cd $env:temp
+} catch {
+    # Download the Microsoft monitoring agent
+    Write-Output "Downloading and installing the Microsoft Monitoring Agent..."
 
-# Install the MMA
-.\MMASetup-AMD64.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID= + $WorkspaceID + OPINSIGHTS_WORKSPACE_KEY= + $WorkspaceKey + AcceptEndUserLicenseAgreement=1 
+    # Check whether or not to download the 64-bit executable or the 32-bit executable
+    if ([Environment]::Is64BitProcess) {
+        $Source = "http://download.microsoft.com/download/1/5/E/15E274B9-F9E2-42AE-86EC-AC988F7631A0/MMASetup-AMD64.exe"
+    } else {
+        $Source = "http://download.microsoft.com/download/1/5/E/15E274B9-F9E2-42AE-86EC-AC988F7631A0/MMASetup-i386.exe"
+    }
+
+    $Destination = "$env:temp\MMASetup.exe"
+
+    $null = Invoke-WebRequest -uri $Source -OutFile $Destination
+    $null = Unblock-File $Destination
+
+    # Change directory to location of the downloaded MMA
+    cd $env:temp
+
+    # Install the MMA
+    $Command = "/C:setup.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID=$WorkspaceID" + " OPINSIGHTS_WORKSPACE_KEY=$WorkspaceKey " + " AcceptEndUserLicenseAgreement=1"
+    .\MMASetup.exe $Command
+
+}
+
+# Sleep until the MMA object has been registered
+Write-Output "Waiting for agent registration to complete..."
+# Timeout = 120 seconds
+$i = 12
+while (!$mma -and ($i -gt 0)) {
+    
+    Start-Sleep -s 10
+    $i--
+
+    # Check for the MMA object
+    try {
+        $mma = New-Object -ComObject 'AgentConfigManager.MgmtSvcCfg'
+    } catch{
+        $mma = $null
+    }
+
+} 
 
 # Check for the HybridRegistration module
 Write-Output "Checking for the HybridRegistration module..."
-if (!(Get-Module -Name HybridRegistration -ListAvailable)) {
+
+if ( !(Get-Module -Name HybridRegistration -ListAvailable)) {
     throw "The HybridRegistration module was not found. Please ensure the Microsoft Monitoring Agent was correctly installed."
 }
 
