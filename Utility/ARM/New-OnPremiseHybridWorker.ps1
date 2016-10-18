@@ -263,7 +263,7 @@ do {
     try {
         # Change the directory to the location of the hybrid registration module
         cd "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AzureAutomation"
-        $version = (ls | Select -First 1).Name
+        $version = (ls | Sort-Object LastWriteTime -Descending | Select -First 1).Name
         cd "$version\HybridRegistration"
 
         # Import the module
