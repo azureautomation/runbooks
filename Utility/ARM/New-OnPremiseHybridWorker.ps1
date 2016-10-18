@@ -273,8 +273,8 @@ while (!$mma -and ($i -gt 0)) {
 # Check for the HybridRegistration module
 Write-Output "Checking for the HybridRegistration module..."
 
-if ( !(Get-Module -Name HybridRegistration -ListAvailable)) {
-    throw "The HybridRegistration module was not found. Please ensure the Microsoft Monitoring Agent was correctly installed."
+if (!(Get-Module -Name HybridRegistration -ListAvailable)) {
+    throw "The HybridRegistration module was not found. Please ensure that the Microsoft Monitoring Agent was correctly installed and/or restart your machine to reload the module list."
 }
 
 # Register the hybrid runbook worker
