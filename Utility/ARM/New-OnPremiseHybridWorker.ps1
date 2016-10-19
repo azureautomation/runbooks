@@ -50,14 +50,14 @@
     is created, referencing the IDString in order to create a unique identifier.
 
 
-.PARAMETER GroupName
+.PARAMETER HybridGroupName
 
     Mandatory. The hybrid worker group name to be referenced.
 
 
 .EXAMPLE
 
-    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources" -GroupName "ContosoHybridGroup"
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup"
 
 
 .NOTES
@@ -89,7 +89,7 @@ Param (
 
 # Machine
 [Parameter(Mandatory=$true)]
-[String] $GroupName
+[String] $HybridGroupName
 )
 
 
@@ -288,4 +288,4 @@ if ($i -le 0) {
 
 # Register the hybrid runbook worker
 Write-Output "Registering the hybrid runbook worker..."
-Add-HybridRunbookWorker -Name $GroupName -EndPoint $AutomationEndpoint -Token $AutomationPrimaryKey
+Add-HybridRunbookWorker -Name $HybridGroupName -EndPoint $AutomationEndpoint -Token $AutomationPrimaryKey
