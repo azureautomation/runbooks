@@ -57,7 +57,7 @@
 
 .EXAMPLE
 
-    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources"
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources" -GroupName "ContosoHybridGroup"
 
 
 .NOTES
