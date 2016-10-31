@@ -118,7 +118,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: Octoper 17, 2016  
+    LASTEDIT: October 17, 2016  
 
 #>
 
