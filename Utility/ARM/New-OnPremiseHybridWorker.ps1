@@ -31,9 +31,7 @@
 
 .PARAMETER SubscriptionID
 
-    Optional. A string containing the SubscriptionID to be used. If not specified, the first subscriptionID
-
-    associated with the account is used.
+    Mandatory. A string containing the SubscriptionID to be used. 
 
 
 .PARAMETER WorkspaceName
@@ -76,7 +74,7 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $ResourceGroupName,
 
-[Parameter(Mandatory=$false)]
+[Parameter(Mandatory=$true)]
 [String] $SubscriptionID = "",
 
 # OMS Workspace
@@ -139,25 +137,11 @@ Write-Output "Pulling Azure account credentials..."
 # Login to Azure account
 $Account = Add-AzureRmAccount
 
-# If a subscriptionID has not been provided, select the first registered to the account
-if ([string]::IsNullOrEmpty($SubscriptionID)) {
-   
-    # Get a list of all subscriptions
-    $Subscription =  Get-AzureRmSubscription
+# Get a reference to the current subscription
+$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+# Get the tenant id for this subscription
+$TenantID = $Subscription.TenantId
 
-    # Get the subscription ID
-    $SubscriptionID = (($Subscription).SubscriptionId | Select -First 1).toString()
-
-    # Get the tenant id for this subscription
-    $TenantID = (($Subscription).TenantId | Select -First 1).toString()
-
-} else {
-
-    # Get a reference to the current subscription
-    $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
-    # Get the tenant id for this subscription
-    $TenantID = $Subscription.TenantId
-}
 
 # Set the active subscription
 $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
