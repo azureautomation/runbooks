@@ -75,7 +75,7 @@ Param (
 [String] $ResourceGroupName,
 
 [Parameter(Mandatory=$true)]
-[String] $SubscriptionID = "",
+[String] $SubscriptionID,
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
