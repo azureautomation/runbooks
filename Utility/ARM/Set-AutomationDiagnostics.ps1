@@ -67,7 +67,7 @@ Param
     Write-Verbose ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
     if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid))
     {
-            throw "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters"
+            throw "This runbook needs to be run from the automation service."
     }
     $AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 
