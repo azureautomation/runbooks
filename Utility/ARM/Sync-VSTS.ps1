@@ -1,4 +1,4 @@
-﻿<#
+ <#
 .SYNOPSIS 
     This Azure Automation runbook syncs runbook and configurations from VSTS source control. It requires that a 
     service hook be set up in VSTS to trigger this runbook when changes are made.
@@ -24,10 +24,10 @@
 .PARAMETER VSFolder
     Required. The name of the folder in VSTS where the runbooks and configurations exist.
     This should look like '$/ContosoDev/AutomationScriptsConfigurations'
-
+  
 .PARAMETER VSAccount
-    Required. The name of the account in VSTS 
-    
+    Required. The name of the account in VSTS
+
 .PARAMETER VSAccessTokenVariableName
     Required. The name of the Automation variable that holds the access token for access to the VSTS project.
     You can set this up by following http://www.visualstudio.com/en-us/integrate/get-started/auth/overview 
@@ -249,7 +249,7 @@ Function Get-TFSVersionFolder{
 
 } 
 
-
+　
 Function Get-TFSVersionFile{
     [CmdletBinding(DefaultParameterSetName='UseConnectionObject')]
     param(
@@ -399,7 +399,7 @@ try
 
     Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose 
 
-
+　
     # Get the personal access token to access VSTS
     $AccessToken = Get-AutomationVariable -Name $VSAccessTokenVariableName
     if (!$AccessToken)
@@ -423,7 +423,7 @@ try
             if ($File.path -match ".ps1")
             {
                 $PSPath = Get-TFSVersionFile -Connection $Connection -VersionControlPath $File.path -LocalPath $PSFolderPath
-                Write-Output("Syncing " +  $PSPath)
+                Write-Output("Syncing " +  $File.path )
                 $AST = [System.Management.Automation.Language.Parser]::ParseFile($PSPath, [ref]$null, [ref]$null);
                 If ($AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))
                 {
@@ -459,25 +459,28 @@ try
                 if ($File.changeType -match "delete")
                 {
                     $FileName = Split-Path $File.item.path -Leaf
-                    $Name = $FileName.Substring(0,$FileName.LastIndexOf('.'))
-                    Write-Verbose ("Removing " + $Name)
-                    
-                    # Since we no longer have the file, will just try and remove it as a runbook
-                    # and catch the exception and then remove as a configuration
-                    try
+                    $Name = $FileName.Substring(0,$FileName.LastIndexOf('.'))              
+                    $Runbook = Get-AzureRmAutomationRunbook -Name $Name -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -ErrorAction SilentlyContinue
+                    if ($Runbook -ne $null)
                     {
+                        Write-Output ("Removing runbook " + $Name)    
                         Remove-AzureRmAutomationRunbook -Name $Name -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Force
                     }
-                    catch
+                    else
                     {
-                        Remove-AzureRmAutomationDscConfiguration -Name $Name -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Force
+                        $Configuration = Get-AzureRmAutomationDscConfiguration -Name $Name -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -ErrorAction SilentlyContinue
+                        if ($Configuration -ne $null)
+                        {
+                            Write-Output ("Removing configuration " + $Name)  
+                            Remove-AzureRmAutomationDscConfiguration -Name $Name -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Force
+                        }
                     }
                 }
                 else
                 {
                     # Download the file locally and then upload to the automation service
                     $PSPath = Get-TFSVersionFile -Connection $Connection -VersionControlPath $File.item.path -LocalPath $PSFolderPath
-                    Write-Output("Syncing " +  $PSPath)
+                    Write-Output("Syncing " +  $File.item.path)
                     $AST = [System.Management.Automation.Language.Parser]::ParseFile($PSPath, [ref]$null, [ref]$null);
                     If ($AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))
                     {
@@ -510,4 +513,4 @@ finally
     {
         Remove-Item $PSFolderPath -Recurse -Force
     }
-}
+} 
