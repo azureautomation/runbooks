@@ -24,7 +24,10 @@
 .PARAMETER VSFolder
     Required. The name of the folder in VSTS where the runbooks and configurations exist.
     This should look like '$/ContosoDev/AutomationScriptsConfigurations'
-  
+
+.PARAMETER VSAccount
+    Required. The name of the account in VSTS 
+    
 .PARAMETER VSAccessTokenVariableName
     Required. The name of the Automation variable that holds the access token for access to the VSTS project.
     You can set this up by following http://www.visualstudio.com/en-us/integrate/get-started/auth/overview 
