@@ -1,4 +1,4 @@
-  <#
+<#
 .SYNOPSIS 
     This Azure Automation runbook syncs runbook and configurations from VSTS source control. It requires that a 
     service hook be set up in VSTS to trigger this runbook when changes are made.
