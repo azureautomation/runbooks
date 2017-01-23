@@ -1,4 +1,4 @@
-<#
+ <#
 .SYNOPSIS 
     This Azure Automation runbook syncs runbook and configurations from VSTS source control. It requires that a 
     service hook be set up in VSTS to trigger this runbook when changes are made.
@@ -407,7 +407,7 @@ try
     $AccessToken = Get-AutomationVariable -Name $VSAccessTokenVariableName
     if (!$AccessToken)
     {
-        throw "Variable $AccessToken not found. Create this secure variable that holds your access token"
+        throw "Variable $VSAccessTokenVariableName not found. Create this secure variable that holds your access token"
     }
 
     $Connection = Set-ConnectionValues -Password $AccessToken -Account $VSAccount
