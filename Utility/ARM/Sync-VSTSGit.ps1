@@ -18,7 +18,7 @@ Azure Automation Visual Studio Team Services Git Source Control
 https://raw.githubusercontent.com/azureautomation/runbooks/master/LICENSE
 
 .PROJECTURI 
-https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Sync-VSTSGIT.ps1
+https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Sync-VSTSGit.ps1
 
 .ICONURI 
 
