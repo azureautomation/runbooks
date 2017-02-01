@@ -119,16 +119,17 @@ for ($j = 0; $j -lt $output.Length; $j++) {
         $QuoteIndex1 = $Output[$j].IndexOf('"')
         $PropertyName = $Output[$j].Substring(0, $QuoteIndex1)
 
-
         # Find the property's value
         $Output[$j] = $Output[$j].Substring(0,$Output[$j].LastIndexOf('"'))
         $QuoteIndex2 = $Output[$j].LastIndexOf('"') + 1
         $PropertyValue = $output[$j].Substring($QuoteIndex2, ($Output[$j].Length - $QuoteIndex2))
 
-        # Add the value pair to the dictionary
+        # Add the value pair to the dictionary, check for duplicate entries (may result from metadata)
         try {
+
             $Properties.Add($PropertyName, $PropertyValue)
-            #Write-Output "$PropertyName : $PropertyValue"
+            Write-Output "$PropertyName : $PropertyValue"
+
         } catch{}
        
     }
@@ -147,7 +148,7 @@ for ($j = 0; $j -lt $output.Length; $j++) {
 # Thrown an error if the output didn't contain a valid change record
 if ($i -lt 0) {
 
-    Write-Error ("Error: Please check your values.")
+    Write-Error ("Error: Please check your values and query.")
 
 }
 
@@ -186,7 +187,7 @@ if ($Properties.Get_Item("ChangeCategory") -imatch "Added") {
     # To-do: Undo modification based on type and what field was changed
 }
 
-# Use the Change Type to provide reference to the specific change item
+# Use the Change Type to provide a naming reference to the specific change item
 $ItemName = ""
 
 switch ($ChangeType) {
@@ -225,4 +226,5 @@ $DscBlock = "$DscBlock`n`t$ItemName"
 $DscBlock = "$DscBlock`n}"
 
 #Print out the DSC Block
+Write-Output "`n`n`n"
 Write $DscBlock
