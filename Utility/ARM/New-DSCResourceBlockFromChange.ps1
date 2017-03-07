@@ -28,6 +28,11 @@
     Mandatory. The name of the OMS workspace where the Change Tracking change record belongs.
 
 
+.PARAMETER AutomationAccountName
+
+    Optional. The name of the Automation Account to store the DSC configuration. If blank, the configuration will not be stored.
+
+
 .PARAMETER StartDateTime
 
     Optional. The start date and time for the time window to look for the change record. Defaults to past 24 hours ago.
@@ -72,6 +77,10 @@ Param (
 # OMS Workspace Name
 [Parameter(Mandatory=$true)]
 [String] $WorkspaceName,
+
+# Azure Automation Account Name
+[Parameter(Mandatory=$false)]
+[String] $AutomationAccountName,
 
 # Start
 [Parameter(Mandatory=$false)]
@@ -172,16 +181,16 @@ if ($isLinux) {
 
 # Begin compiling the DSC block with the parsed metadata
 $ChangeType = $CTypes.Get_Item($Properties.Get_Item("ConfigChangeType"))
-$DscBlock =  "$ChangeType ChangeItem`n{"
+$DscBlock =  "`t`t$ChangeType ChangeItem`r`n`t`t{"
 
 # Determine which action to take to undo the change
 if ($Properties.Get_Item("ChangeCategory") -imatch "Added") {
 
-    $DscBlock = "$DscBlock`n`tEnsure = `"Absent`""
+    $DscBlock = "$DscBlock`r`n`t`t`tEnsure = `"Absent`""
 
 } elseif ($Properties.Get_Item("ChangeCategory") -imatch "Removed") {
 
-   $DscBlock = "$DscBlock`n`tEnsure = `"Present`""
+   $DscBlock = "$DscBlock`r`n`t`t`tEnsure = `"Present`""
 
 } else {
     # To-do: Undo modification based on type and what field was changed
@@ -194,37 +203,78 @@ switch ($ChangeType) {
     "Service" {
         
         $Name = $Properties.Get_Item("SvcName")
-        $ItemName = "Name = `"$Name`""
+        $ItemName = "`t`t`tName = `"$Name`""
 
     } "Registry" {
             
         $Key = $Properties.Get_Item("RegistryKey").Replace("\\","\")
         $ValueName = $Properties.Get_Item("ValueName")
-        $ItemName = "Key = `"$Key`"`n`tValueName = `"$ValueName`""
+        $ItemName = "`t`t`tKey = `"$Key`"`r`n`t`t`tValueName = `"$ValueName`""
 
     } "nxService" {
 
         $Name = $Properties.Get_Item("SvcName")
-        $ItemName = "Name = `"$Name`""
+        $ItemName = "`t`t`tName = `"$Name`""
 
     } "nxPackage" {
         
         $Name = $Properties.Get_Item("SoftwareName")
-        $ItemName = "Name = `"$Name`""
+        $ItemName = "`t`t`tName = `"$Name`""
 
     } Default {
         # File is the default
         $Path = $Properties.Get_Item("FileSystemPath").Replace("\\","\")
-        $ItemName = "DestinationPath = `"$Path`""
+        $ItemName = "`t`t`tDestinationPath = `"$Path`""
     }
 }
 
 # Add the item name string to the DSC Block
-$DscBlock = "$DscBlock`n`t$ItemName"
+$DscBlock = "$DscBlock`r`n$ItemName"
 
 # Add ending curly brace
-$DscBlock = "$DscBlock`n}"
+$DscBlock = "$DscBlock`r`n`t`t}"
 
-#Print out the DSC Block
-Write-Output "`n`n`n"
-Write $DscBlock
+
+
+# To-do: Turn into configuration and apply through Azure Automation
+# Only generate, store, compile, and apply configuration if an automation account is supplied
+if (![String]::IsNullOrEmpty($AutomationAccountName)) {
+    
+    $DscConfiguration = "Configuration ChangeRemediationDemo`r`n{`r`n`tImport-DscResource –ModuleName 'PSDesiredStateConfiguration’`r`n`tNode `"localhost`"`r`n`t{`r`n$DscBlock`r`n`t}`r`n}"
+
+    # Write the Configuration to a *.ps1 file
+    $tmp = New-Item $Env:Temp\ChangeRemediationDemo.ps1 -type file -force -value $DscConfiguration
+
+    # Login to Azure account
+    $Account = Add-AzureRmAccount
+
+    # Get a reference to the DSC node
+    $DscNode = Get-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -Name $Properties.Get_Item("Computer")
+    
+    # Import the DSC configuration to the automation account
+    $null = Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroupName -SourcePath $tmp.FullName -Published -Force
+
+
+    # Compile the DSC configuration
+    $CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -ConfigurationName "ChangeRemediationDemo"
+    while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $null)           
+    {
+        $CompilationJob = $CompilationJob | Get-AzureRmAutomationDscCompilationJob
+        Start-Sleep -Seconds 3
+    }
+  
+    # Configure the DSC node
+    $null = Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroupName  -NodeConfigurationName "ChangeRemediationDemo.localhost" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
+
+    # Clean up the generated configuration file 
+    #Remove-Item $tmp.FullName -Force
+
+    #Print out the DSC Configuration
+    Write-Output "`n`n`n"
+    Write $DscConfiguration
+} else {
+
+    #Print out the DSC Block
+    Write-Output "`n`n`n"
+    Write $DscBlock
+}
