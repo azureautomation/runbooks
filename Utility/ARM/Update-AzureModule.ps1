@@ -9,7 +9,7 @@
     You could put this runbook on a schedule so that it updates the modules each month or call through a webhook
     as needed.
 
-.PARAMETER ResourceGroupName
+.PARAMETER AutomationResourceGroup
     Required. The name of the Azure Resource Group containing the Automation account.
 
 .PARAMETER AutomationAccountName
