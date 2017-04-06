@@ -52,7 +52,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 14, 2016  
+    LASTEDIT: March 7, 2017
 
 #>
 
@@ -331,7 +331,7 @@ $Modules = @()
 
 # Add the names of the modules necessary to register a hybrid worker
 $Modules += @{"Name" = "AzureRM.OperationalInsights"; "Version" = ""}
-$Modules += @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
+$Modules += @{"Name" = "HybridRunbookWorkerDsc"; "Version" = "1.0.0.0"}
 $Modules += @{"Name" = "xPSDesiredStateConfiguration"; "Version" = "4.0.0.0"}
 
 # Import modules

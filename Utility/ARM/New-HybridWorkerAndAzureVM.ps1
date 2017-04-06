@@ -436,7 +436,7 @@ $Modules = @()
 # Add the names of the modules necessary to register a hybrid worker
 $Modules += @{"Name" = "AzureRM.Network"; "Version" = ""}
 $Modules += @{"Name" = "AzureRM.OperationalInsights"; "Version" = ""}
-$Modules += @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
+$Modules += @{"Name" = "HybridRunbookWorkerDsc"; "Version" = "1.0.0.0"}
 $Modules += @{"Name" = "xPSDesiredStateConfiguration"; "Version" = "4.0.0.0"}
 
 # Import modules
