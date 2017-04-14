@@ -1,4 +1,34 @@
-﻿<#
+﻿<#PSScriptInfo 
+
+.VERSION 1.2 
+
+.GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
+
+.AUTHOR Azure Automation Team & Peppe Kerstens
+
+.COMPANYNAME Microsoft / ITON
+
+.COPYRIGHT 
+
+.TAGS Azure Automation 
+
+.LICENSEURI 
+
+.PROJECTURI 
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES 
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES 
+
+#>
+
+<#
 
 .SYNOPSIS 
 
@@ -52,17 +82,33 @@
 
     Mandatory. The hybrid worker group name to be referenced.
 
+    
+.PARAMETER Credential 
+
+    Optional. The credentials to use when loging into Azure environment. When running this script on a Windows Core machine, credentials MUST be Azure AD credentials.
+
+    See: https://github.com/Azure/azure-powershell/issues/2915
+
 
 .EXAMPLE
 
     New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 
+.EXAMPLE
+
+    $Credentials = Get-Credential
+
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials
+
+
 .NOTES
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 31, 2016  
+    LASTEDIT: April 14, 2017
+
+    EDITBY: Peppe Kerstens on February 14, 2017
 
 #>
 
@@ -81,13 +127,17 @@ Param (
 [Parameter(Mandatory=$false)]
 [String] $WorkspaceName = "hybridWorkspace" + (Get-Random -Maximum 99999),
 
-# Automation
+# Automation Account
 [Parameter(Mandatory=$true)]
 [String] $AutomationAccountName ,
 
-# Machine
+# Hyprid Group
 [Parameter(Mandatory=$true)]
-[String] $HybridGroupName
+[String] $HybridGroupName,
+
+# Hyprid Group
+[Parameter(Mandatory=$false)]
+[PSCredential] $Credential
 )
 
 
@@ -135,7 +185,13 @@ foreach ($Module in $Modules) {
 Write-Output "Pulling Azure account credentials..."
 
 # Login to Azure account
-$Account = Add-AzureRmAccount
+$paramsplat = @{}
+
+if ($Credential) {
+    $paramsplat.Credential = $Credential
+}
+
+$Account = Add-AzureRmAccount @paramsplat 
 
 # Get a reference to the current subscription
 $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
