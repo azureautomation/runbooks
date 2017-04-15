@@ -12,9 +12,9 @@
 
 .TAGS Azure Automation 
 
-.LICENSEURI 
+.LICENSEURI https://github.com/azureautomation/runbooks/blob/master/LICENSE
 
-.PROJECTURI 
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/New-OnPremiseHybridWorker.ps1
 
 .ICONURI 
 
