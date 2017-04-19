@@ -1,4 +1,38 @@
- <#
+<#PSScriptInfo
+
+.VERSION 1.1
+
+.GUID e4d79ced-48c7-44e7-bdd5-1b9c48a725a3
+
+.AUTHOR Azure Automation Team
+
+.COMPANYNAME 
+Microsoft
+
+.COPYRIGHT 
+
+.TAGS 
+Azure Automation Visual Studio Team Services Source Control
+
+.LICENSEURI 
+https://raw.githubusercontent.com/azureautomation/runbooks/master/LICENSE
+
+.PROJECTURI 
+https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Sync-VSTS.ps1
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES 
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+
+#>
+
+<#
 .SYNOPSIS 
     This Azure Automation runbook syncs runbook and configurations from VSTS source control. It requires that a 
     service hook be set up in VSTS to trigger this runbook when changes are made.
@@ -37,13 +71,13 @@
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: Jan 20th, 2017  
+    LASTEDIT: April 18th, 2017  
 #>
 Param
 (
     [Parameter(Mandatory=$false)]
-	[Object]
-	$WebhookData,
+    [Object]
+    $WebhookData,
 
     [Parameter(Mandatory=$true)]
     [String] $ResourceGroup,
@@ -77,8 +111,57 @@ Function Get-TFSBasicAuthHeader{
     @{Authorization=("Basic {0}" -f $VSAuth)}
 
 }
-
 Function Invoke-TFSGetRestMethod
+{
+    Param(
+        [Parameter(ParameterSetName='SpecifyConnectionParameters', Position=0, Mandatory=$False)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Username,
+
+        [Parameter(ParameterSetName='SpecifyConnectionParameters', Position=0, Mandatory=$True)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Password,
+
+        [Parameter(ParameterSetName='SpecifyConnectionParameters', Position=0, Mandatory=$True)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Account,
+
+        [Parameter(ParameterSetName='UseConnectionObject', Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [Hashtable]
+        $Connection,
+
+        [Parameter(Mandatory=$True)]  
+        $URI,
+        
+        [Parameter(Mandatory=$false)]       
+        [string]
+        $QueryString
+        )
+
+    if ($Connection -eq $null) { $Connection = Set-ConnectionValues -UserName $Username -Password $Password -Account $Account }
+
+    # Get the API verison to use for REST calls
+    $APIVersion = GetAPIVersion
+    $URI = $URI + $APIVersion
+    $URI = $URI + $QueryString
+
+    # Set up Basic authentication for use against the Visual Studio Online account
+    # This needs to be enabled on your account - http://www.visualstudio.com/en-us/integrate/get-started/auth/overview 
+    $headers = SetBasicAuthHeader -Username $Connection.Username -Password $Connection.Password -Account $Connection.Account 
+
+    $Result = Invoke-RestMethod -Uri $URI -headers $headers -Method Get
+
+ 
+    # Return array values to make them more PowerShell friendly
+    if ($Result.value -ne $null) {$Result.value}
+    else {$Result}
+}
+
+Function Invoke-TFSGetBatchRestMethod
 {
     Param(
         [Parameter(ParameterSetName='SpecifyConnectionParameters', Position=0, Mandatory=$False)]
@@ -252,7 +335,7 @@ Function Get-TFSVersionFolder{
 
 } 
 
-　
+ 
 Function Get-TFSVersionFile{
     [CmdletBinding(DefaultParameterSetName='UseConnectionObject')]
     param(
@@ -339,7 +422,7 @@ Function Get-TFSChangeSet{
 
     $URI = "https://" + $Connection.Account + ".visualstudio.com/_apis/tfvc/changesets/" + $ChangeSetID + "/changes"
 
-    Invoke-TFSGetRestMethod -Connection $Connection -URI $URI
+    Invoke-TFSGetBatchRestMethod -Connection $Connection -URI $URI
 
 } 
 
@@ -402,7 +485,7 @@ try
 
     Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose 
 
-　
+ 
     # Get the personal access token to access VSTS
     $AccessToken = Get-AutomationVariable -Name $VSAccessTokenVariableName
     if (!$AccessToken)
@@ -428,17 +511,17 @@ try
                 $PSPath = Get-TFSVersionFile -Connection $Connection -VersionControlPath $File.path -LocalPath $PSFolderPath
                 Write-Output("Syncing " +  $File.path )
                 $AST = [System.Management.Automation.Language.Parser]::ParseFile($PSPath, [ref]$null, [ref]$null);
-                If ($AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))
+                If ($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))
                 {
                 Write-Verbose "File is a PowerShell workflow"
                 $AutomationScript = Import-AzureRmAutomationRunbook -Path $PSPath -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Type PowerShellWorkflow -Force -Published 
                 }
-                If ($AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration"))
+                If ($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration"))
                 {
                 Write-Verbose "File is a configuration script"
                 $AutomationScript = Import-AzureRmAutomationDscConfiguration -Path $PSPath -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Force -Published
                 }
-                If (!($AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration") -or ($AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))))
+                If (!($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration") -or ($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))))
                 {
                 Write-Verbose "File is a powershell script"
                 $AutomationScript = Import-AzureRmAutomationRunbook -Path $PSPath -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Type PowerShell -Force -Published 
@@ -485,17 +568,17 @@ try
                     $PSPath = Get-TFSVersionFile -Connection $Connection -VersionControlPath $File.item.path -LocalPath $PSFolderPath
                     Write-Output("Syncing " +  $File.item.path)
                     $AST = [System.Management.Automation.Language.Parser]::ParseFile($PSPath, [ref]$null, [ref]$null);
-                    If ($AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))
+                    If ($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))
                     {
                         Write-Verbose "File is a PowerShell workflow"
                         $AutomationScript = Import-AzureRmAutomationRunbook -Path $PSPath -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Type PowerShellWorkflow -Force -Published 
                     }
-                    If ($AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration"))
+                    If ($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration"))
                     {
                         Write-Verbose "File is a configuration script"
                        $AutomationScript = Import-AzureRmAutomationDscConfiguration -Path $PSPath -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Force -Published
                     }
-                    If (!($AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration") -or ($AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))))
+                    If (!($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("configuration") -or ($AST.EndBlock -ne $null -and $AST.EndBlock.Extent.Text.ToLower().StartsWith("workflow"))))
                     {
                         Write-Verbose "File is a powershell script"
                         $AutomationScript = Import-AzureRmAutomationRunbook -Path $PSPath -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Type PowerShell -Force -Published 
@@ -518,4 +601,4 @@ finally
     }
 } 
 
- 
+
