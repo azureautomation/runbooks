@@ -1,35 +1,35 @@
-<#
+ <#
 .SYNOPSIS 
-    This automation runbook stops all Azure virtual machines that are running in a subscription
+    This automation runbook starts all Azure virtual machines that are running in a subscription
 
 .DESCRIPTION
-    This automation runbook stops all Azure virtual machines that are running in a subscription. It will
-    process all VMs in parallel by creating a runbook in the automation service that stops a single virtual
+    This automation runbook starts all Azure virtual machines that are running in a subscription. It will
+    process all VMs in parallel by creating a runbook in the automation service that starts a single virtual
     machine and then calls this runbook from this parent runboook. This runbook is designed to be run from
     the Azure automation service.
 
 .PARAMETER VMResourceGroup
-    Optional. The name of the resource group the VMs are contained in. If not specified, all VMs in the subscription are stopped.
+    Optional. The name of the resource group the VMs are contained in. If not specified, all VMs in the subscription are started.
 
 .PARAMETER VM
-    Optional. The name of the VM. If not specified, all VMs in the resource group are stopped.
+    Optional. The name of the VM. If not specified, all VMs in the resource group are started.
 
-.PARAMETER MaxAutomationJobs
-    Optional. This represents the number of automation jobs to shut down virtual machines in parallel. The automation service
-    currently has a limit of 200 concurrent running jobs per account and the default for this runbook is set to 190.
-
-.EXAMPLE
-    Stop-AzureRMARMVMInParallel -VMResourceGroup Contoso -VM Marketing1
+.PARAMETER BackOffInSeconds
+    Optional. This represents the back off time in seconds when the max running jobs in met in the service. https://docs.microsoft.com/en-us/azure/azure-subscription-service-limits#automation-limits
+    Default is 30 seconds
 
 .EXAMPLE
-    Stop-AzureRMARMVMInParallel -VMResourceGroup Contoso 
+    Start-AzureRMARMVMInParallel -VMResourceGroup Contoso -VM Marketing1
 
 .EXAMPLE
-    Stop-AzureRMARMVMInParallel
+    Start-AzureRMARMVMInParallel -VMResourceGroup Contoso 
+
+.EXAMPLE
+    Start-AzureRMARMVMInParallel
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: April 30th, 2017 
+    LASTEDIT: May 10th, 2017 
 #>
 Param
 (
@@ -40,17 +40,16 @@ Param
     $VM,
 
     [Parameter(Mandatory=$false)]
-    $MaxAutomationJobs = 190
+    $BackOffInSeconds = 30
 ) 
 
 # This is the runbook that will process work in parallel in the automation service.
-$RunbookName = "Process-ParallelRunbook"
+$RunbookName = "Start-ParallelRunbook"
 $ProcessRunbook = @'
 param (
 [Parameter(Mandatory=$true)]
 $VM
 )
-$ErrorActionPreference = 'stop'
 
 $RunAsConnection = Get-AutomationConnection -Name AzureRunAsConnection
 if ($RunAsConnection -eq $null)
@@ -65,7 +64,7 @@ Add-AzureRmAccount `
 
 Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
 
-Stop-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name -Force | Write-Verbose
+Start-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name | Write-Verbose
 Get-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name -Status | Select Name -ExpandProperty Statuses
 
 '@
@@ -96,8 +95,8 @@ Function WhoAmI
 # Import the runbook to process each VM into the service if it doesn't exist.
 Function Import-Runbook($AccountInfo,$RunbookName, $RunbookContent)
 {
-    $StopRunbookById = Get-AzureRmAutomationRunbook -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName -Name $RunbookName -ErrorAction SilentlyContinue
-    if ([string]::IsNullOrEmpty($StopRunbookById))
+    $StartRunbookById = Get-AzureRmAutomationRunbook -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName -Name $RunbookName -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrEmpty($StartRunbookById))
     {
         Set-Content -Path (Join-Path $env:TEMP "$RunbookName.ps1") -Value $RunbookContent -Force | Write-Verbose
         Import-AzureRmAutomationRunbook -Path (Join-Path $env:TEMP "$RunbookName.ps1") -Name $RunbookName `
@@ -129,50 +128,51 @@ try
     # Get list of vms to process
     if  (!([string]::IsNullOrEmpty($VMResourceGroup)) -and !([string]::IsNullOrEmpty($VM)))
     {
-        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Name $VM
+        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Name $VM -Status | where {$_.PowerState -match "deallocated"}
     }
     elseif (!([string]::IsNullOrEmpty($VMResourceGroup)))
     {
-        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup
+        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Status | where {$_.PowerState -match "deallocated"}
     }
     else
     {
-        $AzureVMs = Get-AzureRMVM
+        $AzureVMs = Get-AzureRMVM -Status | where {$_.PowerState -match "deallocated"}
     }
 
     # Process the list of VMs using the automation service and collect jobs used
     $Jobs = @()
+
     foreach ($VM in $AzureVMs)
-    {
-        # Get all active jobs for this account
-        $AllActiveJobs = Get-AzureRMAutomationJob -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName `
-                        | Where {($_.Status -eq "Running")  `
-                    -or ($_.Status -eq "Starting") `
-                    -or ($_.Status -eq "New")}  
-
-        While ($AllActiveJobs.Count -ge $MaxAutomationJobs)
+    {   
+        # Start automation runbook to process VMs in parallel
+        $RunbookNameParams = @{}
+        $RunbookNameParams.Add("VM",$VM)
+        # Loop here until a job was successfully submitted. Will stay in the loop until job has been submitted or an exception other than max allowed jobs is reached
+        while ($true)
         {
-            Write-Verbose "Waiting as there are currently greater than $NoOfInstances jobs. Sleeping 30 seconds..."
-            Sleep 30
-            $AllActiveJobs = Get-AzureRMAutomationJob -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName `
-                         | Where {($_.Status -eq "Running") `
-                        -or ($_.Status -eq "Starting") `
-                        -or ($_.Status -eq "New")}
-                  
-            Write-Verbose ("Number of current jobs running is " + $AllActiveJobs.Count)
-        } 
-
-        # Process VMs that are started
-        $VMStatus = Get-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name -Status
-        if ($VMStatus.Statuses[1].Code -eq "PowerState/running")
-        {
-            $RunbookNameParams = @{}
-            $RunbookNameParams.Add("VM",$VM)
-            $Job = Start-AzureRmAutomationRunbook -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName -Name $RunbookName -Parameters $RunbookNameParams
-            $Jobs+=$Job
+            try 
+            {
+                $Job = Start-AzureRmAutomationRunbook -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName -Name $RunbookName -Parameters $RunbookNameParams -ErrorAction Stop
+                $Jobs+=$Job
+                # Submitted job successfully, exiting while loop
+                break
+            }
+            catch
+            {
+                # If we have reached the max allowed jobs, sleep backoff seconds and try again inside the while loop
+                if ($_.Exception.Message -match "conflict")
+                {
+                    Write-Verbose ("Sleeping for 30 seconds as max allowed jobs has been reached. Will try again afterwards")
+                    Sleep $BackOffInSeconds
+                }
+                else
+                {
+                    throw $_
+                }
+            }
         }
     }
-    
+ 
     # Wait for jobs to complete, fail, or suspend (final states allowed for a runbook)
     $JobsResults = @()
     foreach ($RunningJob in $Jobs)
@@ -185,6 +185,7 @@ try
         }
         $JobsResults+= $ActiveJob
     }
+
 
     # Print out results of the automation jobs
     foreach ($JobsResult in $JobsResults)
@@ -214,7 +215,5 @@ Catch
 {
     throw $_
 }
-
-
 
 
