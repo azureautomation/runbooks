@@ -1,31 +1,31 @@
- <#
+<#
 .SYNOPSIS 
-    This automation runbook starts all Azure virtual machines that are running in a subscription
+    This automation runbook stops all Azure virtual machines that are running in a subscription
 
 .DESCRIPTION
-    This automation runbook starts all Azure virtual machines that are running in a subscription. It will
-    process all VMs in parallel by creating a runbook in the automation service that starts a single virtual
+    This automation runbook stops all Azure virtual machines that are running in a subscription. It will
+    process all VMs in parallel by creating a runbook in the automation service that stops a single virtual
     machine and then calls this runbook from this parent runboook. This runbook is designed to be run from
     the Azure automation service.
 
 .PARAMETER VMResourceGroup
-    Optional. The name of the resource group the VMs are contained in. If not specified, all VMs in the subscription are started.
+    Optional. The name of the resource group the VMs are contained in. If not specified, all VMs in the subscription are stopped.
 
 .PARAMETER VM
-    Optional. The name of the VM. If not specified, all VMs in the resource group are started.
+    Optional. The name of the VM. If not specified, all VMs in the resource group are stopped.
 
 .PARAMETER BackOffInSeconds
     Optional. This represents the back off time in seconds when the max running jobs in met in the service. https://docs.microsoft.com/en-us/azure/azure-subscription-service-limits#automation-limits
     Default is 30 seconds
 
 .EXAMPLE
-    Start-AzureRMARMVMInParallel -VMResourceGroup Contoso -VM Marketing1
+    Stop-AzureRMARMVMInParallel -VMResourceGroup Contoso -VM Marketing1
 
 .EXAMPLE
-    Start-AzureRMARMVMInParallel -VMResourceGroup Contoso 
+    Stop-AzureRMARMVMInParallel -VMResourceGroup Contoso 
 
 .EXAMPLE
-    Start-AzureRMARMVMInParallel
+    Stop-AzureRMARMVMInParallel
 
 .NOTES
     AUTHOR: Automation Team
@@ -44,7 +44,7 @@ Param
 ) 
 
 # This is the runbook that will process work in parallel in the automation service.
-$RunbookName = "Start-ParallelRunbook"
+$RunbookName = "Stop-ParallelRunbook"
 $ProcessRunbook = @'
 param (
 [Parameter(Mandatory=$true)]
@@ -64,7 +64,7 @@ Add-AzureRmAccount `
 
 Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose
 
-Start-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name | Write-Verbose
+Stop-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name -Force | Write-Verbose
 Get-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name -Status | Select Name -ExpandProperty Statuses
 
 '@
@@ -95,8 +95,8 @@ Function WhoAmI
 # Import the runbook to process each VM into the service if it doesn't exist.
 Function Import-Runbook($AccountInfo,$RunbookName, $RunbookContent)
 {
-    $StartRunbookById = Get-AzureRmAutomationRunbook -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName -Name $RunbookName -ErrorAction SilentlyContinue
-    if ([string]::IsNullOrEmpty($StartRunbookById))
+    $StopRunbookById = Get-AzureRmAutomationRunbook -ResourceGroupName $AccountInfo.ResourceGroupName -AutomationAccountName $AccountInfo.AutomationAccountName -Name $RunbookName -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrEmpty($StopRunbookById))
     {
         Set-Content -Path (Join-Path $env:TEMP "$RunbookName.ps1") -Value $RunbookContent -Force | Write-Verbose
         Import-AzureRmAutomationRunbook -Path (Join-Path $env:TEMP "$RunbookName.ps1") -Name $RunbookName `
@@ -128,20 +128,20 @@ try
     # Get list of vms to process
     if  (!([string]::IsNullOrEmpty($VMResourceGroup)) -and !([string]::IsNullOrEmpty($VM)))
     {
-        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Name $VM -Status | where {$_.PowerState -match "deallocated"}
+        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Name $VM -Status | where {$_.PowerState -match "running"}
     }
     elseif (!([string]::IsNullOrEmpty($VMResourceGroup)))
     {
-        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Status | where {$_.PowerState -match "deallocated"}
+        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Status | where {$_.PowerState -match "running"}
     }
     else
     {
-        $AzureVMs = Get-AzureRMVM -Status | where {$_.PowerState -match "deallocated"}
+        $AzureVMs = Get-AzureRMVM -Status | where {$_.PowerState -match "running"}
     }
 
     # Process the list of VMs using the automation service and collect jobs used
-    $Jobs = @()
-
+    $Jobs = @()      
+                         
     foreach ($VM in $AzureVMs)
     {   
         # Start automation runbook to process VMs in parallel
@@ -172,7 +172,7 @@ try
             }
         }
     }
- 
+    
     # Wait for jobs to complete, fail, or suspend (final states allowed for a runbook)
     $JobsResults = @()
     foreach ($RunningJob in $Jobs)
