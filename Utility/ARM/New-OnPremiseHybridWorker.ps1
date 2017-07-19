@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo 
 
-.VERSION 1.2 
+.VERSION 1.3 
 
 .GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
 
@@ -106,9 +106,9 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: April 14, 2017
+    LASTEDIT: July 18, 2017
 
-    EDITBY: Peppe Kerstens on February 14, 2017
+    EDITBY: Jenny Hunter
 
 #>
 
@@ -211,6 +211,9 @@ $AutomationAccount = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGr
 # Find the automation account region
 $AALocation = $AutomationAccount.Location
 
+# Print out Azure Automation Account name and region
+Write-Output("Accessing Azure Automation Account named $AutomationAccountName in region $AALocation...")
+
 # Get Azure Automation Primary Key and Endpoint
 $AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName
 $AutomationPrimaryKey = $AutomationInfo.PrimaryKey
@@ -225,13 +228,21 @@ try {
 
 } catch {
 
-    # Select an OMS workspace region
+    # Select an OMS workspace region based on the AA region
     if ($AALocation -match "europe") {
         $OmsLocation = "westeurope"
     } elseif ($AALocation -match "asia") {
         $OmsLocation = "southeastasia"
+    } elseif ($AALocation -match "india") {
+        $OmsLocation = "southeastasia"
     } elseif ($AALocation -match "australia") {
         $OmsLocation = "australiasoutheast"
+    } elseif ($AALocation -match "centralus") {
+        $OmsLocation = "westcentralus"
+    } elseif ($AALocation -match "japan") {
+        $OmsLocation = "japaneast"
+    } elseif ($AALocation -match "uk") {
+        $OmsLocation = "uksouth"
     } else {
         $OmsLocation = "eastus"
     }
@@ -243,7 +254,7 @@ try {
 }
 
 # Provide warning if the Automation account and OMS regions are different
-if (!($AALocation -match $OmsLocation)) {
+if (!($AALocation -match $OmsLocation) -and !($OmsLocation -match "eastus" -and $AALocation -match "eastus")) {
     Write-Output "Warning: Your Automation account and OMS workspace are in different regions and will not be compatible for future linking."
 }
 
