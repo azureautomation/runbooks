@@ -1,23 +1,54 @@
-﻿<#
+﻿<#PSScriptInfo 
+
+.VERSION 1.3 
+
+.GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
+
+.AUTHOR Azure Automation Team & Peppe Kerstens
+
+.COMPANYNAME Microsoft / ITON
+
+.COPYRIGHT 
+
+.TAGS Azure Automation 
+
+.LICENSEURI https://github.com/azureautomation/runbooks/blob/master/LICENSE
+
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/New-OnPremiseHybridWorker.ps1
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES 
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES 
+
+#>
+
+<#
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, & OMS workspace 
+    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. An OMS workspace 
     will all be generated if needed.
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a hybrid worker. A resource group, automation account, OMS workspace,
-    and VM will all be generated if needed. The major steps of the script are outlined below.
+    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. NOTE: This script is
+    intended to be run with administrator privileges and on a machine with WMF 5.
     
-    1) Login to an Azure account
-    2) Check for the resource group and automation account
-    3) Create references to automation account attributes
-    4) Download the necessary modules
+    The major steps of the script are outlined below. 
+    1) Install the necessary modules
+    2) Login to an Azure account
+    3) Check for the resource group and automation account
+    4) Create references to automation account attributes
     5) Create an OMS Workspace if needed
     6) Enable the Azure Automation solution in OMS
-    7) Download and install the Microsoft Monitoring agent
+    7) Download and install the Microsoft Monitoring Agent
     8) Register the machine as hybrid worker
 
  
@@ -30,9 +61,7 @@
 
 .PARAMETER SubscriptionID
 
-    Optional. A string containing the SubscriptionID to be used. If not specified, the first subscriptionID
-
-    associated with the account is used.
+    Mandatory. A string containing the SubscriptionID to be used. 
 
 
 .PARAMETER WorkspaceName
@@ -49,23 +78,37 @@
     is created, referencing the IDString in order to create a unique identifier.
 
 
-.PARAMETER MachineName
+.PARAMETER HybridGroupName
 
-    Mandatory. The computer name  to be referenced. If not specified, a computer name is created, referencing
+    Mandatory. The hybrid worker group name to be referenced.
+
     
-    the IDString in order to create a unique identifier.
+.PARAMETER Credential 
+
+    Optional. The credentials to use when loging into Azure environment. When running this script on a Windows Core machine, credentials MUST be Azure AD credentials.
+
+    See: https://github.com/Azure/azure-powershell/issues/2915
 
 
 .EXAMPLE
 
-    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources"
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+
+.EXAMPLE
+
+    $Credentials = Get-Credential
+
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -ResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials
 
 
 .NOTES
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 14, 2016  
+    LASTEDIT: July 18, 2017
+
+    EDITBY: Jenny Hunter
 
 #>
 
@@ -77,76 +120,36 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $ResourceGroupName,
 
-[Parameter(Mandatory=$false)]
-[String] $SubscriptionID = "",
+[Parameter(Mandatory=$true)]
+[String] $SubscriptionID,
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
-[String] $WorkspaceName = "hybridWorkerWorkspace" + (Get-Random -Maximum 99999),
+[String] $WorkspaceName = "hybridWorkspace" + (Get-Random -Maximum 99999),
 
-# Automation
+# Automation Account
 [Parameter(Mandatory=$true)]
 [String] $AutomationAccountName ,
 
-# Machine
+# Hyprid Group
+[Parameter(Mandatory=$true)]
+[String] $HybridGroupName,
+
+# Hyprid Group
 [Parameter(Mandatory=$false)]
-[String] $MachineName = $env:computername
+[PSCredential] $Credential
 )
+
 
 # Stop the script if any errors occur
 $ErrorActionPreference = "Stop"
-
-# Connect to the current Azure account
-Write-Output "Pulling account credentials..."
-
-# Login to Azure account
-$Account = Add-AzureRmAccount
-
-# If a subscriptionID has not been provided, select the first registered to the account
-if ([string]::IsNullOrEmpty($SubscriptionID)) {
-   
-    # Get a list of all subscriptions
-    $Subscription =  Get-AzureRmSubscription
-
-    # Get the subscription ID
-    $SubscriptionID = (($Subscription).SubscriptionId | Select -First 1).toString()
-
-    # Get the tenant id for this subscription
-    $TenantID = (($Subscription).TenantId | Select -First 1).toString()
-
-} else {
-
-    # Get a reference to the current subscription
-    $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
-    # Get the tenant id for this subscription
-    $TenantID = $Subscription.TenantId
-}
-
-# Set the active subscription
-$null = Set-AzureRmContext -SubscriptionID $SubscriptionID
-
-# Create the resource group if needed
-$null = Get-AzureRmResourceGroup -Name $ResourceGroupName
-
-# Create a new automation account if needed 
-$AutomationAccount = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName
-
-# Find the automation account region
-$AALocation = $AutomationAccount.Location
-
-# Get Azure Automation Primary Key and Endpoint
-$AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName
-$AutomationPrimaryKey = $AutomationInfo.PrimaryKey
-$AutomationEndpoint = $AutomationInfo.Endpoint
 
 # Add and update modules on the Automation account
 Write-Output "Importing necessary modules..."
 
 # Create a list of the modules necessary to register a hybrid worker
 $AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
-$HybridModule = @{"Name" = "HybridRunbookWorker"; "Version" = "1.1"}
-$Modules = @($AzureRmModule; $HybridModule)
-
+$Modules = @($AzureRmModule)
 
 # Import modules
 foreach ($Module in $Modules) {
@@ -178,22 +181,68 @@ foreach ($Module in $Modules) {
     }
 }
 
+# Connect to the current Azure account
+Write-Output "Pulling Azure account credentials..."
+
+# Login to Azure account
+$paramsplat = @{}
+
+if ($Credential) {
+    $paramsplat.Credential = $Credential
+}
+
+$Account = Add-AzureRmAccount @paramsplat 
+
+# Get a reference to the current subscription
+$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+# Get the tenant id for this subscription
+$TenantID = $Subscription.TenantId
+
+
+# Set the active subscription
+$null = Set-AzureRmContext -SubscriptionID $SubscriptionID
+
+# Check that the resource group is valid
+$null = Get-AzureRmResourceGroup -Name $ResourceGroupName
+
+# Check that the automation account is valid
+$AutomationAccount = Get-AzureRmAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName
+
+# Find the automation account region
+$AALocation = $AutomationAccount.Location
+
+# Print out Azure Automation Account name and region
+Write-Output("Accessing Azure Automation Account named $AutomationAccountName in region $AALocation...")
+
+# Get Azure Automation Primary Key and Endpoint
+$AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName
+$AutomationPrimaryKey = $AutomationInfo.PrimaryKey
+$AutomationEndpoint = $AutomationInfo.Endpoint
+
 # Create a new OMS workspace if needed
 try {
 
     $Workspace = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroupName  -ErrorAction Stop
-    Write-Output "Referencing existing OMS Workspace named $WorkspaceName..."
     $OmsLocation = $Workspace.Location
+    Write-Output "Referencing existing OMS Workspace named $WorkspaceName in region $OmsLocation..."
 
 } catch {
 
-    # Select an OMS workspace region
+    # Select an OMS workspace region based on the AA region
     if ($AALocation -match "europe") {
         $OmsLocation = "westeurope"
     } elseif ($AALocation -match "asia") {
         $OmsLocation = "southeastasia"
+    } elseif ($AALocation -match "india") {
+        $OmsLocation = "southeastasia"
     } elseif ($AALocation -match "australia") {
         $OmsLocation = "australiasoutheast"
+    } elseif ($AALocation -match "centralus") {
+        $OmsLocation = "westcentralus"
+    } elseif ($AALocation -match "japan") {
+        $OmsLocation = "japaneast"
+    } elseif ($AALocation -match "uk") {
+        $OmsLocation = "uksouth"
     } else {
         $OmsLocation = "eastus"
     }
@@ -205,7 +254,7 @@ try {
 }
 
 # Provide warning if the Automation account and OMS regions are different
-if ($AALocation -match $OmsLocation) {
+if (!($AALocation -match $OmsLocation) -and !($OmsLocation -match "eastus" -and $AALocation -match "eastus")) {
     Write-Output "Warning: Your Automation account and OMS workspace are in different regions and will not be compatible for future linking."
 }
 
@@ -219,23 +268,75 @@ $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 # Activate the Azure Automation solution in the workspace
 $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $ResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
 
-# Download the Microsoft monitoring agent
-$Source = "https://download.microsoft.com/download/8/4/3/84312DF3-5111-4C13-9192-EBF2DF81B19B/MMASetup-AMD64.exe"
-$Destination = "$env:temp\MMASetup-AMD64.exe"
+# Check for the MMA on the machine
+try {
 
-$null = Invoke-WebRequest -uri $Source -OutFile $Destination
-$null = Unblock-File $Destination
+    $mma = New-Object -ComObject 'AgentConfigManager.MgmtSvcCfg'
+    
+    Write-Output "Configuring the MMA..."
+    $mma.AddCloudWorkspace($WorkspaceId, $WorkspaceKey)
+    $mma.ReloadConfiguration()
 
-# Change directory to location of the downloaded MMA
-cd $env:temp
+} catch {
+    # Download the Microsoft monitoring agent
+    Write-Output "Downloading and installing the Microsoft Monitoring Agent..."
 
-# Install the MMA
-MMASetup-AMD64.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID= + $WorkspaceID + OPINSIGHTS_WORKSPACE_KEY= + $WorkspaceKey + AcceptEndUserLicenseAgreement=1 
+    # Check whether or not to download the 64-bit executable or the 32-bit executable
+    if ([Environment]::Is64BitProcess) {
+        $Source = "http://download.microsoft.com/download/1/5/E/15E274B9-F9E2-42AE-86EC-AC988F7631A0/MMASetup-AMD64.exe"
+    } else {
+        $Source = "http://download.microsoft.com/download/1/5/E/15E274B9-F9E2-42AE-86EC-AC988F7631A0/MMASetup-i386.exe"
+    }
 
-# Check for the HybridRegistration module
-Write-Output "Checking for the HybridRegistration module..."
-$null = Get-Module -Name HybridRegistration -ListAvailable
+    $Destination = "$env:temp\MMASetup.exe"
+
+    $null = Invoke-WebRequest -uri $Source -OutFile $Destination
+    $null = Unblock-File $Destination
+
+    # Change directory to location of the downloaded MMA
+    cd $env:temp
+
+    # Install the MMA
+    $Command = "/C:setup.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID=$WorkspaceID" + " OPINSIGHTS_WORKSPACE_KEY=$WorkspaceKey " + " AcceptEndUserLicenseAgreement=1"
+    .\MMASetup.exe $Command
+
+}
+
+# Sleep until the MMA object has been registered
+Write-Output "Waiting for agent registration to complete..."
+
+# Timeout = 180 seconds = 3 minutes
+$i = 18
+
+do {
+    
+    # Check for the MMA folders
+    try {
+        # Change the directory to the location of the hybrid registration module
+        cd "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AzureAutomation"
+        $version = (ls | Sort-Object LastWriteTime -Descending | Select -First 1).Name
+        cd "$version\HybridRegistration"
+
+        # Import the module
+        Import-Module (Resolve-Path('HybridRegistration.psd1'))
+
+        # Mark the flag as true
+        $hybrid = $true
+    } catch{
+
+        $hybrid = $false
+
+    }
+    # Sleep for 10 seconds
+    Start-Sleep -s 10
+    $i--
+
+} until ($hybrid -or ($i -le 0))
+
+if ($i -le 0) {
+    throw "The HybridRegistration module was not found. Please ensure the Microsoft Monitoring Agent was correctly installed."
+}
 
 # Register the hybrid runbook worker
 Write-Output "Registering the hybrid runbook worker..."
-Add-HybridRunbookWorker -Name $MachineName -EndPoint $AutomationEndpoint -Token $AutomationPrimaryKey
+Add-HybridRunbookWorker -Name $HybridGroupName -EndPoint $AutomationEndpoint -Token $AutomationPrimaryKey

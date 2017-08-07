@@ -2,19 +2,19 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook removes an exisiting hybrid worker. It assumes that the machine is
-    
-    configured as a DSC node and utilizes DSC to unregister the hybrid worker.
+    This Azure/OMS Automation runbook removes an exisiting hybrid worker. 
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook removes a hybrid worker.
+    This Azure/OMS Automation runbook removes an existing hybrid worker. It assumes that the machine is
+    
+    configured as a DSC node and utilizes DSC to unregister the hybrid worker.
 
 
 .PARAMETER MachineName
 
-    Mandatory. The computer name of the Azure VM to be referenced.
+    Mandatory. The computer name of the DSC Node to be referenced.
 
 
 .PARAMETER HybridWorkerGroup
@@ -31,7 +31,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 13, 2016  
+    LASTEDIT: October 17, 2016  
 
 #>
 

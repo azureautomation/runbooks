@@ -2,50 +2,31 @@
 
 .SYNOPSIS 
 
-    This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. (1/2)
+    This Azure/OMS Automation runbook creates a new VM and onboards it as a DSC node (1/2)
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook creates a new VM and onboards it as a hybrid worker. An OMS 
-    workspace will be generated if needed. The major steps of the script are outlined below.
+    This Azure/OMS Automation runbook creates a new VM and onboards it as a DSC node. 
+    The major steps of the script are outlined below.
     
     1) Login to an Azure account
     2) Import/Update the necessary modules
-    3) Import Install-VmAndWorker for next steps
-
-
-.PARAMETER IDString
-
-    Optional. A string added to newly generated resources to create unique identifiers. If not specified,
-
-    a random number (Maximum of 99999) is used.
-
- 
-.PARAMETER WorkspaceName
-
-    Optional. The name of the OMS Workspace to be referenced. If not specified, a new OMS workspace 
-
-    is created, referencing the IDString in order to create a unique identifier.
-
-
-.PARAMETER OmsLocation
-
-    Optional. The region of the OMS Workspace to be referenced. If not specified, the closest valid
-
-    region to the Automation account is chosen.
+    3) Import Install-VmWithDsc for next steps
 
 
 .PARAMETER VMName
 
     Optional. The computer name of the Azure VM to be referenced. If not specified, a computer name
 
-    is created, referencing the IDString in order to create a unique identifier.
+    is created, referencing a random number in order to create a unique identifier.
 
 
 .PARAMETER VmLocation
 
-    Optional. The region of the Azure VM. If not specified, "eastus" is used.
+    Optional. The region of the Azure VM. If not specified, the location of the Automation account
+    
+    is used.
 
 
 .PARAMETER VmResourceGroup
@@ -57,26 +38,26 @@
 
 .PARAMETER VMUser
 
-    Optional. The username for the provided user machine. If not specified,"hybridUser" is used.
+    Optional. The username for the provided user machine. If not specified,"dscUser" is used.
 
 
 .PARAMETER VMPassword
 
-    Optional. The password for the provided user on the machine. If not specified,"p@ssw0rdHybrid" is used.
+    Optional. The password for the provided user on the machine. If not specified,"p@ssw0rdDsc" is used.
 
 
 .PARAMETER AvailabilityName
 
     Optional. The name of the Availability set to be referenced. If not specified, a new availability set 
 
-    is created, referencing the VM name and IDString in order to create a unique identifier.
+    is created, referencing the VM name in order to create a unique identifier.
 
 
 .PARAMETER StorageName
 
     Optional. The name of the Storage account to be referenced. If not specified, a new storage account 
 
-    is created, referencing the vm name and IDString in order to create a unique identifier.
+    is created, referencing the vm name in order to create a unique identifier.
 
 
 .PARAMETER OSDiskName
@@ -109,34 +90,24 @@
 
 .EXAMPLE
 
-    New-HybridWorker
+    New-VmWithDSC
 
-    New-HybridWorker -WorkspaceName "ContosoWorkspace"
+    New-VmWithDSC -VmName "ContosoVm"
 
 
 .NOTES
 
-    AUTHOR: Jenny Hunter, Azure/OMS Automation Team
+    AUTHOR: Jenny Hunter, Azure Automation Team
 
-    LASTEDIT: October 17, 2016  
+    LASTEDIT: October 28, 2016  
 
 #>
 
 Param (
-    # Setup base identifier variable
-    [Parameter(Mandatory=$false)]
-    [String] $IDString = (Get-Random -Maximum 99999),
-
-    # OMS Workspace
-    [Parameter(Mandatory=$false)]
-    [String] $WorkspaceName = "hybridworker" + $IDstring,
-
-    [Parameter(Mandatory=$false)]
-    [String] $OmsLocation,
 
     # VM
     [Parameter(Mandatory=$false)]
-    [String] $VmName = "hybridVM" + $IDstring,
+    [String] $VmName = "dscmachine" + $IDstring,
 
     [Parameter(Mandatory=$false)]
     [String] $VmLocation,
@@ -145,10 +116,10 @@ Param (
     [String] $VmResourceGroup,
 
     [Parameter(Mandatory=$false)]
-    [String] $VMUser = "hybridUser",
+    [String] $VMUser = "dscUser",
 
     [Parameter(Mandatory=$false)]
-    [String] $VMPassword = "p@ssw0rdHybrid",
+    [String] $VMPassword = "p@ssw0rdDsc",
 
     [Parameter(Mandatory=$false)]
     [String] $AvailabilityName = $VmName + "-availability",
@@ -219,26 +190,7 @@ if ([string]::IsNullOrEmpty($VMLocation)) {
     $VMLocation = $AALocation
 }
 
-# If not provided, select an OMS workspace region
-if ([string]::IsNullOrEmpty($OmsLocation)) {
-    if ($AALocation -match "europe") {
-        $OmsLocation = "westeurope"
-    } elseif ($AALocation -match "asia") {
-        $OmsLocation = "southeastasia"
-    } elseif ($AALocation -match "australia") {
-        $OmsLocation = "australiasoutheast"
-    } else {
-        $OmsLocation = "eastus"
-    }
-}
-
-# Check that the provided region is a supported OMS region
-$validRegions = "westeurope", "southeastasia", "eastus", "australiasoutheast"
-if ($validRegions -notcontains $OmsLocation) {
-    throw "Currently, only the West Europe, East US, Australia Southeast, and Southeast Asia regions are supported for OMS."
-}
-
-# Add and update modules on the Automation account
+# Add and update necessary modules on the Automation account
 ######
 Write-Output "Importing necessary modules..."
 
@@ -437,9 +389,6 @@ $Modules = @()
 
 # Add the names of the modules necessary to register a hybrid worker
 $Modules += @{"Name" = "AzureRM.Network"; "Version" = ""}
-$Modules += @{"Name" = "AzureRM.OperationalInsights"; "Version" = ""}
-$Modules += @{"Name" = "HybridRunbookWorkerDsc"; "Version" = "1.0.0.0"}
-$Modules += @{"Name" = "xPSDesiredStateConfiguration"; "Version" = "4.0.0.0"}
 
 # Import modules
 foreach ($NewModule in $Modules) {
@@ -502,35 +451,21 @@ foreach ($NewModule in $Modules) {
     }
 }
 
-# Check for the Install-VmAndWorker runbook in the automation account, import if not there
-try {
-    
-    $null = Get-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "Install-VmAndWorker" -ErrorAction Stop
+# Check for the Install-VmWithDsc runbook in the automation account
 
-} catch {
+ $next = Get-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Name "Install-VmWithDsc"
 
-    # Download Install-VmAndWorker
-    $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Install-VmAndWorker.ps1"
-    $Destination = "$env:temp\Install-VmAndWorker.ps1"
-
-    $null = Invoke-WebRequest -uri $Source -OutFile $Destination
-    $null = Unblock-File $Destination
-
-
-    # Import the DSC configuration to the automation account
-    Write-Output "Importing Install-VmAndWorker to complete the next steps..."
-    $null = Import-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -Path $Destination -Type "PowerShell"
-
+if ($next.State -ne "Published") {
     # Publish the runbook so it is runnable
-    $null = Publish-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-VmAndWorker" -ResourceGroupName $ResourceGroup
+    $null = Publish-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-VmWithDsc" -ResourceGroupName $ResourceGroup
 
 }
 
-$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"VmName"=$VmName;"WorkspaceName"=$WorkspaceName;"OmsLocation"=$OmsLocation; `
+$runbookParams = @{"ResourceGroup"=$ResourceGroup;"AutomationAccountName"=$AutomationAccountName;"VmName"=$VmName; `
     "VmLocation" = $VmLocation; "VmResourceGroup" = $VmResourceGroup;"VMUser" = $VMUser; "VMPassword" = $VMPassword; "AvailabilityName" = $AvailabilityName; ` 
     "StorageName" = $StorageName; "OSDiskName" = $OSDiskName; "VNetName" = $VNetName; "PIpName" = $PIpName; "InterfaceName" = $InterfaceName}
 
 # Start the next runbook job
-$null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-VmAndWorker" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 
+$null = Start-AzureRmAutomationRunbook -AutomationAccountName $AutomationAccountName -Name "Install-VmWithDsc" -ResourceGroupName $ResourceGroup -Parameters $runbookParams 
 
-Write-Output "Starting Install-VmAndWorker..."
+Write-Output "Starting Install-VmWithDsc..."

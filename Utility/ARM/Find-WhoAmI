@@ -1,4 +1,3 @@
-
 <#
 .SYNOPSIS 
     Queries the automation accounts in the subscription to find the automation account, runbook and resource group that the job is running in.
@@ -25,6 +24,8 @@ Add-AzureRmAccount `
     -TenantId $ServicePrincipalConnection.TenantId `
     -ApplicationId $ServicePrincipalConnection.ApplicationId `
     -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
+
+Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID  | Write-Verbose 
 
 $AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 

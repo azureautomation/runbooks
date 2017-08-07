@@ -96,7 +96,7 @@ function _doImport {
     $Url = "https://www.powershellgallery.com/api/v2/Search()?`$filter=IsLatestVersion&searchTerm=%27$ModuleName%27&targetFramework=%27%27&includePrerelease=false&`$skip=0&`$top=40" 
     $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -UseBasicParsing
 
-    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
+    if($SearchResult -ne $null) {
         $SearchResult = $SearchResult | Where-Object -FilterScript {
             return $_.properties.title -eq $ModuleName
         }
@@ -122,13 +122,13 @@ function _doImport {
         if($Dependencies -and $Dependencies.Length -gt 0) {
             $Dependencies = $Dependencies.Split("|")
 
-            # parse depencencies, which are in the format: module1name:module1version:|module2name:module2version:
+            # parse depencencies, which are in the format: module1name:[module1version]:|module2name:[module2version]:
             $Dependencies | ForEach-Object {
 
                 if($_ -and $_.Length -gt 0) {
                     $Parts = $_.Split(":")
                     $DependencyName = $Parts[0]
-                    $DependencyVersion = $Parts[1]
+                    $DependencyVersion = $Parts[1] -replace '[\[,\]]',""
 
                     # check if we already imported this dependency module during execution of this script
                     if(!$ModulesImported.Contains($DependencyName)) {
