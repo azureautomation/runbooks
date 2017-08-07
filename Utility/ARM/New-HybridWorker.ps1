@@ -23,7 +23,7 @@
 
 .PARAMETER VmResourceGroup
 
-    Optional. The resource group of the VM to be referenced. If not specified, resource group of the Automation
+    Mandatory. The resource group of the VM to be referenced. If not specified, resource group of the Automation
     
     account is used.
 
@@ -39,21 +39,22 @@
 
 .PARAMETER OmsLocation
 
-    Optional. The region of the OMS Workspace to be referenced. If not specified, "eastus" is used.
+    Optional. The region of the OMS Workspace to be referenced. If not specified, the closest valid
+
+    region to the Automation account is chosen.
 
 
 
 .EXAMPLE
 
-    New-HybridWorker -MachineName "ContosoVM"
+    New-HybridWorker -MachineName "ContosoVM" -VMResourceGroup "ContosoResources"
 
 
 .NOTES
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: March 7, 2017
-
+    LASTEDIT: October 17, 2016  
 #>
 
 Param (
@@ -67,7 +68,7 @@ Param (
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
-[String] $WorkspaceName = "hybrid-workspace-" + (Get-Random -Maximum 99999),
+[String] $WorkspaceName = "hybridworkspace" + (Get-Random -Maximum 99999),
 
 # OMS Region
 [Parameter(Mandatory=$false)]
@@ -132,6 +133,7 @@ $validRegions = "westeurope", "southeastasia", "eastus", "australiasoutheast"
 if ($validRegions -notcontains $OmsLocation) {
     throw "Currently, only the West Europe, East US, Australia Southeast, and Southeast Asia regions are supported for OMS."
 }
+
 # Add and update modules on the Automation account
 ######
 Write-Output "Importing necessary modules..."
