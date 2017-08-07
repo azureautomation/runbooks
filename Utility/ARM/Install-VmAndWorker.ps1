@@ -329,7 +329,7 @@ $ConfigData = @{
     
 # Download the DSC configuration file
 $Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/HybridRunbookWorkerConfiguration.ps1"
-$Destination = "$env:temp\HybridWorkerConfiguration.ps1"
+$Destination = "$env:temp\HybridRunbookWorkerConfiguration.ps1"
 
 $null = Invoke-WebRequest -uri $Source -OutFile $Destination
 $null = Unblock-File $Destination
@@ -341,7 +341,7 @@ $null = Import-AzureRmAutomationDscConfiguration -AutomationAccountName $Automat
 
 
 # Compile the DSC configuration
-$CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
+$CompilationJob = Start-AzureRmAutomationDscCompilationJob -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccountName -ConfigurationName "HybridRunbookWorkerConfiguration" -Parameters $ConfigParameters -ConfigurationData $ConfigData
 
 Write-Output "Compiling DSC Job..."
 
@@ -353,6 +353,6 @@ while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $
   
 # Configure the DSC node
 Write-Output "Setting the configuration for the DSC node..."
-$null = Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridWorkerConfiguration.HybridVM" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
+$null = Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridRunbookWorkerConfiguration.HybridVM" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
 
 Write-Output "Complete: Please wait one configuration cycle (approximately 30 minutes) for the DSC configuration to be pulled from the server and the Hybrid Worker Group to be created."
