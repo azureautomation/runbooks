@@ -101,7 +101,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 14, 2016  
+    LASTEDIT: August 7, 2017
 
 #>
 
@@ -328,7 +328,7 @@ $ConfigData = @{
 
     
 # Download the DSC configuration file
-$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/HybridWorkerConfiguration.ps1"
+$Source =  "https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/HybridRunbookWorkerConfiguration.ps1"
 $Destination = "$env:temp\HybridWorkerConfiguration.ps1"
 
 $null = Invoke-WebRequest -uri $Source -OutFile $Destination

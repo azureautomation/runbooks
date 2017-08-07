@@ -64,7 +64,7 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: October 17, 2016  
+    LASTEDIT: August 7, 2017  
 
 #>
 
@@ -220,6 +220,6 @@ while($CompilationJob.EndTime –eq $null -and $CompilationJob.Exception –eq $
   
 # Configure the DSC node
 Write-Output "Setting the configuration for the DSC node..."
-$null = Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridWorkerConfiguration.HybridVM" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
+$null = Set-AzureRmAutomationDscNode -ResourceGroupName $ResourceGroup  -NodeConfigurationName "HybridWorkerRunbookConfiguration.HybridVM" -Id $DscNode.Id -AutomationAccountName $AutomationAccountName -Force
 
 Write-Output "Complete: Please wait one configuration cycle (approximately 30 minutes) for the DSC configuration to be pulled from the server and the Hybrid Worker Group to be created."
