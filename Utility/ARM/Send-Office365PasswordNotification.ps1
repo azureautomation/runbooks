@@ -135,7 +135,7 @@ foreach ($ADUser in $ADUsers)
                 $OfficeCred = Get-AutomationPSCredential -Name $O365CredentialName
                 $Body = "Please reset your password in the next " + $DaysLeft + " days."
                 Send-MailMessage -Credential $OfficeCred -SmtpServer smtp.office365.com -Port 587 `
-                                -To $ADUser.AlternateEmailAddresses `
+                                -To $ADUser.SignInName `
                                 -Subject "Password will expire soon" `
                                 -Body $Body `
                                 -From $OfficeCred.UserName `
