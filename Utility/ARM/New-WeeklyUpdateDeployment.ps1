@@ -1,7 +1,7 @@
- <#
+  <#
 .SYNOPSIS 
     This sample automation runbook creates a weekly update deployment each Sunday for VMs in a specific Azure resource group
-    or an individual VM in a resource group.
+    or an individual VM in a resource group. It assumes that the VM's are already onboarded.
 
 .DESCRIPTION
     This sample automation runbook creates a weekly update deployment each Sunday for VMs in a specific Azure resource group
