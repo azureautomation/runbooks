@@ -128,7 +128,7 @@ try
     # Get list of vms to process
     if  (!([string]::IsNullOrEmpty($VMResourceGroup)) -and !([string]::IsNullOrEmpty($VM)))
     {
-        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Name $VM -Status | where {$_.PowerState -match "deallocated"}
+        $AzureVMs = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Name $VM -Status | where {$_.Statuses.code -match "deallocated"}
     }
     elseif (!([string]::IsNullOrEmpty($VMResourceGroup)))
     {
