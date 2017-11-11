@@ -189,6 +189,7 @@ if ([string]::IsNullOrEmpty($Onboarded))
                                         -Name $DeploymentName `
                                         -TemplateParameterObject $MMADeploymentParams `
                                         -AzureRmContext $NewVMSubscriptionContext -Verbose
+    Write-Output("VM " + $VMName + " successfully onboarded.")
 }
 else 
 {
