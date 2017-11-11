@@ -80,7 +80,7 @@ Param (
     )
 
 # Runbook that is used to enable a solution on a VM.
-# This must be imported and published before this Runbook is called
+# If this is not present in the Automation account, it will be imported automatically from
 # https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1
 $RunbookName = "Enable-AutomationSolution"
 
