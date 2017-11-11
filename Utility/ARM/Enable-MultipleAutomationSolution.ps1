@@ -4,16 +4,18 @@
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
     This Runbook needs to be run from the Automation account that you wish to connect the new VM to. It depends on
-    the EnableAutomationSolution runbook that is available from that gallery and needs to be imported and published
-    before this runbook is started. https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1
+    the EnableAutomationSolution runbook that is available from that gallery and 
+    https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1. If this Runbook is
+    not present, it will be automatically imported.
 
 .DESCRIPTION
-    This sample automation runbook onboards an Azure VM for either the Update or ChangeTracking (which includes Inventory) solution.
+    This sample automation runbook onboards Azure VMs for either the Update or ChangeTracking (which includes Inventory) solution.
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
     This Runbook needs to be run from the Automation account that you wish to connect the new VM to. It depends on
-    the EnableAutomationSolution runbook that is available from that gallery and needs to be imported and published
-    before this runbook is started. https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1
+    the EnableAutomationSolution runbook that is available from that gallery and 
+    https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1. If this Runbook is
+    not present, it will be automatically imported.
 
 .PARAMETER VMName
     Optional. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
@@ -46,10 +48,6 @@
     .\Enable-MultipleAutomationSolution -ResourceGroupName finance `
              -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType ChangeTracking 
 
-.Example
-    .\Enable-MultipleAutomationSolution -ResourceGroupName finance -SubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" `
-             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType Updates
-             
 .NOTES
     AUTHOR: Automation Team
     LASTEDIT: November 9th, 2017 
@@ -130,10 +128,29 @@ foreach ($Automation in $AutomationResource)
 # Check that Enable-AutomationSolution runbook is published in the automation account
 $EnableSolutionRunbook = Get-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroup `
                                                     -AutomationAccountName $AutomationAccount -Name $RunbookName `
-                                                    -AzureRmContext $SubscriptionContext -ErrorAction Stop
+                                                    -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
+
 if ($EnableSolutionRunbook.State -ne "Published" -and $EnableSolutionRunbook.State -ne "Edit")
 {
-    throw ($RunbookName + " is not in a published state. Please publish this runbook.")
+    Write-Verbose ("Importing Enable-AutomationSolution runbook as it is not present..")
+    $LocalFolder = Join-Path "c:\" (New-Guid).Guid
+    New-Item -ItemType directory $LocalFolder -Force | Write-Verbose
+    
+    (New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Enable-AutomationSolution.ps1", "$LocalFolder\Enable-AutomationSolution.ps1")
+    Unblock-File $LocalFolder\Enable-AutomationSolution.ps1 | Write-Verbose
+    Import-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroup `
+                                    -AutomationAccountName $AutomationAccount -Path $LocalFolder\Enable-AutomationSolution.ps1 `
+                                    -Published -Type PowerShell -Force | Write-Verbose
+    Remove-Item -Path $LocalFolder -Recurse -Force
+}
+
+# Check AzureRM.OperationalInsights is present in the automation account
+$OperationalInsightsModule = Get-AzureRmAutomationModule -ResourceGroupName $AutomationResourceGroup `
+                            -AutomationAccountName $AutomationAccount -Name "AzureRM.OperationalInsights" -ErrorAction SilentlyContinue
+
+if ([string]::IsNullOrEmpty($OperationalInsightsModule))
+{
+        throw ("The module AzureRM.OperationalInsights is not available. Please import from the gallery on the modules page.")
 }
 
 # Get existing VM that is already onboarded to the solution.
@@ -153,7 +170,9 @@ elseif (!([string]::IsNullOrEmpty($VMResourceGroup)))
 else
 {
    # If the resource group was not required, but optional, all VMs in the subsription could be onboarded.
-   $VMList = Get-AzureRMVM -AzureRmContext $VMSubscriptionContext -Status | Where-Object {$_.PowerState -match "running"}
+   # Commenting this out as it is a pretty big deployment to do depending on how many VMs you 
+   # have in your subscription..
+   # $VMList = Get-AzureRMVM -AzureRmContext $VMSubscriptionContext -Status | Where-Object {$_.PowerState -match "running"}
 }
 
  # Get existing VM that is onboarded already to get information from it
