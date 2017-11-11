@@ -170,9 +170,7 @@ elseif (!([string]::IsNullOrEmpty($VMResourceGroup)))
 else
 {
    # If the resource group was not required, but optional, all VMs in the subsription could be onboarded.
-   # Commenting this out as it is a pretty big deployment to do depending on how many VMs you 
-   # have in your subscription..
-   # $VMList = Get-AzureRMVM -AzureRmContext $VMSubscriptionContext -Status | Where-Object {$_.PowerState -match "running"}
+   $VMList = Get-AzureRMVM -AzureRmContext $VMSubscriptionContext -Status | Where-Object {$_.PowerState -match "running"}
 }
 
  # Get existing VM that is onboarded already to get information from it
