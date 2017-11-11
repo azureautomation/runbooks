@@ -133,7 +133,7 @@ $EnableSolutionRunbook = Get-AzureRmAutomationRunbook -ResourceGroupName $Automa
 if ($EnableSolutionRunbook.State -ne "Published" -and $EnableSolutionRunbook.State -ne "Edit")
 {
     Write-Verbose ("Importing Enable-AutomationSolution runbook as it is not present..")
-    $LocalFolder = Join-Path "c:\" (New-Guid).Guid
+    $LocalFolder = Join-Path $Env:SystemDrive (New-Guid).Guid
     New-Item -ItemType directory $LocalFolder -Force | Write-Verbose
     
     (New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Enable-AutomationSolution.ps1", "$LocalFolder\Enable-AutomationSolution.ps1")
