@@ -20,5 +20,4 @@ param(
     $EVENTDATA
 )
 
-Write-Output("Message is " + $EVENTDATA.EventProperties.Message)
 Write-Output("Passed in data is " + ($EVENTDATA.EventProperties.Data | ConvertFrom-Json))
