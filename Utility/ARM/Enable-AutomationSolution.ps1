@@ -154,7 +154,6 @@ $VMName = $NewVM.Name
 $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
 $WorkspaceName = $WorkspaceInfo.Name
 $WorkspaceResourceId = $WorkspaceInfo.ResourceId
-$MMAExentsionName = "MicrosoftMonitoringAgent"
 
 # New VM information
 $VMResourceGroupName = $NewVM.ResourceGroupName
@@ -170,7 +169,16 @@ $Onboarded = Get-AzureRmVMExtension -ResourceGroup $ResourceGroupName  -VMName $
 if ([string]::IsNullOrEmpty($Onboarded))
 {
     # Set up MMA agent information to onboard VM to the workspace
-    $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json"
+    if ($NewVM.OSProfile.WindowsConfiguration -eq $null)
+    {
+        $MMAExentsionName = "OmsAgentForLinux"
+        $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json"
+    }
+    else 
+    {
+        $MMAExentsionName = "MicrosoftMonitoringAgent"
+        $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json"      
+    }
     $MMADeploymentParams = @{}
     $MMADeploymentParams.Add("vmName", $VMName)
     $MMADeploymentParams.Add("vmLocation", $VMLocation)
