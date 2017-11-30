@@ -4,7 +4,7 @@
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
     This Runbook needs to be run from the Automation account that you wish to connect the new VM to. It depends on
-    the EnableAutomationSolution runbook that is available from the gallery and 
+    the Enable-AutomationSolution runbook that is available from the gallery and 
     https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1. If this Runbook is
     not present, it will be automatically imported.
 
@@ -13,7 +13,7 @@
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
     This Runbook needs to be run from the Automation account that you wish to connect the new VM to. It depends on
-    the EnableAutomationSolution runbook that is available from the gallery and 
+    the Enable-AutomationSolution runbook that is available from the gallery and 
     https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1. If this Runbook is
     not present, it will be automatically imported.
 
@@ -30,10 +30,10 @@
     give a different subscription id then you need to make sure the RunAs account for
     this automaiton account is added as a contributor to this subscription also.
 
-.PARAMETER ExistingVM
+.PARAMETER AlreadyOnboardedVM 
     Required. The name of the existing Azure VM that is already onboarded to the Updates or ChangeTracking solution
 
-.PARAMETER ExistingVMResourceGroup
+.PARAMETER AlreadyOnboardedVMResourceGroup 
     Required. The name of resource group that the existing VM with the solution is a member of
 
 .PARAMETER SolutionType
@@ -42,11 +42,11 @@
 
 .Example
     .\Enable-MultipleAutomationSolution -VMName finance1 -ResourceGroupName finance `
-             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType Updates
+             -AlreadyOnboardedVM hrapp1 -AlreadyOnboardedVMResourceGroup hr -SolutionType Updates
 
 .Example
     .\Enable-MultipleAutomationSolution -ResourceGroupName finance `
-             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType ChangeTracking 
+             -AlreadyOnboardedVM hrapp1 -AlreadyOnboardedVMResourceGroup hr -SolutionType ChangeTracking 
 
 .NOTES
     AUTHOR: Automation Team
@@ -68,11 +68,11 @@ Param (
 
     [Parameter(Mandatory=$True)]
     [String]
-    $ExistingVM,
+    $AlreadyOnboardedVM,
 
     [Parameter(Mandatory=$True)]
     [String]
-    $ExistingVMResourceGroup,
+    $AlreadyOnboardedVMResourceGroup,
 
     [Parameter(Mandatory=$True)]
     [String]
@@ -154,7 +154,7 @@ if ([string]::IsNullOrEmpty($OperationalInsightsModule))
 }
 
 # Get existing VM that is already onboarded to the solution.
-$OnboardedVM = Get-AzureRMVM -ResourceGroupName $ExistingVMResourceGroup -Name $ExistingVM -AzureRmContext $SubscriptionContext
+$OnboardedVM = Get-AzureRMVM -ResourceGroupName $AlreadyOnboardedVMResourceGroup -Name $AlreadyOnboardedVM -AzureRmContext $SubscriptionContext
 
 # Get list of VMs that you want to onboard the solution to
 if  (!([string]::IsNullOrEmpty($VMResourceGroup)) -and !([string]::IsNullOrEmpty($VMName)))
@@ -180,7 +180,7 @@ $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $OnboardedVM.Resour
 $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
 if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
 {
-    throw ("This VM " + $ExistingVM + " is not onboarded. Please onboard first as it is used to collect information")
+    throw ("This VM " + $AlreadyOnboardedVM + " is not onboarded. Please onboard first as it is used to collect information")
 }
 
 # Get information about the workspace
