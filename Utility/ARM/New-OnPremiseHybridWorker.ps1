@@ -1,4 +1,4 @@
-﻿<#PSScriptInfo 
+<#PSScriptInfo 
 
 .VERSION 1.3 
 
@@ -62,8 +62,12 @@
 .PARAMETER SubscriptionID
 
     Mandatory. A string containing the SubscriptionID to be used. 
+	
+.PARAMETER TenantId
 
+    Mandatory. A string containing the TenantId to be used. 
 
+	
 .PARAMETER WorkspaceName
 
     Optional. The name of the OMS Workspace to be referenced. If not specified, a new OMS workspace 
@@ -106,9 +110,9 @@
 
     AUTHOR: Jenny Hunter, Azure/OMS Automation Team
 
-    LASTEDIT: July 18, 2017
+    LASTEDIT: November 28, 2017
 
-    EDITBY: Jenny Hunter
+    EDITBY: Fabian Bader
 
 #>
 
@@ -122,6 +126,9 @@ Param (
 
 [Parameter(Mandatory=$true)]
 [String] $SubscriptionID,
+
+[Parameter(Mandatory=$true)]
+[String] $TenantId,
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
@@ -189,18 +196,19 @@ $paramsplat = @{}
 
 if ($Credential) {
     $paramsplat.Credential = $Credential
+	$paramsplat.TenantId = $TenantId
 }
 
 $Account = Add-AzureRmAccount @paramsplat 
 
 # Get a reference to the current subscription
-$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID -TenantID $TenantId
 # Get the tenant id for this subscription
 $TenantID = $Subscription.TenantId
 
 
 # Set the active subscription
-$null = Set-AzureRmContext -SubscriptionID $SubscriptionID
+$null = Set-AzureRmContext -SubscriptionID $SubscriptionID  -TenantID $TenantId
 
 # Check that the resource group is valid
 $null = Get-AzureRmResourceGroup -Name $ResourceGroupName
