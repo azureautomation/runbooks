@@ -9,18 +9,18 @@ Restart your Linux VM
 
 Perform the following steps:
 
-Stop and Start OMIServer
+1). Stop and Start OMIServer
 --------------------------
 sudo /opt/omi/bin/omiserver -s
 sudo /opt/omi/bin/omiserver -d
 
 
-Restart OMSAgent
+2). Restart OMSAgent
 ---------------
 sudo /opt/microsoft/omsagent/bin/service_control restart 
 
 
-Issue DSC operation to trigger loading of DSC engine
+3). Issue DSC operation to trigger loading of DSC engine
 ----------------------------------------------------
 
 sudo -su omsagent 
