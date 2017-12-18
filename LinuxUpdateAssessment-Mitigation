@@ -1,6 +1,14 @@
 Mitigation Steps
 ------------------
 
+Either;
+
+Restart your Linux VM
+
+(OR)
+
+Perform the following steps:
+
 Stop and Start OMIServer
 --------------------------
 sudo /opt/omi/bin/omiserver -s
@@ -13,9 +21,9 @@ sudo /opt/microsoft/omsagent/bin/service_control restart
 
 
 Issue DSC operation to trigger loading of DSC engine
----------------------------------------------------- 
+----------------------------------------------------
 
 sudo -su omsagent 
 /opt/microsoft/omsconfig/Scripts/GetDscLocalConfigurationManager.py
-
+exit
 
