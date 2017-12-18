@@ -18,11 +18,4 @@ Issue DSC operation to trigger loading of DSC engine
 sudo -su omsagent 
 /opt/microsoft/omsconfig/Scripts/GetDscLocalConfigurationManager.py
 
-To check the start time of the process AFTER you restart the services
----------------------------------------------------------------------------
 
-ps -eo pid,lstart,cmd | grep omiserver
-
-ps -eo pid,lstart,cmd | grep omiagent
-
-ps -eo pid,lstart,cmd | grep omsagent
