@@ -1,0 +1,28 @@
+Mitigation Steps
+------------------
+
+Stop and Start OMIServer
+--------------------------
+sudo /opt/omi/bin/omiserver -s
+sudo /opt/omi/bin/omiserver -d
+
+
+Restart OMSAgent
+---------------
+sudo /opt/microsoft/omsagent/bin/service_control restart 
+
+
+Issue DSC operation to trigger loading of DSC engine
+---------------------------------------------------- 
+
+sudo -su omsagent 
+/opt/microsoft/omsconfig/Scripts/GetDscLocalConfigurationManager.py
+
+To check the start time of the process AFTER you restart the services
+---------------------------------------------------------------------------
+
+ps -eo pid,lstart,cmd | grep omiserver
+
+ps -eo pid,lstart,cmd | grep omiagent
+
+ps -eo pid,lstart,cmd | grep omsagent
