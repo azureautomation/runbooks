@@ -69,9 +69,11 @@ $ResourceAppIdURI = "https://management.core.windows.net/"
 # Login uri for Azure AD
 $LoginURI = "https://login.windows.net/"
 
-# Find AzureRM.Automation module and load the Azure AD client library
-$PathToAutomationModule = Get-ChildItem (Join-Path $ModulePath AzureRM.Automation) -Recurse
-Add-Type -Path (Join-Path $PathToAutomationModule "Microsoft.IdentityModel.Clients.ActiveDirectory.dll")
+# Import AzureRM.prifle module and load the Azure AD client library that lives in its folder
+Import-Module AzureRM.profile | Write-Verbose
+$ProfileModule = Get-Module AzureRM.profile
+$ProfileModulePath = Split-Path -Parent $ProfileModule.Path
+Add-Type -Path (Join-Path $ProfileModulePath "Microsoft.IdentityModel.Clients.ActiveDirectory.dll")
 
 # Get RunAsConnection
 $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
