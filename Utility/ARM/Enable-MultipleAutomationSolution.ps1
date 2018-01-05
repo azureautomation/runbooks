@@ -33,7 +33,7 @@
 .PARAMETER AlreadyOnboardedVM 
     Required. The name of the existing Azure VM that is already onboarded to the Updates or ChangeTracking solution
 
-.PARAMETER AlreadyOnboardedVMResourceGroup 
+.PARAMETER AlreadyOnboardedVMResourceGroup
     Required. The name of resource group that the existing VM with the solution is a member of
 
 .PARAMETER SolutionType
@@ -41,11 +41,11 @@
     It must be either "Updates" or "ChangeTracking". ChangeTracking also includes the inventory solution.
 
 .Example
-    .\Enable-MultipleAutomationSolution -VMName finance1 -ResourceGroupName finance `
+    .\Enable-MultipleSolution -VMName finance1 -ResourceGroupName finance `
              -AlreadyOnboardedVM hrapp1 -AlreadyOnboardedVMResourceGroup hr -SolutionType Updates
 
 .Example
-    .\Enable-MultipleAutomationSolution -ResourceGroupName finance `
+    .\Enable-MultipleSolution -ResourceGroupName finance `
              -AlreadyOnboardedVM hrapp1 -AlreadyOnboardedVMResourceGroup hr -SolutionType ChangeTracking 
 
 .NOTES
@@ -140,13 +140,14 @@ if ($EnableSolutionRunbook.State -ne "Published" -and $EnableSolutionRunbook.Sta
     Unblock-File $LocalFolder\Enable-AutomationSolution.ps1 | Write-Verbose
     Import-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroup `
                                     -AutomationAccountName $AutomationAccount -Path $LocalFolder\Enable-AutomationSolution.ps1 `
-                                    -Published -Type PowerShell -Force | Write-Verbose
+                                    -Published -Type PowerShell -AzureRmContext $SubscriptionContext -Force | Write-Verbose
     Remove-Item -Path $LocalFolder -Recurse -Force
 }
 
 # Check AzureRM.OperationalInsights is present in the automation account
 $OperationalInsightsModule = Get-AzureRmAutomationModule -ResourceGroupName $AutomationResourceGroup `
-                            -AutomationAccountName $AutomationAccount -Name "AzureRM.OperationalInsights" -ErrorAction SilentlyContinue
+                            -AutomationAccountName $AutomationAccount -Name "AzureRM.OperationalInsights" `
+                            -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
 
 if ([string]::IsNullOrEmpty($OperationalInsightsModule))
 {
@@ -174,7 +175,8 @@ else
 }
 
  # Get existing VM that is onboarded already to get information from it
-$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $OnboardedVM.ResourceGroupName  -VMName $OnboardedVM.Name -Name MicrosoftMonitoringAgent
+$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $OnboardedVM.ResourceGroupName -VMName $OnboardedVM.Name `
+                                                -AzureRmContext $SubscriptionContext -Name MicrosoftMonitoringAgent
 
 # Check if the existing VM is already onboarded
 $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
