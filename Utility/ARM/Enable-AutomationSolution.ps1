@@ -1,27 +1,20 @@
 <#
 .SYNOPSIS 
-    This sample automation runbook onboards Azure VMs for either the Update or ChangeTracking (which includes Inventory) solution.
+    This sample automation runbook onboards an Azure VM for either the Update or ChangeTracking (which includes Inventory) solution.
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
-    This Runbook needs to be run from the Automation account that you wish to connect the new VM to. It depends on
-    the Enable-AutomationSolution runbook that is available from the gallery and 
-    https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1. If this Runbook is
-    not present, it will be automatically imported.
+    This Runbook needs to be run from the Automation account that you wish to connect the new VM to.
 
 .DESCRIPTION
-    This sample automation runbook onboards Azure VMs for either the Update or ChangeTracking (which includes Inventory) solution.
+    This sample automation runbook onboards an Azure VM for either the Update or ChangeTracking (which includes Inventory) solution.
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
-    This Runbook needs to be run from the Automation account that you wish to connect the new VM to. It depends on
-    the Enable-AutomationSolution runbook that is available from the gallery and 
-    https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1. If this Runbook is
-    not present, it will be automatically imported.
+    This Runbook needs to be run from the Automation account that you wish to connect the new VM to.
 
 .PARAMETER VMName
-    Optional. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
-    If this is not specified, all VMs in the resource group will be onboarded.
+    Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
 
-.PARAMETER VMResourceGroup
+.PARAMETER ResourceGroupName
     Required. The name of the resource group that the VM is a member of.
 
 .PARAMETER SubscriptionId
@@ -30,23 +23,36 @@
     give a different subscription id then you need to make sure the RunAs account for
     this automaiton account is added as a contributor to this subscription also.
 
-.PARAMETER AlreadyOnboardedVM 
+.PARAMETER ExistingVM
     Required. The name of the existing Azure VM that is already onboarded to the Updates or ChangeTracking solution
 
-.PARAMETER AlreadyOnboardedVMResourceGroup
+.PARAMETER ExistingVMResourceGroup
     Required. The name of resource group that the existing VM with the solution is a member of
 
 .PARAMETER SolutionType
     Required. The name of the solution to onboard to this Automation account.
     It must be either "Updates" or "ChangeTracking". ChangeTracking also includes the inventory solution.
 
-.Example
-    .\Enable-MultipleSolution -VMName finance1 -ResourceGroupName finance `
-             -AlreadyOnboardedVM hrapp1 -AlreadyOnboardedVMResourceGroup hr -SolutionType Updates
+.PARAMETER UpdateScopeQuery
+    Optional. Default is true. Indicates whether to add this VM to the list of computers to enable for this solution.
+    Solutions enable an optional scope configuration to be set on them that contains a query of computers 
+    to target the solution to. If you are calling this Runbook from a parent runbook that is onboarding
+    multiple VMs concurrently, then you will want to set this to false and then do a final update of the
+    search query with the list of onboarded computers to avoid any possible conflicts that this Runbook
+    might do when reading, adding this VM, and updating the query since multiple versions of this Runbook
+    might try and do this at the same time if run concurrently.
 
 .Example
-    .\Enable-MultipleSolution -ResourceGroupName finance `
-             -AlreadyOnboardedVM hrapp1 -AlreadyOnboardedVMResourceGroup hr -SolutionType ChangeTracking 
+    .\Enable-AutomationSolution -VMName finance1 -ResourceGroupName finance `
+             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType Updates
+
+.Example
+    .\Enable-AutomationSolution -VMName finance1 -ResourceGroupName finance `
+             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType ChangeTracking -UpdateScopeQuery $False
+
+.Example
+    .\Enable-AutomationSolution -VMName finance1 -ResourceGroupName finance -SubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" `
+             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType Updates
 
 .NOTES
     AUTHOR: Automation Team
@@ -54,13 +60,13 @@
 #>
  
 Param (
-    [Parameter(Mandatory=$False)]
+    [Parameter(Mandatory=$True)]
     [String]
     $VMName,
 
     [Parameter(Mandatory=$True)]
     [String]
-    $VMResourceGroup,
+    $ResourceGroupName,
 
     [Parameter(Mandatory=$False)]
     [String]
@@ -68,21 +74,23 @@ Param (
 
     [Parameter(Mandatory=$True)]
     [String]
-    $AlreadyOnboardedVM,
+    $ExistingVM,
 
     [Parameter(Mandatory=$True)]
     [String]
-    $AlreadyOnboardedVMResourceGroup,
+    $ExistingVMResourceGroup,
 
     [Parameter(Mandatory=$True)]
     [String]
-    $SolutionType
+    $SolutionType,
+
+    [Parameter(Mandatory=$False)]
+    [Boolean]
+    $UpdateScopeQuery=$True 
     )
 
-# Runbook that is used to enable a solution on a VM.
-# If this is not present in the Automation account, it will be imported automatically from
-# https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1
-$RunbookName = "Enable-AutomationSolution"
+# Stop on errors
+$ErrorActionPreference = 'stop'
 
 if ($SolutionType -cne "Updates" -and $SolutionType -cne "ChangeTracking")
 {
@@ -90,268 +98,135 @@ if ($SolutionType -cne "Updates" -and $SolutionType -cne "ChangeTracking")
 }
 
  # Authenticate to Azure
- $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
- Add-AzureRmAccount `
-     -ServicePrincipal `
-     -TenantId $ServicePrincipalConnection.TenantId `
-     -ApplicationId $ServicePrincipalConnection.ApplicationId `
-     -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
- 
- # Set subscription to work against
- $SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId 
- 
- if ([string]::IsNullOrEmpty($SubscriptionId))
- {
-     # Use the same subscription as the Automation account if not passed in
-     $VMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId
- }
- else 
- {
-     # VM is in a different subscription so set the context to this subscription
-     $VMSubscriptionContext = Set-AzureRmContext -SubscriptionId $SubscriptionId
- }
- 
-# Find out the resource group and account name
-$AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -AzureRmContext $SubscriptionContext
-foreach ($Automation in $AutomationResource)
+$ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+Add-AzureRmAccount `
+    -ServicePrincipal `
+    -TenantId $ServicePrincipalConnection.TenantId `
+    -ApplicationId $ServicePrincipalConnection.ApplicationId `
+    -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
+
+# Set subscription to work against
+$SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId 
+
+if ([string]::IsNullOrEmpty($SubscriptionId))
 {
-    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name `
-                                    -Id $PSPrivateMetadata.JobId.Guid -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
-    if (!([string]::IsNullOrEmpty($Job)))
-    {
-        $AutomationResourceGroup = $Job.ResourceGroupName
-        $AutomationAccount = $Job.AutomationAccountName
-        break;
-    }
+    # Use the same subscription as the Automation account if not passed in
+    $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId
+}
+else 
+{
+    # VM is in a different subscription so set the context to this subscription
+    $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $SubscriptionId
 }
 
-# Check that Enable-AutomationSolution runbook is published in the automation account
-$EnableSolutionRunbook = Get-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroup `
-                                                    -AutomationAccountName $AutomationAccount -Name $RunbookName `
-                                                    -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
-
-if ($EnableSolutionRunbook.State -ne "Published" -and $EnableSolutionRunbook.State -ne "Edit")
-{
-    Write-Verbose ("Importing Enable-AutomationSolution runbook as it is not present..")
-    $LocalFolder = Join-Path $Env:SystemDrive (New-Guid).Guid
-    New-Item -ItemType directory $LocalFolder -Force | Write-Verbose
-    
-    (New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/azureautomation/runbooks/master/Utility/ARM/Enable-AutomationSolution.ps1", "$LocalFolder\Enable-AutomationSolution.ps1")
-    Unblock-File $LocalFolder\Enable-AutomationSolution.ps1 | Write-Verbose
-    Import-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroup `
-                                    -AutomationAccountName $AutomationAccount -Path $LocalFolder\Enable-AutomationSolution.ps1 `
-                                    -Published -Type PowerShell -AzureRmContext $SubscriptionContext -Force | Write-Verbose
-    Remove-Item -Path $LocalFolder -Recurse -Force
-}
-
-# Check AzureRM.OperationalInsights is present in the automation account
-$OperationalInsightsModule = Get-AzureRmAutomationModule -ResourceGroupName $AutomationResourceGroup `
-                            -AutomationAccountName $AutomationAccount -Name "AzureRM.OperationalInsights" `
-                            -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
-
-if ([string]::IsNullOrEmpty($OperationalInsightsModule))
-{
-        throw ("The module AzureRM.OperationalInsights is not available. Please import from the gallery on the modules page.")
-}
-
-# Get existing VM that is already onboarded to the solution.
-$OnboardedVM = Get-AzureRMVM -ResourceGroupName $AlreadyOnboardedVMResourceGroup -Name $AlreadyOnboardedVM -AzureRmContext $SubscriptionContext
-
-# Get list of VMs that you want to onboard the solution to
-if  (!([string]::IsNullOrEmpty($VMResourceGroup)) -and !([string]::IsNullOrEmpty($VMName)))
-{
-    $VMList = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -Name $VMName -AzureRmContext $VMSubscriptionContext `
-                            -Status | Where-Object {$_.Statuses.code -match "running"}
-}
-elseif (!([string]::IsNullOrEmpty($VMResourceGroup)))
-{
-    $VMList = Get-AzureRMVM -ResourceGroupName $VMResourceGroup -AzureRmContext $VMSubscriptionContext `
-                            -Status | Where-Object {$_.PowerState -match "running"}
-}
-else
-{
-   # If the resource group was not required, but optional, all VMs in the subsription could be onboarded.
-   $VMList = Get-AzureRMVM -AzureRmContext $VMSubscriptionContext -Status | Where-Object {$_.PowerState -match "running"}
-}
-
- # Get existing VM that is onboarded already to get information from it
-$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $OnboardedVM.ResourceGroupName -VMName $OnboardedVM.Name `
-                                                -AzureRmContext $SubscriptionContext -Name MicrosoftMonitoringAgent
+# Get existing VM that is onboarded already to get information from it
+$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
+                                             -Name MicrosoftMonitoringAgent -AzureRmContext $SubscriptionContext
 
 # Check if the existing VM is already onboarded
 $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
 if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
 {
-    throw ("This VM " + $AlreadyOnboardedVM + " is not onboarded. Please onboard first as it is used to collect information")
+    throw ("This VM " + $ExistingVM + " is not onboarded. Please onboard first as it is used to collect information")
 }
 
 # Get information about the workspace
 $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext `
-                                                        | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
+                                                    | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
 
 # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
 $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
-                                                        -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
+                                         -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
 
 $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}                                          
+
 if ([string]::IsNullOrEmpty($SolutionGroup))
 {
     throw "Saved group MicrosoftDefaultComputerGroup is not available. Please check this exists... "
 }
 
-# Process the list of VMs using the automation service and collect jobs used
-$Jobs = @{}     
+# Get details of the new VM to onboard.
+$NewVM = Get-AzureRMVM -ResourceGroupName $ResourceGroupName -Name $VMName `
+                        -AzureRmContext $NewVMSubscriptionContext
+$VMName = $NewVM.Name
 
-foreach ($VM in $VMList)
-{   
-   # Start automation runbook to process VMs in parallel
-   $RunbookNameParams = @{}
-   $RunbookNameParams.Add("VMName",$VM.Name)
-   $RunbookNameParams.Add("ResourceGroupName",$VM.ResourceGroupName)
-   $RunbookNameParams.Add("ExistingVM",$OnboardedVM.Name)
-   $RunbookNameParams.Add("ExistingVMResourceGroup", $OnboardedVM.ResourceGroupName)
-   $RunbookNameParams.Add("SolutionType",$SolutionType)
-   $RunbookNameParams.Add("UpdateScopeQuery",$False)
-   if (!([string]::IsNullOrEmpty($SubscriptionId)))
-   {
-       $RunbookNameParams.Add("SubscriptionId",$SubscriptionId)
-   }
+# Workspace information
+$WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
+$WorkspaceName = $WorkspaceInfo.Name
+$WorkspaceResourceId = $WorkspaceInfo.ResourceId
 
-   # Loop here until a job was successfully submitted. Will stay in the loop until job has been submitted or an exception other than max allowed jobs is reached
-   while ($true)
-   {
-       try 
-       {
-           $Job = Start-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroup -AutomationAccountName $AutomationAccount `
-                                                -Name $RunbookName -Parameters $RunbookNameParams `
-                                                -AzureRmContext $SubscriptionContext -ErrorAction Stop
-           $Jobs.Add($VM.Name,$Job)
-           # Submitted job successfully, exiting while loop
-           break
-       }
-       catch
-       {
-           # If we have reached the max allowed jobs, sleep backoff seconds and try again inside the while loop
-           if ($_.Exception.Message -match "conflict")
-           {
-               Write-Verbose ("Sleeping for 30 seconds as max allowed jobs has been reached. Will try again afterwards")
-               Start-Sleep 60
-           }
-           else
-           {
-               throw $_
-           }
-       }
-   }
-}
+# New VM information
+$VMResourceGroupName = $NewVM.ResourceGroupName
+$VMName = $NewVM.Name
+$VMLocation = $NewVM.Location
+$VMResourceId = $NewVM.Id
+$VMIdentityRequired = $false
 
-# Wait for jobs to complete, stop, fail, or suspend (final states allowed for a runbook)
-$JobsResults = @()
-$MachineList = $null
-foreach ($RunningJob in $Jobs.GetEnumerator())
+# Check if the VM is already onboarded to the MMA Agent and skip if it is
+$Onboarded = Get-AzureRmVMExtension -ResourceGroup $ResourceGroupName  -VMName $VMName `
+                -Name MicrosoftMonitoringAgent -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue
+
+if ([string]::IsNullOrEmpty($Onboarded))
 {
-    $ActiveJob = Get-AzureRMAutomationJob -ResourceGroupName $AutomationResourceGroup `
-                                            -AutomationAccountName $AutomationAccount -Id $RunningJob.Value.JobId `
-                                            -AzureRmContext $SubscriptionContext
-    While ($ActiveJob.Status -ne "Completed" -and $ActiveJob.Status -ne "Failed" -and $ActiveJob.Status -ne "Suspended" -and $ActiveJob.Status -ne "Stopped")
+    # Set up MMA agent information to onboard VM to the workspace
+    if ($NewVM.OSProfile.WindowsConfiguration -eq $null)
     {
-        Start-Sleep 30
-        $ActiveJob = Get-AzureRMAutomationJob -ResourceGroupName $AutomationResourceGroup `
-                                            -AutomationAccountName $AutomationAccount -Id $RunningJob.Value.JobId `
-                                            -AzureRmContext $SubscriptionContext
+        $MMAExentsionName = "OmsAgentForLinux"
+        $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json"
     }
-    if ($ActiveJob.Status -eq "Completed")
+    else 
     {
-        $VirutalMachineName = $RunningJob.Name
-        if (!($SolutionGroup.Properties.Query -match $VirutalMachineName))
-        {
-            $MachineList += "`"$VirutalMachineName`", "
-        }
+        $MMAExentsionName = "MicrosoftMonitoringAgent"
+        $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json"      
     }
-    $JobsResults+= $ActiveJob
-}
+    $MMADeploymentParams = @{}
+    $MMADeploymentParams.Add("vmName", $VMName)
+    $MMADeploymentParams.Add("vmLocation", $VMLocation)
+    $MMADeploymentParams.Add("vmResourceId", $VMResourceId)
+    $MMADeploymentParams.Add("vmIdentityRequired", $VMIdentityRequired)
+    $MMADeploymentParams.Add("workspaceName",$WorkspaceName)
+    $MMADeploymentParams.Add("workspaceId",$PublicSettings.workspaceId)
+    $MMADeploymentParams.Add("workspaceResourceId", $WorkspaceResourceId)
+    $MMADeploymentParams.Add("mmaExtensionName", $MMAExentsionName)
 
-# Get latest group information and add new machines to the query if needed.
-$SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
-                                                        -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
+    # Create deployment name
+    $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-$SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}   
-
-if (!([string]::IsNullOrEmpty($MachineList)))
-{
-    $MachineList = $MachineList.TrimEnd(', ')
-    $NewQuery = $SolutionGroup.Properties.Query.Replace('(',"($MachineList, ")
+    # Deploy solution to new VM
+    New-AzureRmResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateUri $MMATemplateLinkUri `
+                                        -Name $DeploymentName `
+                                        -TemplateParameterObject $MMADeploymentParams `
+                                        -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
+    Write-Output("VM " + $VMName + " successfully onboarded.")
 }
 else 
 {
-    $NewQuery = $SolutionGroup.Properties.Query
+    Write-Warning("The VM " + $VMName + " already has the MMA agent installed. Skipping this one.")
 }
 
-# If new machines need to be added to the scope query, add them here.
-if (!([string]::IsNullOrEmpty($MachineList)))
+# Update scope query if necessary
+if (!($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
 {
+    $NewQuery = $SolutionGroup.Properties.Query.Replace('(',"(`"$VMName`", ")
     $ComputerGroupQueryTemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/updateKQLScopeQueryV2.json"                                       
 
     # Add all of the parameters
-    $DeploymentParams = @{}
-    $DeploymentParams.Add("location", $WorkspaceInfo.Location)
-    $DeploymentParams.Add("id", "/" + $SolutionGroup.Id)
-    $DeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
-    $DeploymentParams.Add("category", $SolutionType)
-    $DeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
-    $DeploymentParams.Add("query", $NewQuery)
-    $DeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
-    $DeploymentParams.Add("etag", $SolutionGroup.ETag)
+    $QueryDeploymentParams = @{}
+    $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
+    $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
+    $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
+    $QueryDeploymentParams.Add("category", $SolutionType)
+    $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
+    $QueryDeploymentParams.Add("query", $NewQuery)
+    $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
+    $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
 
     # Create deployment name
-    $DeploymentName = "EnableAutomation" + (Get-Date).ToFileTimeUtc()
+    $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-    New-AzureRmResourceGroupDeployment -ResourceGroupName $AutomationResourceGroup -TemplateUri $ComputerGroupQueryTemplateLinkUri `
+    New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateUri $ComputerGroupQueryTemplateLinkUri `
                                         -Name $DeploymentName `
-                                        -TemplateParameterObject $DeploymentParams -AzureRmContext $SubscriptionContext -Verbose
-
+                                        -TemplateParameterObject $QueryDeploymentParams `
+                                        -AzureRmContext $SubscriptionContext | Write-Verbose
 }
-
-# Print out results of the automation jobs
-$JobFailed = $False
-foreach ($JobsResult in $JobsResults)
-{
-    $OutputJob = Get-AzureRmAutomationJobOutput  -ResourceGroupName $AutomationResourceGroup `
-                                                        -AutomationAccountName $AutomationAccount -Id `
-                                                        $JobsResult.JobId -AzureRmContext $SubscriptionContext -Stream Output
-    foreach ($Stream in $OutputJob)
-    {
-        (Get-AzureRmAutomationJobOutputRecord  -ResourceGroupName $AutomationResourceGroup `
-                                                        -AutomationAccountName $AutomationAccount -JobID $JobsResult.JobId `
-                                                        -AzureRmContext $SubscriptionContext -Id $Stream.StreamRecordId).Value
-    }
-
-    $ErrorJob = Get-AzureRmAutomationJobOutput  -ResourceGroupName $AutomationResourceGroup `
-                                                        -AutomationAccountName $AutomationAccount -Id `
-                                                        $JobsResult.JobId -AzureRmContext $SubscriptionContext -Stream Error
-    foreach ($Stream in $ErrorJob)
-    {
-        (Get-AzureRmAutomationJobOutputRecord  -ResourceGroupName $AutomationResourceGroup `
-                                                        -AutomationAccountName $AutomationAccount -JobID $JobsResult.JobId `
-                                                        -AzureRmContext $SubscriptionContext -Id $Stream.StreamRecordId).Value
-    }
-
-    $WarningJob = Get-AzureRmAutomationJobOutput  -ResourceGroupName $AutomationResourceGroup `
-                                                        -AutomationAccountName $AutomationAccount -Id `
-                                                        $JobsResult.JobId -AzureRmContext $SubscriptionContext -Stream Warning
-    foreach ($Stream in $WarningJob)
-    {
-        (Get-AzureRmAutomationJobOutputRecord  -ResourceGroupName $AutomationResourceGroup `
-                                                        -AutomationAccountName $AutomationAccount -JobID $JobsResult.JobId `
-                                                        -AzureRmContext $SubscriptionContext -Id $Stream.StreamRecordId).Value
-    }
-
-    if ($JobsResult.Status -ne "Completed")
-    {
-        $JobFailed = $True
-    }
-}
-if ($JobFailed)
-{
-    throw ("Some jobs failed to complete successfully. Please see output stream for details.")
-}
+ 
