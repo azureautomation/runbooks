@@ -226,6 +226,8 @@ $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
 $null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
 if ($OMSResouceGroupName) {
     $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
+} else {
+    $OMSResourceGroupName = $AAResourceGroupName
 }
 
 # Check that the automation account is valid
