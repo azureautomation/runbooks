@@ -1,0 +1,29 @@
+Mitigation Steps
+------------------
+
+Either
+
+Restart your Linux VM
+
+(OR)
+
+Perform the following steps:
+
+1). Stop and Start OMIServer
+--------------------------
+sudo /opt/omi/bin/omiserver -s
+sudo /opt/omi/bin/omiserver -d
+
+
+2). Restart OMSAgent
+---------------
+sudo /opt/microsoft/omsagent/bin/service_control restart 
+
+
+3). Issue DSC operation to trigger loading of DSC engine
+----------------------------------------------------
+
+sudo -su omsagent 
+/opt/microsoft/omsconfig/Scripts/GetDscLocalConfigurationManager.py
+exit
+
