@@ -117,6 +117,14 @@ else
 {
     # VM is in a different subscription so set the context to this subscription
     $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $SubscriptionId
+    
+    # Register Automation provider if it is not registered on the subscription
+    $AutomationProvider = Get-AzureRMResourceProvider -ProviderNamespace Microsoft.Automation `
+                                                    -AzureRmContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
+    if ([string]::IsNullOrEmpty($AutomationProvider))
+    {
+        Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
+    }
 }
 
 # Get existing VM that is onboarded already to get information from it
