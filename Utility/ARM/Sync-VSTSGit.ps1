@@ -1,4 +1,4 @@
-<#PSScriptInfo
+﻿<#PSScriptInfo
 
 .VERSION 1.0
 
@@ -387,7 +387,7 @@ Function Get-TFSGitChangeSet{
     # Use connection if specific values were set
     if ($Connection -eq $null) { $Connection = Set-ConnectionValues -UserName $Username -Password $Password -Account $Account }
 
-    $URI = "https://" + $Connection.Account + ".visualstudio.com/_apis/git/repositories/$RepoID/commits/$ChangeSetID"
+    $URI = "https://" + $Connection.Account + ".visualstudio.com/_apis/git/repositories/$RepoID/commits/$ChangeSetID/changes"
 
     Invoke-TFSGetRestMethod -Connection $Connection -URI $URI -QueryString "&changeCount=1000&scopePath=$Folder"
 
@@ -428,9 +428,6 @@ Function Get-TFSGitRepo{
     # Use connection if specific values were set
     if ($Connection -eq $null) { $Connection = Set-ConnectionValues -UserName $Username -Password $Password -Account $Account }
 
-    $URI = "https://" + $Connection.Account + ".visualstudio.com/_apis/tfvc/changesets/" + $ChangeSetID + "/changes"
-
-    
     $URI = "https://" + $Connection.Account + ".visualstudio.com/DefaultCollection/$Project/_apis/git/repositories/$Repo"
 
     Invoke-TFSGetRestMethod -Connection $Connection -URI $URI
@@ -544,7 +541,7 @@ try
     else
     {
         $WebhookBody = ConvertFrom-Json $WebhookData.RequestBody
-        $ChangeSetID = $WebhookBody.resource.commits.commitid
+        $ChangeSetID = $WebhookBody.resource.refUpdates.newObjectId
 
         if ($WebhookBody.resource.repository.id -ne $RepoInformation.id)
         {
