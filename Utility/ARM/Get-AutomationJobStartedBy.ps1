@@ -24,7 +24,7 @@
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: March 1st 2018
+    LASTEDIT: March 6th 2018
 #>
 
 param(
@@ -58,9 +58,10 @@ else
     $StartTime = Get-Date $StartTime    
 }
 
-# Get list of jobs in the resource group
+# Get jobs in the resource group
 $JobAcvitityLogs = Get-AzureRmLog -ResourceGroupName $AutomationResourceGroupName -StartTime $StartTime `
                                 | Where-Object {$_.Authorization.Action -eq "Microsoft.Automation/automationAccounts/jobs/write"}
+
 
 $JobInfo = @{}
 foreach ($log in $JobAcvitityLogs)
@@ -68,16 +69,37 @@ foreach ($log in $JobAcvitityLogs)
     # Get job resource
     $JobResource = Get-AzureRmResource -ResourceId $log.ResourceId
 
-    if ($JobInfo[$JobResource.Properties.jobId] -eq $null)
+    if ($JobInfo[$log.SubmissionTimestamp] -eq $null)
     { 
         # Get runbook
         $Runbook = Get-AzureRmAutomationJob -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName `
                                             -Id $JobResource.Properties.jobId
 
         # Add job information to hash table
-        $JobInfo.Add($JobResource.Properties.jobId, @($Runbook.RunbookName,$Log.Caller, $Runbook.CreationTime))
+        $JobInfo.Add($log.SubmissionTimestamp, @($Runbook.RunbookName,$Log.Caller, $JobResource.Properties.jobId))
     }
 }
 
+# Get test jobs
+$TestJobAcvitityLogs = Get-AzureRmLog -ResourceGroupName $AutomationResourceGroupName -StartTime $StartTime `
+                                | Where-Object {$_.Authorization.Action -eq "Microsoft.Automation/automationAccounts/runbooks/draft/write" `
+                                -and $_.Authorization.Scope -match 'draft/testjob'}
+$TestJobInfo = @{}
+foreach ($log in $TestJobAcvitityLogs)
+{
+    # Get runbook
+    $RunbookIndex = $log.ResourceId.IndexOf('/runbooks/') + 10
+    $Runbook = $log.ResourceId.Substring($RunbookIndex, $log.ResourceId.IndexOf('/draft/testJob') - $RunbookIndex)
+
+    if ($TestJobInfo[$log.SubmissionTimestamp] -eq $null)
+    { 
+        # Add job information to hash table
+        $TestJobInfo.Add($log.SubmissionTimestamp, @($Runbook,$Log.Caller))
+    }
+}
 # Print out job information sorted by runbook name
-$JobInfo.GetEnumerator() | Sort-Object {$_.Value}
+Write-Output "Published Jobs"
+if ($JobInfo.Count) { $JobInfo.GetEnumerator() | Sort-Object {$_.Value} }
+
+Write-Output "Test Jobs"
+if ($TestJobInfo.Count) { $TestJobInfo.GetEnumerator() | Sort-Object {$_.Value} }
