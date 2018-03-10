@@ -56,7 +56,7 @@ if ($ModuleVersionOverrides){
         ## ModuleVersionOverrides is of type String
         ## Verify that the ModuleVersionOverrides can be deserialized
         try{
-            $temp = ConvertFrom-Json $ModuleVersionOverrides
+            $temp = ConvertFrom-Json $ModuleVersionOverrides -ErrorAction Stop
         }
         catch [System.ArgumentException]{
             $ex = $_ 
@@ -121,7 +121,7 @@ try
                "parameters":{
                     "ResourceGroupName":"$AutomationResourceGroup",
                     "AutomationAccountName":"$AutomationAccount",
-                    "ModuleVersionOverrides": $versionOverrides
+                    "ModuleVersionOverrides":"$versionOverrides"
                }
               }
            }
