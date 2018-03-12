@@ -47,22 +47,20 @@ Param
     )
 
 $versionOverrides = ""
-## Try to parse module version overrides
-if ($ModuleVersionOverrides){
-    if ($ModuleVersionOverrides.GetType() -eq (@{}).GetType()){
-        ## ModuleVersionOverrides is of type HashTable
+# Try to parse module version overrides
+if ($ModuleVersionOverrides) {
+    if ($ModuleVersionOverrides.GetType() -eq [HashTable]) {
         $versionOverrides = ConvertTo-Json $ModuleVersionOverrides
-    } elseif ($ModuleVersionOverrides.GetType() -eq ("").GetType()){
-        ## ModuleVersionOverrides is of type String
-        ## Verify that the ModuleVersionOverrides can be deserialized
+    } elseif ($ModuleVersionOverrides.GetType() -eq [String]) {
+        # Verify that the ModuleVersionOverrides can be deserialized
         try{
             $temp = ConvertFrom-Json $ModuleVersionOverrides -ErrorAction Stop
         }
-        catch [System.ArgumentException]{
+        catch [System.ArgumentException] {
             $ex = $_ 
-		    ## rethrow intended
-		    throw "The value of the parameter ModuleVersionOverrides is not a valid JSON string: ", $ex
-	    }
+            # rethrow intended
+            throw "The value of the parameter ModuleVersionOverrides is not a valid JSON string: ", $ex
+        }
         $versionOverrides = $ModuleVersionOverrides
     } else {
         $ex = [System.ArgumentException]::new("The value of the parameter ModuleVersionOverrides should be a PowerShell HashTable or a JSON string")
