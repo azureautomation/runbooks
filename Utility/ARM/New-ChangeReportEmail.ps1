@@ -1,8 +1,47 @@
-﻿<#
+﻿<#PSScriptInfo
+
+.VERSION 1.0
+
+.GUID 02c1b8eb-28ff-4b7f-9935-3c9285370cd7
+
+.AUTHOR Azure Automation Team
+
+.COMPANYNAME 'Microsoft Corporation'
+
+.COPYRIGHT 'Microsoft Corporation. All rights reserved.'
+
+.TAGS 'Azure', 'Azure Automation', 'Change Tracking', 'Email'
+
+.LICENSEURI https://github.com/azureautomation/runbooks/blob/master/LICENSE
+
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/New-ChangeReportEmail.ps1
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES  @(@{ModuleName = 'AzureRM.Profile'; ModuleVersion = '4.5.0'; }, 
+            @{ModuleName = 'AzureRM.OperationalInsights'; ModuleVersion = '4.5.0'; },
+            @{ModuleName = 'LogAnalyticsQuery';})
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES 
+
+1.0 - 4/5/2018
+
+ -- CREATED BY Jenny Hunter
+
+ -- added base script to send email report and to include link to dashboard if AA info is provided
+
+
+#>
+
+<#
 
 .SYNOPSIS 
 
-    This Azure Automation runbook generates an email report based on reported changes in Log Analytics from Change Tracking.
+    This Azure Automation runbook generates and sends an email report based on changes in Log Analytics from Change Tracking.
 
 
 .DESCRIPTION
@@ -21,7 +60,6 @@
     5) Prepare email HTML
     6) Define, run, and parse Log Analytics queries for the report
     7) Send the email
-    
 
 
 .PARAMETER OMSResourceGroupName
@@ -133,7 +171,7 @@ Param (
 $ErrorActionPreference = "Stop"
 
 # Define function to parse the query results into read-able HTML
-function Parse-Results {
+function Get-ParsedResult {
 param (
 [Parameter(Mandatory=$true)]
 [String[]] $Results
@@ -164,7 +202,7 @@ $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
 $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
 
 # Check that the OMS Workspace is valid
-$Workspace = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $OMSResourceGroupName  -ErrorAction Stop
+$null = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $OMSResourceGroupName  -ErrorAction Stop
 
 # Timespan
 $now = Get-Date
@@ -221,25 +259,25 @@ $ServicesStopped = $ServicesStoppedResults.tables.rows
 $body = "<h3> Changes per type</h3>"
 
 # Add the HTML results for the Change Type query
-$body += Parse-Results -Results $ChangeTypes
+$body += Get-ParsedResult -Results $ChangeTypes
 
 $body += '</td> </tr> </table> </td> <td style=" line-height: 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"" width="20"> </td> <td width="260" valign="top"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <tr> <td style="padding: 25px 25px 0 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"">'
 
 # Add the HTML results for the Top Computers query
 $body += "<h3> Top computers with changes</h3>"
-$body += Parse-Results -Results $TopComputers
+$body += Get-ParsedResult -Results $TopComputers
 
 $body += '</td> </tr> </table> </td> </tr> <tr> <td width="260" valign="top"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <tr> <td style="padding: 25px 0 25px 25px; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"">'
 
 # Add the HTML results for the Softawre Added query
 $body += "<h3> Software added per type</h3>"
-$body += Parse-Results -Results $SoftwareAdded
+$body += Get-ParsedResult -Results $SoftwareAdded
 
 $body += '</td> </tr> </table> </td> <td style=" line-height: 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"" width="20"> </td> <td width="260" valign="top"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <tr> <td style="padding: 25px 25px 25px 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"">'
 
 # Add the HTML results for the last query
 $body += "<h3> Windows services stopped per startup type</h3>"
-$body += Parse-Results -Results $ServicesStopped
+$body += Get-ParsedResult -Results $ServicesStopped
 
 # Add the footer
 $body += '</td> </tr> </table> </td> </tr> </table> </td> </tr> <tr> <td bgcolor="#26619C" style="padding: 30px 30px 30px 30px;"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <td style="color: #ffffff; font-family: Arial, sans-serif; font-size: 14px;" width="75%">To learn more about Azure Change tracking, visit <a href="http://www.aka.ms/changetracking"><font color="#ffffff"><u>our documentation page</u></font></a>.</td> </table> </td> </tr> </table> </table>'
