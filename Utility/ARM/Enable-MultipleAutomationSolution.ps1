@@ -178,6 +178,17 @@ else
 $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $OnboardedVM.ResourceGroupName -VMName $OnboardedVM.Name `
                                                 -AzureRmContext $SubscriptionContext -Name MicrosoftMonitoringAgent
 
+if ([string]::IsNullOrEmpty($ExistingVMExtension))
+{
+    # Check Microsoft.EnterpriseCloud.Monitoring as this can be used for the monitoring agent also
+    $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
+                                             -Name Microsoft.EnterpriseCloud.Monitoring -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
+}                                            
+if ([string]::IsNullOrEmpty($ExistingVMExtension))
+{
+    throw ("Cannot find monitoring agent on exiting machine " + $ExistingVM + " in resource group " + $ExistingVMResourceGroup )
+}   
+
 # Check if the existing VM is already onboarded
 $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
 if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
@@ -194,10 +205,6 @@ $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $Wor
                                                         -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
 
 $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}                                          
-if ([string]::IsNullOrEmpty($SolutionGroup))
-{
-    throw "Saved group MicrosoftDefaultComputerGroup is not available. Please check this exists... "
-}
 
 # Process the list of VMs using the automation service and collect jobs used
 $Jobs = @{}     
@@ -263,9 +270,12 @@ foreach ($RunningJob in $Jobs.GetEnumerator())
     if ($ActiveJob.Status -eq "Completed")
     {
         $VirutalMachineName = $RunningJob.Name
-        if (!($SolutionGroup.Properties.Query -match $VirutalMachineName))
+        if ($SolutionGroup)
         {
-            $MachineList += "`"$VirutalMachineName`", "
+            if (!($SolutionGroup.Properties.Query -match $VirutalMachineName))
+            {
+                $MachineList += "`"$VirutalMachineName`", "
+            }
         }
     }
     $JobsResults+= $ActiveJob
@@ -288,7 +298,7 @@ else
 }
 
 # If new machines need to be added to the scope query, add them here.
-if (!([string]::IsNullOrEmpty($MachineList)))
+if ($SolutionGroup -and !([string]::IsNullOrEmpty($MachineList)))
 {
     $ComputerGroupQueryTemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/updateKQLScopeQueryV2.json"                                       
 

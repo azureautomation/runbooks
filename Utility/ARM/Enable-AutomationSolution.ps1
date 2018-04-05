@@ -129,7 +129,18 @@ else
 
 # Get existing VM that is onboarded already to get information from it
 $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
-                                             -Name MicrosoftMonitoringAgent -AzureRmContext $SubscriptionContext
+                                             -Name MicrosoftMonitoringAgent -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
+
+if ([string]::IsNullOrEmpty($ExistingVMExtension))
+{
+    # Check Microsoft.EnterpriseCloud.Monitoring as this can be used for the monitoring agent also
+    $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
+                                             -Name Microsoft.EnterpriseCloud.Monitoring -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
+}                                            
+if ([string]::IsNullOrEmpty($ExistingVMExtension))
+{
+    throw ("Cannot find monitoring agent on exiting machine " + $ExistingVM + " in resource group " + $ExistingVMResourceGroup )
+}   
 
 # Check if the existing VM is already onboarded
 $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
@@ -145,13 +156,6 @@ $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $Subscr
 # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
 $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
                                          -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
-
-$SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}                                          
-
-if ([string]::IsNullOrEmpty($SolutionGroup))
-{
-    throw "Saved group MicrosoftDefaultComputerGroup is not available. Please check this exists... "
-}
 
 # Get details of the new VM to onboard.
 $NewVM = Get-AzureRMVM -ResourceGroupName $ResourceGroupName -Name $VMName `
@@ -213,28 +217,33 @@ else
 }
 
 # Update scope query if necessary
-if (!($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
+$SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}                                          
+
+if (!([string]::IsNullOrEmpty($SolutionGroup)))
 {
-    $NewQuery = $SolutionGroup.Properties.Query.Replace('(',"(`"$VMName`", ")
-    $ComputerGroupQueryTemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/updateKQLScopeQueryV2.json"                                       
+    if (!($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
+    {
+        $NewQuery = $SolutionGroup.Properties.Query.Replace('(',"(`"$VMName`", ")
+        $ComputerGroupQueryTemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/updateKQLScopeQueryV2.json"                                       
 
-    # Add all of the parameters
-    $QueryDeploymentParams = @{}
-    $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
-    $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
-    $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
-    $QueryDeploymentParams.Add("category", $SolutionType)
-    $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
-    $QueryDeploymentParams.Add("query", $NewQuery)
-    $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
-    $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
+        # Add all of the parameters
+        $QueryDeploymentParams = @{}
+        $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
+        $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
+        $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
+        $QueryDeploymentParams.Add("category", $SolutionType)
+        $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
+        $QueryDeploymentParams.Add("query", $NewQuery)
+        $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
+        $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
 
-    # Create deployment name
-    $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+        # Create deployment name
+        $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-    New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateUri $ComputerGroupQueryTemplateLinkUri `
-                                        -Name $DeploymentName `
-                                        -TemplateParameterObject $QueryDeploymentParams `
-                                        -AzureRmContext $SubscriptionContext | Write-Verbose
+        New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateUri $ComputerGroupQueryTemplateLinkUri `
+                                            -Name $DeploymentName `
+                                            -TemplateParameterObject $QueryDeploymentParams `
+                                            -AzureRmContext $SubscriptionContext | Write-Verbose
+    }
 }
  
