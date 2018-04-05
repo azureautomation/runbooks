@@ -112,6 +112,7 @@ if ([string]::IsNullOrEmpty($SubscriptionId))
 {
     # Use the same subscription as the Automation account if not passed in
     $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId
+    $SubscriptionId = $ServicePrincipalConnection.SubscriptionId
 }
 else 
 {
@@ -128,20 +129,17 @@ else
 }
 
 # Get existing VM that is onboarded already to get information from it
-$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
-                                             -Name MicrosoftMonitoringAgent -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
+$ExistingVMExtension = Get-AzureRmResource -ResourceId /subscriptions/$SubscriptionId/resourceGroups/$ExistingVMResourceGroup/providers/Microsoft.Compute/virtualMachines/$ExistingVM/extensions `
+                                            | Where-Object {$_.Properties.type -eq "MicrosoftMonitoringAgent"}
 
-if ([string]::IsNullOrEmpty($ExistingVMExtension))
-{
-    # Check Microsoft.EnterpriseCloud.Monitoring as this can be used for the monitoring agent also
-    $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
-                                             -Name Microsoft.EnterpriseCloud.Monitoring -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
-}                                            
 if ([string]::IsNullOrEmpty($ExistingVMExtension))
 {
     throw ("Cannot find monitoring agent on exiting machine " + $ExistingVM + " in resource group " + $ExistingVMResourceGroup )
-}   
+} 
 
+$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
+                                             -Name $ExistingVMExtension.Name -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
+                                         
 # Check if the existing VM is already onboarded
 $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
 if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
