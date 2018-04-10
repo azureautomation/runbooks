@@ -38,23 +38,33 @@ $AutomationJobId = $PSPrivateMetadata.JobId.Guid
 
 # Get jobs created in last 3 hours
 $StartTime = (Get-Date).AddHours(-3)
-$JobAcvitityLogs = Get-AzureRmLog -ResourceGroupName $AutomationResourceGroupName -StartTime $StartTime `
-                                | Where-Object {$_.Authorization.Action -eq "Microsoft.Automation/automationAccounts/jobs/write"}
-
-# Find caller for job
+# Loop here for a max of 60 seconds in order for the activity log to show up.
 $JobInfo = @{}
-foreach ($Log in $JobAcvitityLogs)
-{
-    # Get job resource
-    $JobResource = Get-AzureRmResource -ResourceId $Log.ResourceId
+$TimeoutLoop = 0
+While ($JobInfo.Count -eq 0 -and $TimeoutLoop -lt 6 ) {
+    $TimeoutLoop++
+    $JobAcvitityLogs = Get-AzureRmLog -ResourceGroupName $AutomationResourceGroupName -StartTime $StartTime `
+    | Where-Object {$_.Authorization.Action -eq "Microsoft.Automation/automationAccounts/jobs/write"}
 
-    if ($JobResource.Properties.jobId -eq $AutomationJobId)
-    { 
-        if ($JobInfo[$JobResource.Properties.jobId] -eq $null)
-        {
-            $JobInfo.Add($JobResource.Properties.jobId,$log.Caller)
+    # Find caller for job
+    foreach ($Log in $JobAcvitityLogs)
+    {
+        # Get job resource
+        $JobResource = Get-AzureRmResource -ResourceId $Log.ResourceId
+
+        if ($JobResource.Properties.jobId -eq $AutomationJobId)
+        { 
+            if ($JobInfo[$JobResource.Properties.jobId] -eq $null)
+            {
+                $JobInfo.Add($JobResource.Properties.jobId,$log.Caller)
+            }
+            break
         }
-        break
+    }
+    # If we didn't find the running job in activity log, sleep and try again.
+    if ($JobInfo.Count -eq 0) 
+    {
+        Start-Sleep 10
     }
 }
 
