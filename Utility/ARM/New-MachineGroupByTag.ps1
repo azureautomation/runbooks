@@ -1,4 +1,40 @@
-﻿#Requires -Module @{ModuleName = 'AzureRM.Profile'; ModuleVersion = '4.6.0';}
+﻿<#PSScriptInfo
+
+.VERSION 1.0
+
+.GUID 2d76c8e2-666b-445e-9dc7-9fc2484f360a
+
+.AUTHOR Azure Automation Team
+
+.COMPANYNAME Microsoft Corporation
+
+.COPYRIGHT Microsoft Corporation. All rights reserved.
+
+.TAGS Azure, Azure Automation, Tags, VM, Update management, Machine groups, Computer group, Saved search
+
+.LICENSEURI https://github.com/azureautomation/runbooks/blob/master/LICENSE
+
+.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/New-MachineGroupByTag.ps1
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES @{ModuleName = 'AzureRM.Profile'; ModuleVersion = '4.6.0'; ModuleName = 'AzureRM.OperationalInsights'; ModuleVersion = '4.3.2';}
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+
+ 4/25/2018
+
+ -- CREATED BY Jenny Hunter
+
+ -- added sample script to create a Log Analytics machine group based off of a Azure VM tag
+
+#>
+
+#Requires -Module @{ModuleName = 'AzureRM.Profile'; ModuleVersion = '4.6.0';}
 
 #Requires -Module @{ModuleName = 'AzureRM.OperationalInsights'; ModuleVersion = '4.3.2';}
 
@@ -6,12 +42,12 @@
 
 .SYNOPSIS 
 
-    This sample Azure Automation runbook creates a Log Analytics machine group based off of an Azure VM tag.
+    Sample Azure Automation runbook creates a Log Analytics machine group based off of an Azure VM tag.
 
 
 .DESCRIPTION
 
-    This sample runbook creates Log Analytics machine groups based off anAzure VM tag and Update management Log Analytics data.
+    This sample runbook creates a Log Analytics machine group based off an Azure VM tag and Update management Log Analytics data.
     
     The major steps of the script are outlined below: 
 
