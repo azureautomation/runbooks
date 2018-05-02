@@ -14,9 +14,21 @@
 
 .PARAMETER AutomationAccountName
     Required. The name of the Automation account.
+
+.PARAMETER ModuleVersionOverrides
+    Optional. A PowerShell HashTable or a JSON dictionary which contains module version overrides. Please be
+    careful of version incompatibility between modules when overriding module versions.
+
       
 .EXAMPLE
     Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount
+
+.EXAMPLE
+    Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides @{'Azure'="4.0.2"; 'Azure.Storage'="3.0.2"; 'AzureRM.Profile'="3.0.1"; 'AzureRM.Automation'="3.0.1"; 'AzureRM.Compute'="3.0.1"; 'AzureRM.Resources' = "4.0.1"; 'AzureRM.Sql' = "3.0.1"; 'AzureRM.Storage'="3.0.2"}
+
+.EXAMPLE
+    Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides '{"Azure" : "4.0.2", "AzureRM.Sql" : "3.0.1", "AzureRM.Automation" : "3.0.1", "Azure.Storage" : "3.0.2", "AzureRM.Resources" : "4.0.1", "AzureRM.Storage" : "3.0.2", "AzureRM.Compute" : "3.0.1", "AzureRM.Profile" : "3.0.1"}'
+
 
 .NOTES
     AUTHOR: Automation Team
@@ -28,8 +40,34 @@ Param
     [String] $AutomationResourceGroup,
 
     [Parameter(Mandatory=$True)]
-    [String] $AutomationAccount
+    [String] $AutomationAccount,
+
+    [Parameter(Mandatory=$False)]
+    [object] $ModuleVersionOverrides
     )
+
+$versionOverrides = ""
+# Try to parse module version overrides
+if ($ModuleVersionOverrides) {
+    if ($ModuleVersionOverrides.GetType() -eq [HashTable]) {
+        $versionOverrides = ConvertTo-Json $ModuleVersionOverrides
+    } elseif ($ModuleVersionOverrides.GetType() -eq [String]) {
+        # Verify that the ModuleVersionOverrides can be deserialized
+        try{
+            $temp = ConvertFrom-Json $ModuleVersionOverrides -ErrorAction Stop
+        }
+        catch [System.ArgumentException] {
+            $ex = $_ 
+            # rethrow intended
+            throw "The value of the parameter ModuleVersionOverrides is not a valid JSON string: ", $ex
+        }
+        $versionOverrides = $ModuleVersionOverrides
+    } else {
+        $ex = [System.ArgumentException]::new("The value of the parameter ModuleVersionOverrides should be a PowerShell HashTable or a JSON string")
+        throw $ex
+    }
+}
+
 try
 {
     # Azure management uri
@@ -71,7 +109,23 @@ try
          +"automationAccounts/$AutomationAccount/jobs/$($JobId)?api-version=2015-10-31"
  
     # Runbook and parameters
-    $Body = @"
+    if($versionOverrides){
+        $Body = @"
+            {
+               "properties":{
+               "runbook":{
+                   "name":"Update-AutomationAzureModulesForAccount"
+               },
+               "parameters":{
+                    "ResourceGroupName":"$AutomationResourceGroup",
+                    "AutomationAccountName":"$AutomationAccount",
+                    "ModuleVersionOverrides":"$versionOverrides"
+               }
+              }
+           }
+"@
+    } else {
+        $Body = @"
             {
                "properties":{
                "runbook":{
@@ -84,6 +138,7 @@ try
               }
            }
 "@
+    }
 
     # Start runbook job
     Invoke-RestMethod -Uri $URI -Method Put -body $body -Headers $requestHeader        
