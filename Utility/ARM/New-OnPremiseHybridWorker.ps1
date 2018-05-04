@@ -316,8 +316,12 @@ try {
     $mma = New-Object -ComObject 'AgentConfigManager.MgmtSvcCfg'
     
     Write-Output "Configuring the MMA..."
-    $mma.AddCloudWorkspace($WorkspaceId, $WorkspaceKey)
-    $mma.ReloadConfiguration()
+    if(-not($mma.GetCloudWorkspace($WorkspaceId)))
+    {
+        Write-Output "Configuring the MMA..."
+        $mma.AddCloudWorkspace($WorkspaceId, $WorkspaceKey)
+        $mma.ReloadConfiguration()
+    }
 
 } catch {
     # Download the Microsoft monitoring agent
