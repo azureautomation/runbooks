@@ -291,7 +291,11 @@ $WorkspaceSharedKeys = Get-AzureRmOperationalInsightsWorkspaceSharedKeys -Resour
 $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 
 # Activate the Azure Automation solution in the workspace
-$null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
+$currentIPs = Get-AzureRmOperationalInsightsIntelligencePacks -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName
+if($currentIPs | Where-Object {$_.Name -eq 'AzureAutomation' -and -not($_.Enabled)})
+{
+  $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
+}
 
 # Check for the MMA on the machine
 try {
