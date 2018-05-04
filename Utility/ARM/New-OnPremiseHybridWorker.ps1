@@ -345,7 +345,7 @@ try {
     # Install the MMA
     $Command = "/C:setup.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID=$WorkspaceID" + " OPINSIGHTS_WORKSPACE_KEY=$WorkspaceKey " + " AcceptEndUserLicenseAgreement=1"
     .\MMASetup.exe $Command
-
+    Remove-Item -Path "$($env:TEMP)\MMASetup.exe" -Force
 }
 
 # Sleep until the MMA object has been registered
