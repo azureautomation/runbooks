@@ -1,4 +1,4 @@
-﻿<#PSScriptInfo 
+<#PSScriptInfo 
 
 .VERSION 1.4
 
@@ -83,6 +83,11 @@
     Mandatory. A string containing the SubscriptionID to be used. 
 
 
+.PARAMETER TenantId
+
+    A string containing the TenantId to be used. 
+
+
 .PARAMETER WorkspaceName
 
     Optional. The name of the OMS Workspace to be referenced. If not specified, a new OMS workspace 
@@ -109,14 +114,14 @@
 
 .EXAMPLE
 
-    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -TenantId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 
 .EXAMPLE
 
     $Credentials = Get-Credential
 
-    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -TenantId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials
 
 
 .NOTES
@@ -143,6 +148,9 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $SubscriptionID,
 
+[Parameter(Mandatory=$false)]
+[String] $TenantId,
+
 # OMS Workspace
 [Parameter(Mandatory=$false)]
 [String] $WorkspaceName = "hybridWorkspace" + (Get-Random -Maximum 99999),
@@ -159,7 +167,6 @@ Param (
 [Parameter(Mandatory=$false)]
 [PSCredential] $Credential
 )
-
 
 # Stop the script if any errors occur
 $ErrorActionPreference = "Stop"
@@ -214,17 +221,23 @@ if ($Credential) {
 $Account = Add-AzureRmAccount @paramsplat 
 
 # Get a reference to the current subscription
-$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
-# Get the tenant id for this subscription
+if($TenantId)
+{
+  $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID -TenantID $TenantId
+} else {
+  $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+  # Get the tenant id for this subscription
+  
 $TenantID = $Subscription.TenantId
 
+}
 
 # Set the active subscription
-$null = Set-AzureRmContext -SubscriptionID $SubscriptionID
+$null = Set-AzureRmContext -SubscriptionID $SubscriptionID -TenantID $TenantId
 
 # Check that the resource groups are valid
 $null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
-if ($OMSResourceGroupName) {
+if ($OMSResouceGroupName) {
     $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
 } else {
     $OMSResourceGroupName = $AAResourceGroupName
