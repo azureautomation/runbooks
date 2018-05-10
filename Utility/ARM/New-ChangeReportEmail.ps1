@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.1
+.VERSION 1.2
 
 .GUID 02c1b8eb-28ff-4b7f-9935-3c9285370cd7
 
@@ -26,7 +26,14 @@
 
 .RELEASENOTES 
 
-1.1 - 4/24/2018
+1.2 - 5/10/2018
+
+ -- EDITED BY Jenny Hunter
+
+ -- previous version was outdated and missed key bug fixes
+
+
+1.1 - 5/9/2018
 
  -- EDITED BY Jenny Hunter
 
@@ -74,14 +81,6 @@
     Mandatory. The ID of the OMS Workspace to be referenced. 
 
 
-.PARAMETER SubscriptionID
-
-    Optional. A string containing the SubscriptionID of the Azure Automation account to be referenced for the dashboard 
-
-    link. If not specified, the value will remain null, and no link to the Change Tracking dashboard will be created.
- 
-
-
 .PARAMETER AAName
 
     Optional. The name of the Azure Automation account to be referenced for the dashboard link. If not specified, the
@@ -94,6 +93,13 @@
     Optional. The name of the Azure Automation account resource group to be referenced for the dashboard link. If not specified,
 
     the value will remain null, and no link to the Change Tracking dashboard will be created.
+
+
+.PARAMETER AASubscriptionID
+
+    Optional. A string containing the SubscriptionID of the Azure Automation account to be referenced for the dashboard 
+
+    link. If not specified, the value will remain null, and no link to the Change Tracking dashboard will be created.
 
     
 .PARAMETER CredentialName
@@ -126,7 +132,7 @@
 
     AUTHOR: Jenny Hunter, Azure Automation Team
 
-    LASTEDIT: April 24, 2018
+    LASTEDIT: May 10, 2018
 
     EDITBY: Jenny Hunter
 
@@ -137,16 +143,15 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $WorkspaceId,
 
-# Subscription
-[Parameter(Mandatory=$false)]
-[String] $SubscriptionID,
-
 # Automation Account
 [Parameter(Mandatory=$false)]
 [String] $AAName,
 
 [Parameter(Mandatory=$false)]
 [String] $AAResourceGroupName,
+
+[Parameter(Mandatory=$false)]
+[String] $AASubscriptionID,
 
 
 # Email
@@ -171,29 +176,32 @@ $ErrorActionPreference = "Stop"
 function Get-ParsedResult {
 param (
 [Parameter(Mandatory=$true)]
-[String[]] $Results
+[System.Object] $Results
 )
     $b = ""
-   for ($i = 0; $i -lt $Results.Length; $res++) {
-        $b += "<p>" + $Results[$i] + "</p>"
+   foreach ($row in $Results.'<>3__rows') {
+        $b += "<p>" + $row.Values + "</p>"
    }
-    
-    Return $b
+
+    Return ($b -replace " ", " : ")
 }
 
 # Connect to the current Azure account
 $Conn = Get-AutomationConnection -Name AzureRunAsConnection 
 $null = Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint 
-#Add-AzureRmAccount
+
+# Timespan
+$now = Get-Date
+$week = $now.AddDays(-7)
 
 # Create the HTML
 $a = '<table align="center" style="border: 1px solid #cccccc; "border="0" cellpadding="0" cellspacing="0" width="600"> <tr> <td bgcolor="#26619C" align="center" style="padding: 20px 0 30px 0; color: #ffffff; font-family: Arial, sans-serif; font-size: 24px;"> <b>Azure Change Tracking </b> <p style="font-size: 20px;">Change Report for ' + $week.ToShortDateString() + " - " + $now.ToShortDateString() + '</p> </td> </tr> <tr> <td bgcolor="#ffffff">'
 
 # Add link to Chaneg Tracking in Azure if AA info was supplied and is accurate
-if ($AAName -and $AAResourceGroupName -and $SubscriptionID) {
+if ($AAName -and $AAResourceGroupName -and $AASubscriptionID) {
     try {
         $null = Get-AzureRmAutomationAccount -ResourceGroupName $AAResourceGroupName -Name $AAName
-        $link = "https://portal.azure.com/#@microsoft.onmicrosoft.com/resource/subscriptions/$SubscriptionID/resourceGroups/$AAResourceGroupName/providers/Microsoft.Automation/automationAccounts/$AAName/changeTrackingTrackChanges"
+        $link = "https://portal.azure.com/#@microsoft.onmicrosoft.com/resource/subscriptions/$AASubscriptionID/resourceGroups/$AAResourceGroupName/providers/Microsoft.Automation/automationAccounts/$AAName/changeTrackingTrackChanges"
 
         $a += '<p align="center" style="padding: 25px 0 0 25px; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;""><table border="0" cellpadding="0" cellspacing="0" width="100%"> To view your Change tracking dashboard in the Azure portal, click <a href="' + "$link" +'"><font color="#153643"><u>here</u></font></a>.</p>'
 
@@ -208,7 +216,7 @@ $a += '<table border="0" cellpadding="0" cellspacing="0" width="100%"> <tr> <td 
 
 # Define queries
 $ChangeTypesQuery = "ConfigurationChange | summarize count() by ConfigChangeType | sort by count_ desc"
-$TopComputersQuery = "ConfigurationChange | summarize count() by Computer | order by ChangeCount desc | limit 5"
+$TopComputersQuery = "ConfigurationChange | summarize count() by Computer | order by count_ desc | limit 5"
 $SoftwareAddedQuery = 'ConfigurationChange | where ConfigChangeType == "Software" and ChangeCategory == "Added" | summarize count() by SoftwareType'
 $ServicesStoppedQuery = 'ConfigurationChange | where ConfigChangeType == "WindowsServices" and SvcState == "Stopped" | summarize count() by SvcStartupType'
 
@@ -222,25 +230,25 @@ $ServicesStoppedResults = (Invoke-AzureRmOperationalInsightsQuery -WorkspaceId $
 $body = "<h3> Changes per type</h3>"
 
 # Add the HTML results for the Change Type query
-$body += Get-ParsedResult -Results $ChangeTypes
+$body += (Get-ParsedResult -Results $ChangeTypesResults)
 
 $body += '</td> </tr> </table> </td> <td style=" line-height: 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"" width="20"> </td> <td width="260" valign="top"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <tr> <td style="padding: 25px 25px 0 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"">'
 
 # Add the HTML results for the Top Computers query
 $body += "<h3> Top computers with changes</h3>"
-$body += Get-ParsedResult -Results $TopComputers
+$body += Get-ParsedResult -Results $TopComputersResults
 
 $body += '</td> </tr> </table> </td> </tr> <tr> <td width="260" valign="top"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <tr> <td style="padding: 25px 0 25px 25px; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"">'
 
 # Add the HTML results for the Softawre Added query
 $body += "<h3> Software added per type</h3>"
-$body += Get-ParsedResult -Results $SoftwareAdded
+$body += Get-ParsedResult -Results $SoftwareAddedResults
 
 $body += '</td> </tr> </table> </td> <td style=" line-height: 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"" width="20"> </td> <td width="260" valign="top"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <tr> <td style="padding: 25px 25px 25px 0; color: #153643; font-family: Arial, sans-serif; font-size: 16px; line-height: 20px;"">'
 
 # Add the HTML results for the last query
 $body += "<h3> Windows services stopped per startup type</h3>"
-$body += Get-ParsedResult -Results $ServicesStopped
+$body += Get-ParsedResult -Results $ServicesStoppedResults
 
 # Add the footer
 $body += '</td> </tr> </table> </td> </tr> </table> </td> </tr> <tr> <td bgcolor="#26619C" style="padding: 30px 30px 30px 30px;"> <table border="0" cellpadding="0" cellspacing="0" width="100%"> <td style="color: #ffffff; font-family: Arial, sans-serif; font-size: 14px;" width="75%">To learn more about Azure Change tracking, visit <a href="http://www.aka.ms/changetracking"><font color="#ffffff"><u>our documentation page</u></font></a>.</td> </table> </td> </tr> </table> </table>'
