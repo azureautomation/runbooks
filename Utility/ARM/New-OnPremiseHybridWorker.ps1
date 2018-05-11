@@ -224,7 +224,7 @@ $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
 
 # Check that the resource groups are valid
 $null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
-if ($OMSResouceGroupName) {
+if ($OMSResourceGroupName) {
     $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
 } else {
     $OMSResourceGroupName = $AAResourceGroupName
