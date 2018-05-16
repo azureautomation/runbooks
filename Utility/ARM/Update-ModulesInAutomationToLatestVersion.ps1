@@ -84,6 +84,7 @@ Import-Module -Name AzureRM.Profile, AzureRM.Automation,AzureRM.Resources -Error
 If($oErr) {
     Write-Error -Message "Failed to load needed modules for Runbook. Error: $($oErr.Message)" -ErrorAction Stop
 }
+$VerbosePreference = "continue"
 $ErrorActionPreference = 'stop'
 $ModulesImported = @()
 
@@ -107,14 +108,14 @@ function _doImport {
     $Url = "https://www.powershellgallery.com/api/v2/Packages?`$filter=$Filter and IsLatestVersion"
 
     # Fetch results and filter them with -like, and then shape the output
-    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr -Verbose:$False | Where-Object { $_.title.'#text' -like $ModuleName } |
+    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
     Select-Object @{n='Name';ex={$_.title.'#text'}},
                   @{n='Version';ex={$_.properties.version}},
                   @{n='Url';ex={$_.Content.src}},
                   @{n='Dependencies';ex={$_.properties.Dependencies}}
     If($oErr) {
         # Will stop runbook, though message will not be logged
-        Write-Error -Message "" -ErrorAction Stop
+        Write-Error -Message "Stopping runbook" -ErrorAction Stop
     }
     # Should not be needed as filter will only return one hit, though will keep the code to strip away if search ever get multiple hits
     if($SearchResult.Length -and $SearchResult.Length -gt 1) {
@@ -182,7 +183,7 @@ function _doImport {
         # Find the actual blob storage location of the module
         do {
             $ActualUrl = $ModuleContentUrl
-            $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore -Verbose:$False).Headers.Location
+            $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location
         } while(!$ModuleContentUrl.Contains(".nupkg"))
 
         $ActualUrl = $ModuleContentUrl
@@ -234,7 +235,7 @@ try {
         If($oErr) {
             Throw "Failed to connect to Azure. Error: $($oErr.Message)"
         }
-    Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue    -ErrorVariable oErr
+    Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
     If($oErr) {
         Throw "Failed to select Azure subscription. Error: $($oErr.Message)"
     }
@@ -295,14 +296,14 @@ foreach($Module in $Modules) {
     $Url = "https://www.powershellgallery.com/api/v2/Packages?`$filter=$Filter and IsLatestVersion"
 
     # Fetch results and filter them with -like, and then shape the output
-    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr -Verbose:$False | Where-Object { $_.title.'#text' -like $ModuleName } |
+    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
     Select-Object @{n='Name';ex={$_.title.'#text'}},
                   @{n='Version';ex={$_.properties.version}},
                   @{n='Url';ex={$_.Content.src}},
                   @{n='Dependencies';ex={$_.properties.Dependencies}}
     If($oErr) {
         # Will stop runbook, though message will not be logged
-        Write-Error -Message "" -ErrorAction Stop
+        Write-Error -Message "Stopping runbook" -ErrorAction Stop
     }
 
     # Should not be needed anymore, though in the event of the search returning more than one hit this will strip it down
@@ -341,14 +342,14 @@ if (!([string]::IsNullOrEmpty($NewModuleName)))
      $Url = "https://www.powershellgallery.com/api/v2/Packages?`$filter=$Filter and IsLatestVersion"
 
      # Fetch results and filter them with -like, and then shape the output
-     $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr -Verbose:$False | Where-Object { $_.title.'#text' -like $ModuleName } |
+     $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
      Select-Object @{n='Name';ex={$_.title.'#text'}},
                    @{n='Version';ex={$_.properties.version}},
                    @{n='Url';ex={$_.Content.src}},
                    @{n='Dependencies';ex={$_.properties.Dependencies}}
      If($oErr) {
          # Will stop runbook, though message will not be logged
-         Write-Error -Message "" -ErrorAction Stop
+         Write-Error -Message "Stopping runbook" -ErrorAction Stop
      }
 
     if($SearchResult.Length -and $SearchResult.Length -gt 1) {
