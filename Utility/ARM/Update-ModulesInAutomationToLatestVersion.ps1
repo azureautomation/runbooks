@@ -216,7 +216,7 @@ function _doImport {
             Write-Error "Importing $ModuleName module to Automation failed."
         }
         else {
-            Write-Verbose -Message "Importing $ModuleName module to Automation succeeded."
+            Write-Output -InputObject "Importing $ModuleName module to Automation succeeded."
         }
     }
 }
