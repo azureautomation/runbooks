@@ -247,7 +247,7 @@ try {
        {
                 throw "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters"
        }
-       # Breaking change in version 6 of AzureRM.Resources, Find-AzureRmResource is depricated
+       # Breaking change in version 6 of AzureRM.Resources, Find-AzureRmResource is deprecated
        If((Get-Module -Name AzureRM.Resources).Version.Major -lt 6) {
             $AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
         }
