@@ -128,7 +128,7 @@ for group in groups:
     vms = compute_client.virtual_machines.list(group.name)
     for vm in vms:
         vm_detail = compute_client.virtual_machines.get(group.name, vm.name, expand='instanceView')
-        if vm_detail.instance_view.statuses[1].code == 'PowerState/deallocated':
+        if vm_detail.instance_view.statuses[1].code == 'PowerState/running':
             stop_vm_thread = StopVMThread(group.name, vm.name)
             stop_vm_thread.start()
             vm_threads_list.append(stop_vm_thread)
