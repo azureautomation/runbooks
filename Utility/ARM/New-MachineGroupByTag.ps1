@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.1
 
 .GUID 2d76c8e2-666b-445e-9dc7-9fc2484f360a
 
@@ -26,9 +26,9 @@
 
 .RELEASENOTES
 
-1.1
+ 1.1
 
- 4/25/2018
+ 5/29/2018
 
  -- EDITED BY Jenny Hunter
 
