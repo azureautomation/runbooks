@@ -105,7 +105,7 @@
 
     AUTHOR: Jenny Hunter, Azure Automation Team
 
-    LASTEDIT: April 25, 2018
+    LASTEDIT: May 29, 2018
 
     EDITBY: Jenny Hunter
 
