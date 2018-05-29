@@ -26,6 +26,16 @@
 
 .RELEASENOTES
 
+1.1
+
+ 4/25/2018
+
+ -- EDITED BY Jenny Hunter
+
+ -- fixed bugs (null error and misspelled variable)
+
+ 1.0
+
  4/25/2018
 
  -- CREATED BY Jenny Hunter
@@ -143,16 +153,16 @@ $GroupQuery = "Heartbeat | where Solutions contains 'updates' and tolower(Resour
 
 # Set the workspace subscription if needed
 if ($OmsSubscriptionId) {
-    null = Select-AzureRmSubscription -SubscriptionId $OmsSubsciptionId
+    $null = Select-AzureRmSubscription -SubscriptionId $OmsSubscriptionId
     Write-Output "Subscription context changed to $OmsSubscriptionId for accessing the workspace"
 } else {
-    $OmsSubsciptionId = $VmSubscriptionId
+    $OmsSubscriptionId= $VmSubscriptionId
 }
 
 # Define saved search computer group properties
 $SavedSearchId = "updategroup" + $VmTagValue.ToLower()
 $DisplayName = "Machine group with tag $VmTagValue"
-$ResourceId = "subscriptions/$OmsSubsciptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId"
+$ResourceId = "subscriptions/$OmsSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId"
 $FunctionAlias = "updategroup" + $VmTagValue.ToLower()
 
 # Remove the saved search computer group if it already exists
