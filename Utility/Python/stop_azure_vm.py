@@ -70,7 +70,10 @@ class StopVMThread(threading.Thread):
         self.vm_name = vm_name
     def run(self):
         print "Stopping " + self.vm_name + " in resource group " + self.resource_group
+        sys.stdout.flush()
         stop_vm(self.resource_group, self.vm_name)
+        print "Stopped " + self.vm_name + " in resource group " + self.resource_group
+        sys.stdout.flush()
 
 def stop_vm(resource_group, vm_name):
     """ Stops a vm in the specified resource group """
