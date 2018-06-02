@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo 
 
-.VERSION 1.4
+.VERSION 1.5
 
 .GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
 
@@ -25,6 +25,10 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES 
+
+1.5 - 5/29/2018
+ -- MODIFIED BY Jenny Hunter
+ -- updated use of New-AzureRmOperationInsightsWorkspace cmdlet to user the "PerNode" SKU
 
 1.4 - 1/5/2018
  -- MODIFIED BY V-JASIMS TO FIX RESOURCEGROUP BUG 01/02/2018
@@ -123,7 +127,7 @@
 
     AUTHOR: Jenny Hunter, Azure Automation Team
 
-    LASTEDIT: January 5, 2018
+    LASTEDIT: May 29, 2018
 
     EDITBY: Jenny Hunter
 
@@ -274,7 +278,7 @@ try {
 
     Write-Output "Creating new OMS Workspace named $WorkspaceName in region $OmsLocation..."
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku Standard -ResourceGroupName $OMSResourceGroupName
+    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku PerNode -ResourceGroupName $OMSResourceGroupName
 
 }
 
