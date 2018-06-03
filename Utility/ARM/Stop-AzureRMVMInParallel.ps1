@@ -72,7 +72,7 @@ Get-AzureRMVM -ResourceGroupName $VM.ResourceGroupName -Name $VM.Name -Status | 
 # Function to return the Automation account information that this job is running in.
 Function WhoAmI
 {
-    $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
+    $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 
     foreach ($Automation in $AutomationResource)
     {

@@ -63,7 +63,7 @@ if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid)) {
 	throw ("This is not running from the Automation service, so could not retrieve the resource group for the Automation account in order to protect it from being removed.")
 }
 else {
-	$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
+	$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 	foreach ($Automation in $AutomationResource) {
 		# Loop through each Automation account to find this job
 	    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue

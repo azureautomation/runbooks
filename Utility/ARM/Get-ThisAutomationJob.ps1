@@ -32,7 +32,7 @@
 # Returns a job object
 [OutputType ("Microsoft.Azure.Commands.Automation.Model.Job")]
 
-$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 foreach ($Automation in $AutomationResource) 
 {
 	# Loop through each Automation account to find this job

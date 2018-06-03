@@ -50,7 +50,7 @@ Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Wr
 
 
 # Find the automation account and resource group that this job is running in
-$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 foreach ($Automation in $AutomationResource)
 {
     $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue

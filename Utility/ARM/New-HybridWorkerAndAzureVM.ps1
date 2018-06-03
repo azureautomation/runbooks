@@ -186,7 +186,7 @@ $TenantID = $Conn.TenantID
 $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
 
 # Find the automation account and resource group
-$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 
 foreach ($Automation in $AutomationResource) {
 

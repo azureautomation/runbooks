@@ -218,8 +218,8 @@ try {
        {
                 throw "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters"
        }
-       $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
-
+       $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+       
         foreach ($Automation in $AutomationResource)
         {
             $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
