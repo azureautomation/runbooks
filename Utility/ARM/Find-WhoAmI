@@ -27,7 +27,7 @@ Add-AzureRmAccount `
 
 Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID  | Write-Verbose 
 
-$AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
 
 foreach ($Automation in $AutomationResource)
 {
