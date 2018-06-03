@@ -69,7 +69,7 @@ Param
     {
             throw "This runbook needs to be run from the automation service."
     }
-    $AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+    $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
 
     foreach ($Automation in $AutomationResource)
     {
