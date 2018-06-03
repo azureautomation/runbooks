@@ -113,7 +113,7 @@ if ($SolutionType -cne "Updates" -and $SolutionType -cne "ChangeTracking")
  }
  
 # Find out the resource group and account name
-$AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -AzureRmContext $SubscriptionContext
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation -AzureRmContext $SubscriptionContext
 foreach ($Automation in $AutomationResource)
 {
     $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name `
