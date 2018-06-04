@@ -56,7 +56,7 @@
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: November 9th, 2017 
+    LASTEDIT: June 4th, 2018
 #>
  
 Param (
@@ -129,17 +129,18 @@ else
 }
 
 # Get existing VM that is onboarded already to get information from it
-$ExistingVMExtension = Get-AzureRmResource -ResourceId /subscriptions/$SubscriptionId/resourceGroups/$ExistingVMResourceGroup/providers/Microsoft.Compute/virtualMachines/$ExistingVM/extensions `
+$ExistingVMExtension = Get-AzureRmResource -ResourceGroupName $ExistingVMResourceGroup -Name $ExistingVM `
+                                            -ResourceType Microsoft.Compute/virtualMachines/extensions -ExpandProperties -AzureRmContext $SubscriptionContext `
                                             | Where-Object {$_.Properties.type -eq "MicrosoftMonitoringAgent"}
-
+                                
 if ([string]::IsNullOrEmpty($ExistingVMExtension))
 {
     throw ("Cannot find monitoring agent on exiting machine " + $ExistingVM + " in resource group " + $ExistingVMResourceGroup )
-} 
+}   
 
-$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
-                                             -Name $ExistingVMExtension.Name -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
-                                         
+$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroupName $ExistingVMResourceGroup -VMName $ExistingVM `
+                                                -AzureRmContext $SubscriptionContext -Name $ExistingVMExtension.Name
+
 # Check if the existing VM is already onboarded
 $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
 if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
