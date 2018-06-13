@@ -50,7 +50,7 @@
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: November 9th, 2017 
+    LASTEDIT: June 4th, 2018 
 #>
  
 Param (
@@ -175,10 +175,11 @@ else
    $VMList = Get-AzureRMVM -AzureRmContext $VMSubscriptionContext -Status | Where-Object {$_.PowerState -match "running"}
 }
 
- # Get existing VM that is onboarded already to get information from it
-$ExistingVMExtension = Get-AzureRmResource -ResourceId /subscriptions/$SubscriptionId/resourceGroups/$AlreadyOnboardedVMResourceGroup/providers/Microsoft.Compute/virtualMachines/$AlreadyOnboardedVM/extensions `
+# Get existing VM that is onboarded already to get information from it
+$ExistingVMExtension = Get-AzureRmResource -ResourceGroupName $AlreadyOnboardedVMResourceGroup -Name $AlreadyOnboardedVM `
+                                            -ResourceType Microsoft.Compute/virtualMachines/extensions -ExpandProperties -AzureRmContext $SubscriptionContext `
                                             | Where-Object {$_.Properties.type -eq "MicrosoftMonitoringAgent"}
-                                          
+                                
 if ([string]::IsNullOrEmpty($ExistingVMExtension))
 {
     throw ("Cannot find monitoring agent on exiting machine " + $AlreadyOnboardedVM + " in resource group " + $AlreadyOnboardedVMResourceGroup )
