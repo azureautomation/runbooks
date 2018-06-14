@@ -86,7 +86,7 @@ If ($TagName -ne $null)
 foreach ($VirtualMachine in $VMs)
 {
     $VM = Get-AzureRmVM -ResourceGroupName $VirtualMachine.ResourceGroupName -Name $VirtualMachine.Name -Status
-    if ($VM.Statuses.Code[1] -eq 'PowerState/running' -and $Tags.Tags.Keys -match $TagNameOnResourceGroup)
+    if ($VM.Statuses.Code[1] -eq 'PowerState/running')
     {
         # Process up to MAX_JOBS at a time so as to not overwhelm the host
         $VMJob = Start-ThreadJob -ScriptBlock $StopVMScriptBlock -ArgumentList $VM.ResourceGroupName, $VM.Name -ThrottleLimit $MAX_JOBS
