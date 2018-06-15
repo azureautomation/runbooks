@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS 
     This sample automation runbook onboards an Azure VM for either the Update or ChangeTracking (which includes Inventory) solution.
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
@@ -180,15 +180,19 @@ $Onboarded = Get-AzureRmVMExtension -ResourceGroup $ResourceGroupName  -VMName $
 if ([string]::IsNullOrEmpty($Onboarded))
 {
     # Set up MMA agent information to onboard VM to the workspace
-    if ($NewVM.OSProfile.WindowsConfiguration -eq $null)
+    if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
     {
         $MMAExentsionName = "OmsAgentForLinux"
         $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json"
     }
-    else 
+    elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")  
     {
         $MMAExentsionName = "MicrosoftMonitoringAgent"
         $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json"      
+    }
+    else
+    {
+        Throw ("Could not determine OS of VM " + $NewVM.Name)
     }
     $MMADeploymentParams = @{}
     $MMADeploymentParams.Add("vmName", $VMName)
