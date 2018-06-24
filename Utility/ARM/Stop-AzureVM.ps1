@@ -62,6 +62,12 @@ $StopVMScriptBlock = {
 $MAX_JOBS = 50
 $VMJobs = @()
 
+# Check for VM without resource group specified
+if  ($VMName -ne $null -and $VMResourceGroupName -eq $null)
+{
+    throw "Resource group must not be empty if a VM is specified"
+}
+
 # Get all the VMs in the subscription
 if  ($VMResourceGroupName -ne $null -and $VMName -ne $null)
 {
