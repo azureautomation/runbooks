@@ -79,9 +79,9 @@ try
     # Login uri for Azure AD
     $LoginURI = "https://login.windows.net/"
 
-    # Find AzureRM.Automation module and load the Azure AD client library
-    $PathToAutomationModule = Get-ChildItem (Join-Path $ModulePath AzureRM.Automation) -Recurse
-    Add-Type -Path (Join-Path $PathToAutomationModule "Microsoft.IdentityModel.Clients.ActiveDirectory.dll")
+    # Find AzureRM.Profile module and load the Azure AD client library
+    $PathToProfileModule = Get-ChildItem (Join-Path $ModulePath AzureRM.Profile) -Recurse
+    Add-Type -Path (Join-Path $PathToProfileModule "Microsoft.IdentityModel.Clients.ActiveDirectory.dll")
 
     # Get RunAsConnection
     $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
@@ -104,7 +104,7 @@ try
  
     # Create a runbook job
     $JobId = [GUID]::NewGuid().ToString()
-    $URI =  “https://management.azure.com/subscriptions/$SubscriptionId/"`
+    $URI =  "https://management.azure.com/subscriptions/$SubscriptionId/"`
          +"resourceGroups/$($AutomationResourceGroup)/providers/Microsoft.Automation/"`
          +"automationAccounts/$AutomationAccount/jobs/$($JobId)?api-version=2015-10-31"
  
