@@ -90,10 +90,19 @@ $RunbookParameters.Add("ServiceName",$Result.rows[$ServiceName])
 
 $ComputerName = $Result.rows[$Computer]
 
+# Authenticate with Azure.
+$ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+Add-AzureRmAccount `
+    -ServicePrincipal `
+    -TenantId $ServicePrincipalConnection.TenantId `
+    -ApplicationId $ServicePrincipalConnection.ApplicationId `
+    -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
+
+$Context = Set-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID | Write-Verbose
 
 # Set the resource group and account where the Restart-ServiceOnHybridWorker is published and start it on the hybrid worker. 
 $AutomationAccountResourceGroup = "ContosoGroup"
 $AutomationAccountName = "ContsoAccount"
 
 Start-AzureRmAutomationRunbook -ResourceGroupName $AutomationAccountResourceGroup -AutomationAccountName $AutomationAccountName `
-                               -Name Restart-ServiceOnHybridWorker -Parameters $RunbookParameters -RunOn $ComputerName -Wait
+                               -Name Restart-ServiceOnHybridWorker -Parameters $RunbookParameters -RunOn $ComputerName -Wait -AzureRmContext $Context
