@@ -98,7 +98,7 @@ Add-AzureRmAccount `
     -ApplicationId $ServicePrincipalConnection.ApplicationId `
     -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
 
-$Context = Set-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID | Write-Verbose
+$Context = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionID | Write-Verbose
 
 # Set the resource group and account where the Restart-ServiceOnHybridWorker is published and start it on the hybrid worker. 
 $AutomationAccountResourceGroup = "ContosoGroup"
