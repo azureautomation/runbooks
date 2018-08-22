@@ -24,7 +24,8 @@
     | where ( ConfigChangeType == "WindowsServices" )
     | where ( SvcChangeType == "State" )
     | where ( SvcState == "Stopped" )
-
+    | where ( SvcDisplayName == "Print Spooler")
+    
     The runbook to start on the hybrid worker is called Restart-ServiceOnHybridWorker with the following code.
 
     Param(
