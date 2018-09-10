@@ -51,7 +51,7 @@ Param(
 $RequestBody = ConvertFrom-Json $WebhookData.RequestBody
 
 # Get the results from the table object
-$Result = $RequestBody.data.SearchResult.tables
+$Result = $RequestBody.SearchResult.tables
 
 
 $i = -1
