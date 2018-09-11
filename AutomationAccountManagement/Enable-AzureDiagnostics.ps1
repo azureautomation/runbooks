@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.1
 
 .GUID 1ce8af29-11c2-4b5a-9548-d6bb359c5bf8
 
@@ -27,10 +27,10 @@
 
 .RELEASENOTES
 
+VERSION 1.1
+EDIT BY JENNY HUNTER
 
 #>
-
-#Requires -Module AzureDiagnosticsAndLogAnalytics
 #Requires -Module AzureRM.Insights
 #Requires -Module AzureRM.OperationalInsights
 #Requires -Module AzureRM.Automation
@@ -115,11 +115,11 @@ $ErrorActionPreference = 'stop'
 Add-AzureRMAccount | Write-Verbose
 
 # Find the Log Analytics workspace to configure
-$Resource = Find-AzureRmResource -ResourceType "Microsoft.OperationalInsights/workspaces" -ResourceNameContains $LogAnalyticsWorkspaceName 
+$Resource = Get-AzureRmResource -ResourceType "Microsoft.OperationalInsights/workspaces" -Name $LogAnalyticsWorkspaceName 
 $LogAnalyticsResource = Validate-Resource -Name $LogAnalyticsWorkspaceName -Resource $Resource
 
 # Find the Automation account to use 
-$Resource = Find-AzureRmResource -ResourceNameContains $AutomationAccountName -ResourceType Microsoft.Automation/AutomationAccounts
+$Resource = Get-AzureRmResource -Name $AutomationAccountName -ResourceType Microsoft.Automation/AutomationAccounts
 $AutomationResource = Validate-Resource -Name $AutomationAccountName -Resource $Resource
 
 # Make sure name of Storage account follows Storage naming rules
@@ -139,9 +139,6 @@ Catch
 
 # Enable diagnostics on the automation account to send logs to the storage account
 Set-AzureRmDiagnosticSetting -ResourceId $AutomationResource.ResourceId -StorageAccountId $StorageAccount.Id -Enabled $true -RetentionEnabled $true -RetentionInDays 180
-
-# Configure logs to send to Log Analytics
-Add-AzureDiagnosticsToLogAnalytics $AutomationResource $LogAnalyticsResource 
 
 # Enable the Automation Log Analytics solution
 Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $LogAnalyticsResource.ResourceGroupName -WorkspaceName $LogAnalyticsResource.Name -Intelligencepackname AzureAutomation -Enabled $true 
