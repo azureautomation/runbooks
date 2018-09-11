@@ -63,7 +63,7 @@ EDIT BY JENNY HUNTER
 
 .NOTES
     AUTHOR: AzureAutomationTeam
-    LASTEDIT: August 3, 2016 
+    LASTEDIT: September 11, 2018 
 
 #>
 
@@ -142,5 +142,3 @@ Set-AzureRmDiagnosticSetting -ResourceId $AutomationResource.ResourceId -Storage
 
 # Enable the Automation Log Analytics solution
 Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $LogAnalyticsResource.ResourceGroupName -WorkspaceName $LogAnalyticsResource.Name -Intelligencepackname AzureAutomation -Enabled $true 
-
-
