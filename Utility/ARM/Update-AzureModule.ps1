@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS 
     This Azure Automation runbook imports the latest version of the Azure modules from the PowerShell Gallery.
 
@@ -19,12 +19,15 @@
     Optional. A PowerShell HashTable or a JSON dictionary which contains module version overrides. Please be
     careful of version incompatibility between modules when overriding module versions.
 
+.PARAMETER AzureEnvironment
+    Optional. The name of the target Azure environment (one of the values returned by 'Get-AzureRmEnvironment | select Name').
+
       
 .EXAMPLE
     Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount
 
 .EXAMPLE
-    Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides @{'Azure'="4.0.2"; 'Azure.Storage'="3.0.2"; 'AzureRM.Profile'="3.0.1"; 'AzureRM.Automation'="3.0.1"; 'AzureRM.Compute'="3.0.1"; 'AzureRM.Resources' = "4.0.1"; 'AzureRM.Sql' = "3.0.1"; 'AzureRM.Storage'="3.0.2"}
+    Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides @{'Azure'="4.0.2"; 'Azure.Storage'="3.0.2"; 'AzureRM.Profile'="3.0.1"; 'AzureRM.Automation'="3.0.1"; 'AzureRM.Compute'="3.0.1"; 'AzureRM.Resources' = "4.0.1"; 'AzureRM.Sql' = "3.0.1"; 'AzureRM.Storage'="3.0.2"} -AzureEnvironment 'AzureCloud'
 
 .EXAMPLE
     Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides '{"Azure" : "4.0.2", "AzureRM.Sql" : "3.0.1", "AzureRM.Automation" : "3.0.1", "Azure.Storage" : "3.0.2", "AzureRM.Resources" : "4.0.1", "AzureRM.Storage" : "3.0.2", "AzureRM.Compute" : "3.0.1", "AzureRM.Profile" : "3.0.1"}'
@@ -43,7 +46,10 @@ Param
     [String] $AutomationAccount,
 
     [Parameter(Mandatory=$False)]
-    [object] $ModuleVersionOverrides
+    [object] $ModuleVersionOverrides,
+
+    [Parameter(Mandatory=$False)]
+    [object] $AzureEnvironment = 'AzureCloud'
     )
 
 $versionOverrides = ""
@@ -117,6 +123,7 @@ try
                    "name":"Update-AutomationAzureModulesForAccount"
                },
                "parameters":{
+                    "AzureEnvironment":"$AzureEnvironment",
                     "ResourceGroupName":"$AutomationResourceGroup",
                     "AutomationAccountName":"$AutomationAccount",
                     "ModuleVersionOverrides":"$versionOverrides"
@@ -132,6 +139,7 @@ try
                    "name":"Update-AutomationAzureModulesForAccount"
                },
                "parameters":{
+                    "AzureEnvironment":"$AzureEnvironment",
                     "ResourceGroupName":"$AutomationResourceGroup",
                     "AutomationAccountName":"$AutomationAccount"
                }
