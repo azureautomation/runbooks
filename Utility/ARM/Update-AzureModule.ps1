@@ -49,7 +49,7 @@ Param
     [object] $ModuleVersionOverrides,
 
     [Parameter(Mandatory=$False)]
-    [object] $AzureEnvironment = 'AzureCloud'
+    [String] $AzureEnvironment = 'AzureCloud'
     )
 
 $versionOverrides = ""
