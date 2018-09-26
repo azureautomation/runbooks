@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS 
     This Azure Automation runbook imports the latest version of the Azure modules from the PowerShell Gallery.
 
@@ -35,7 +35,7 @@
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: Feb 17th, 2017 
+    LASTEDIT: Sep 26th, 2018 
 #>
 Param
 (
