@@ -40,7 +40,10 @@
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: August 14th, 2018
+    RELEASE: August 14th, 2018
+    LASTEDIT: September 10th, 2018
+        - Updated for schema change
+
 #>
 
 Param(
@@ -52,8 +55,7 @@ Param(
 $RequestBody = ConvertFrom-Json $WebhookData.RequestBody
 
 # Get the results from the table object
-$Result = $RequestBody.SearchResult.tables
-
+$Result =  $RequestBody.data.SearchResult.tables
 
 $i = -1
 $Computer = -1
