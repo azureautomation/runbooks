@@ -131,7 +131,7 @@ function _doImport {
                 if($_ -and $_.Length -gt 0) {
                     $Parts = $_.Split(":")
                     $DependencyName = $Parts[0]
-                    $DependencyVersion = ($Parts[1] -replace '\[', '') -replace '\]', ''
+                    $DependencyVersion = $Parts[1] -replace "[^0-9.]", ''
 
                     # check if we already imported this dependency module during execution of this script
                     if(!$ModulesImported.Contains($DependencyName)) {
