@@ -1,7 +1,5 @@
 #!/usr/bin/env python2
 """
-Imports python packages from pypi.org
-
 This Azure Automation runbook runs in Azure to remove a package from Azure Automation.
 It requires the subscription id, resource group of the Automation account, Automation name, and package name as arguments.
 Passing in * for the package name will remove all packages from the account.
