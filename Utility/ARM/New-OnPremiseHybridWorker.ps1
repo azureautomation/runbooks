@@ -26,6 +26,10 @@
 
 .RELEASENOTES 
 
+1.6 - 11/5/2018
+ -- MODIFIED BY Alex Bevan
+ -- Added support for user principle authentication 
+
 1.5 - 5/29/2018
  -- MODIFIED BY Jenny Hunter
  -- updated use of New-AzureRmOperationInsightsWorkspace cmdlet to user the "PerNode" SKU
@@ -140,11 +144,11 @@
 
 .NOTES
 
-    AUTHOR: Jenny Hunter, Azure Automation Team
+    AUTHOR: Jenny Hunter, Azure Automation Team & Alex Bevan
 
-    LASTEDIT: May 29, 2018
+    LASTEDIT: Nov 5, 2018
 
-    EDITBY: Jenny Hunter
+    EDITBY: Alex Bevan
 
 #>
 
