@@ -1,4 +1,4 @@
-﻿<#PSScriptInfo 
+<#PSScriptInfo 
 
 .VERSION 1.5
 
@@ -87,6 +87,11 @@
     Mandatory. A string containing the SubscriptionID to be used. 
 
 
+.PARAMETER TenantId
+
+    A string containing the TenantId to be used. 
+
+
 .PARAMETER WorkspaceName
 
     Optional. The name of the OMS Workspace to be referenced. If not specified, a new OMS workspace 
@@ -113,14 +118,14 @@
 
 .EXAMPLE
 
-    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -TenantId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 
 .EXAMPLE
 
     $Credentials = Get-Credential
 
-    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -TenantId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials
 
 
 .NOTES
@@ -147,6 +152,9 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $SubscriptionID,
 
+[Parameter(Mandatory=$false)]
+[String] $TenantId,
+
 # OMS Workspace
 [Parameter(Mandatory=$false)]
 [String] $WorkspaceName = "hybridWorkspace" + (Get-Random -Maximum 99999),
@@ -163,7 +171,6 @@ Param (
 [Parameter(Mandatory=$false)]
 [PSCredential] $Credential
 )
-
 
 # Stop the script if any errors occur
 $ErrorActionPreference = "Stop"
@@ -218,17 +225,23 @@ if ($Credential) {
 $Account = Add-AzureRmAccount @paramsplat 
 
 # Get a reference to the current subscription
-$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
-# Get the tenant id for this subscription
+if($TenantId)
+{
+  $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID -TenantID $TenantId
+} else {
+  $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+  # Get the tenant id for this subscription
+  
 $TenantID = $Subscription.TenantId
 
+}
 
 # Set the active subscription
-$null = Set-AzureRmContext -SubscriptionID $SubscriptionID
+$null = Set-AzureRmContext -SubscriptionID $SubscriptionID -TenantID $TenantId
 
 # Check that the resource groups are valid
 $null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
-if ($OMSResouceGroupName) {
+if ($OMSResourceGroupName) {
     $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
 } else {
     $OMSResourceGroupName = $AAResourceGroupName
@@ -295,7 +308,11 @@ $WorkspaceSharedKeys = Get-AzureRmOperationalInsightsWorkspaceSharedKeys -Resour
 $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 
 # Activate the Azure Automation solution in the workspace
-$null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
+$currentIPs = Get-AzureRmOperationalInsightsIntelligencePacks -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName
+if($currentIPs | Where-Object {$_.Name -eq 'AzureAutomation' -and -not($_.Enabled)})
+{
+  $null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
+}
 
 # Check for the MMA on the machine
 try {
@@ -303,8 +320,12 @@ try {
     $mma = New-Object -ComObject 'AgentConfigManager.MgmtSvcCfg'
     
     Write-Output "Configuring the MMA..."
-    $mma.AddCloudWorkspace($WorkspaceId, $WorkspaceKey)
-    $mma.ReloadConfiguration()
+    if(-not($mma.GetCloudWorkspace($WorkspaceId)))
+    {
+        Write-Output "Configuring the MMA..."
+        $mma.AddCloudWorkspace($WorkspaceId, $WorkspaceKey)
+        $mma.ReloadConfiguration()
+    }
 
 } catch {
     # Download the Microsoft monitoring agent
@@ -312,9 +333,9 @@ try {
 
     # Check whether or not to download the 64-bit executable or the 32-bit executable
     if ([Environment]::Is64BitProcess) {
-        $Source = "http://download.microsoft.com/download/1/5/E/15E274B9-F9E2-42AE-86EC-AC988F7631A0/MMASetup-AMD64.exe"
+        $Source = "https://go.microsoft.com/fwlink/?LinkId=828603"
     } else {
-        $Source = "http://download.microsoft.com/download/1/5/E/15E274B9-F9E2-42AE-86EC-AC988F7631A0/MMASetup-i386.exe"
+        $Source = "https://go.microsoft.com/fwlink/?LinkId=828604"
     }
 
     $Destination = "$env:temp\MMASetup.exe"
@@ -328,7 +349,7 @@ try {
     # Install the MMA
     $Command = "/C:setup.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID=$WorkspaceID" + " OPINSIGHTS_WORKSPACE_KEY=$WorkspaceKey " + " AcceptEndUserLicenseAgreement=1"
     .\MMASetup.exe $Command
-
+    Remove-Item -Path "$($env:TEMP)\MMASetup.exe" -Force
 }
 
 # Sleep until the MMA object has been registered
