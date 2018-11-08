@@ -34,8 +34,8 @@
 
 
 .NOTES
-    AUTHOR: Automation Team
-    LASTEDIT: Sep 26th, 2018 
+    AUTHOR: Automation Team, Chase Dafnis
+    LASTEDIT: Nov 6th, 2018 
 #>
 Param
 (
@@ -76,14 +76,17 @@ if ($ModuleVersionOverrides) {
 
 try
 {
+    # Pull Azure environment settings
+    $AzureEnvironmentSettings = Get-AzureRmEnvironment -Name $AzureEnvironment
+
     # Azure management uri
-    $ResourceAppIdURI = "https://management.core.windows.net/"
+    $ResourceAppIdURI = $AzureEnvironmentSettings.ActiveDirectoryServiceEndpointResourceId
 
     # Path to modules in automation container
     $ModulePath = "C:\Modules"
 
     # Login uri for Azure AD
-    $LoginURI = "https://login.windows.net/"
+    $LoginURI = $AzureEnvironmentSettings.ActiveDirectoryAuthority
 
     # Find AzureRM.Profile module and load the Azure AD client library
     $PathToProfileModule = Get-ChildItem (Join-Path $ModulePath AzureRM.Profile) -Recurse
@@ -110,7 +113,7 @@ try
  
     # Create a runbook job
     $JobId = [GUID]::NewGuid().ToString()
-    $URI =  "https://management.azure.com/subscriptions/$SubscriptionId/"`
+    $URI =  "$($AzureEnvironmentSettings.ResourceManagerUrl)subscriptions/$SubscriptionId/"`
          +"resourceGroups/$($AutomationResourceGroup)/providers/Microsoft.Automation/"`
          +"automationAccounts/$AutomationAccount/jobs/$($JobId)?api-version=2015-10-31"
  
