@@ -26,6 +26,10 @@
 
 .RELEASENOTES 
 
+1.6 - 11/15/2018
+ -- MODIFIED BY Alexander Zabielski
+ -- Updated the parameters to accept a TenantID to pass to the connection params.
+
 1.5 - 5/29/2018
  -- MODIFIED BY Jenny Hunter
  -- updated use of New-AzureRmOperationInsightsWorkspace cmdlet to user the "PerNode" SKU
@@ -84,7 +88,12 @@
 
 .PARAMETER SubscriptionID
 
-    Mandatory. A string containing the SubscriptionID to be used. 
+    Mandatory. A string containing the SubscriptionID to be used.
+
+
+.PARAMETER TenantID
+
+    Optional. A string containing the TenantID to be used.
 
 
 .PARAMETER WorkspaceName
@@ -146,6 +155,9 @@ Param (
 
 [Parameter(Mandatory=$true)]
 [String] $SubscriptionID,
+
+[Parameter(Mandatory=$false)]
+[String] $TenantID,
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
@@ -215,12 +227,19 @@ if ($Credential) {
     $paramsplat.Credential = $Credential
 }
 
+if($TenantID) {
+    $paramsplat.TenantId = $TenantID
+}
+
+Write-Output "Connecting with the Following Parameters"
+Write-Output $paramsplat
+
 $Account = Add-AzureRmAccount @paramsplat 
 
 # Get a reference to the current subscription
-$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+#$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
 # Get the tenant id for this subscription
-$TenantID = $Subscription.TenantId
+#$TenantID = $Subscription.TenantId
 
 
 # Set the active subscription
