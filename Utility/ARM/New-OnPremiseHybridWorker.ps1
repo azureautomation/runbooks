@@ -1,4 +1,4 @@
-﻿<#PSScriptInfo 
+<#PSScriptInfo 
 
 .VERSION 1.5
 
@@ -25,6 +25,10 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES 
+
+1.6 - 11/5/2018
+ -- MODIFIED BY Alex Bevan
+ -- Added support for user principle authentication 
 
 1.5 - 5/29/2018
  -- MODIFIED BY Jenny Hunter
@@ -110,6 +114,15 @@
 
     See: https://github.com/Azure/azure-powershell/issues/2915
 
+.PARAMETER ServicePrincipal
+
+    Optional. Switch required if using service principle to authenticate
+
+.PARAMETER TenantId
+
+    Optional. TenentId to use if using service principle, otherwise is calculated. 
+
+
 
 .EXAMPLE
 
@@ -122,14 +135,20 @@
 
     New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials
 
+.EXAMPLE
+
+    $Credentials = Get-Credential
+
+    New-OnPremiseHybridWorker -AutomationAccountName "ContosoAA" -AAResourceGroupName "ContosoResources" -HybridGroupName "ContosoHybridGroup" -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Credential $Credentials -ServicePrincipal -TenantId "0fderfb0-401b-4568c-b540-bc7458d67256"
+
 
 .NOTES
 
-    AUTHOR: Jenny Hunter, Azure Automation Team
+    AUTHOR: Jenny Hunter, Azure Automation Team & Alex Bevan
 
-    LASTEDIT: May 29, 2018
+    LASTEDIT: Nov 5, 2018
 
-    EDITBY: Jenny Hunter
+    EDITBY: Alex Bevan
 
 #>
 
@@ -155,14 +174,24 @@ Param (
 [Parameter(Mandatory=$true)]
 [String] $AutomationAccountName ,
 
-# Hyprid Group
+# Hybrid Group
 [Parameter(Mandatory=$true)]
 [String] $HybridGroupName,
 
-# Hyprid Group
+# Hybrid Group
 [Parameter(Mandatory=$false)]
-[PSCredential] $Credential
+[PSCredential] $Credential,
+
+# Hybrid Group
+[Parameter(Mandatory=$false)]
+[Switch] $ServicePrincipal,
+
+# Hybrid Group
+[Parameter(Mandatory=$false)]
+[String] $TenantID
+
 )
+
 
 
 # Stop the script if any errors occur
@@ -215,7 +244,12 @@ if ($Credential) {
     $paramsplat.Credential = $Credential
 }
 
-$Account = Add-AzureRmAccount @paramsplat 
+if ($ServicePrincipal){
+    $Account = Add-AzureRmAccount @paramsplat -ServicePrincipal -TenantId $TenantID
+}else{
+    $Account = Add-AzureRmAccount @paramsplat 
+}
+
 
 # Get a reference to the current subscription
 $Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
