@@ -1,6 +1,10 @@
-﻿<#
+<#
 .SYNOPSIS 
     This Azure Automation runbook imports the latest version of the Azure modules from the PowerShell Gallery.
+
+    *** NOTE: Since the Update Azure Modules runbook has been open-sourced, there is no reason to use
+    the Update-AzureModule.ps1 runbook in most contexts anymore. Instead, consider invoking or scheduling
+    the Update Azure Modules runbook directly. You can find more info here: https://aka.ms/UpdateAzureModules.
 
 .DESCRIPTION
     This Azure Automation runbook imports the latest version of the Azure modules from the PowerShell Gallery.
