@@ -1,5 +1,5 @@
 <#
-.SYNOPSIS 
+.SYNOPSIS
     This sample automation runbook onboards an Azure VM for either the Update or ChangeTracking (which includes Inventory) solution.
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
@@ -35,7 +35,7 @@
 
 .PARAMETER UpdateScopeQuery
     Optional. Default is true. Indicates whether to add this VM to the list of computers to enable for this solution.
-    Solutions enable an optional scope configuration to be set on them that contains a query of computers 
+    Solutions enable an optional scope configuration to be set on them that contains a query of computers
     to target the solution to. If you are calling this Runbook from a parent runbook that is onboarding
     multiple VMs concurrently, then you will want to set this to false and then do a final update of the
     search query with the list of onboarded computers to avoid any possible conflicts that this Runbook
@@ -56,192 +56,227 @@
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: November 9th, 2017 
+    LASTEDIT: November 9th, 2017
 #>
- 
+
 Param (
-    [Parameter(Mandatory=$True)]
+    [Parameter(Mandatory = $True)]
     [String]
     $VMName,
 
-    [Parameter(Mandatory=$True)]
+    [Parameter(Mandatory = $True)]
     [String]
     $ResourceGroupName,
 
-    [Parameter(Mandatory=$False)]
+    [Parameter(Mandatory = $False)]
     [String]
-    $SubscriptionId,
+    $VMSubscriptionId,
 
-    [Parameter(Mandatory=$True)]
+    [Parameter(Mandatory = $True)]
+    [String]
+    $ExistingVMSubscriptionId,
+
+    [Parameter(Mandatory = $True)]
     [String]
     $ExistingVM,
 
-    [Parameter(Mandatory=$True)]
+    [Parameter(Mandatory = $True)]
     [String]
     $ExistingVMResourceGroup,
 
-    [Parameter(Mandatory=$True)]
+    [Parameter(Mandatory = $True)]
     [String]
     $SolutionType,
 
-    [Parameter(Mandatory=$False)]
+    [Parameter(Mandatory = $False)]
     [Boolean]
-    $UpdateScopeQuery=$True 
-    )
-
-# Stop on errors
-$ErrorActionPreference = 'stop'
-
-if ($SolutionType -cne "Updates" -and $SolutionType -cne "ChangeTracking")
+    $UpdateScopeQuery = $True
+)
+try
 {
-    throw ("Only a solution type of Updates or ChangeTracking is currently supported. These are case sensitive ")
-}
+    Write-Verbose -Message  "Starting Runbook at time: $(get-Date -format r). Running PS version: $($PSVersionTable.PSVersion)"
 
- # Authenticate to Azure
-$ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
-Add-AzureRmAccount `
-    -ServicePrincipal `
-    -TenantId $ServicePrincipalConnection.TenantId `
-    -ApplicationId $ServicePrincipalConnection.ApplicationId `
-    -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
-
-# Set subscription to work against
-$SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId 
-
-if ([string]::IsNullOrEmpty($SubscriptionId))
-{
-    # Use the same subscription as the Automation account if not passed in
-    $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId
-    $SubscriptionId = $ServicePrincipalConnection.SubscriptionId
-}
-else 
-{
-    # VM is in a different subscription so set the context to this subscription
-    $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $SubscriptionId
-    
-    # Register Automation provider if it is not registered on the subscription
-    $AutomationProvider = Get-AzureRMResourceProvider -ProviderNamespace Microsoft.Automation `
-                                                    -AzureRmContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
-    if ([string]::IsNullOrEmpty($AutomationProvider))
+    $VerbosePreference = "silentlycontinue"
+    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights -ErrorAction Continue -ErrorVariable oErr
+    If ($oErr)
     {
-        Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
+        Write-Error -Message "Failed to load needed modules for Runbook, check that AzureRM.Automation and AzureRM.OperationalInsights is imported into Azure Automation" -ErrorAction Stop
     }
-}
+    $VerbosePreference = "Continue"
 
-# Get existing VM that is onboarded already to get information from it
-$ExistingVMExtension = Get-AzureRmResource -ResourceId /subscriptions/$SubscriptionId/resourceGroups/$ExistingVMResourceGroup/providers/Microsoft.Compute/virtualMachines/$ExistingVM/extensions `
-                                            | Where-Object {$_.Properties.type -eq "MicrosoftMonitoringAgent"}
-
-if ([string]::IsNullOrEmpty($ExistingVMExtension))
-{
-    throw ("Cannot find monitoring agent on exiting machine " + $ExistingVM + " in resource group " + $ExistingVMResourceGroup )
-} 
-
-$ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
-                                             -Name $ExistingVMExtension.Name -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
-                                         
-# Check if the existing VM is already onboarded
-$PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
-if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
-{
-    throw ("This VM " + $ExistingVM + " is not onboarded. Please onboard first as it is used to collect information")
-}
-
-# Get information about the workspace
-$WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext `
-                                                    | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
-
-# Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-$SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
-                                         -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
-
-# Get details of the new VM to onboard.
-$NewVM = Get-AzureRMVM -ResourceGroupName $ResourceGroupName -Name $VMName `
-                        -AzureRmContext $NewVMSubscriptionContext
-$VMName = $NewVM.Name
-
-# Workspace information
-$WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
-$WorkspaceName = $WorkspaceInfo.Name
-$WorkspaceResourceId = $WorkspaceInfo.ResourceId
-
-# New VM information
-$VMResourceGroupName = $NewVM.ResourceGroupName
-$VMName = $NewVM.Name
-$VMLocation = $NewVM.Location
-$VMResourceId = $NewVM.Id
-$VMIdentityRequired = $false
-
-# Check if the VM is already onboarded to the MMA Agent and skip if it is
-$Onboarded = Get-AzureRmVMExtension -ResourceGroup $ResourceGroupName  -VMName $VMName `
-                -Name MicrosoftMonitoringAgent -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue
-
-if ([string]::IsNullOrEmpty($Onboarded))
-{
-    # Set up MMA agent information to onboard VM to the workspace
-    if ($NewVM.OSProfile.WindowsConfiguration -eq $null)
+    if ($SolutionType -cne "Updates" -and $SolutionType -cne "ChangeTracking")
     {
-        $MMAExentsionName = "OmsAgentForLinux"
-        $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json"
+        throw ("Only a solution type of Updates or ChangeTracking is currently supported. These are case sensitive ")
     }
-    else 
+
+    # Authenticate to Azure
+    $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+    Add-AzureRmAccount `
+        -ServicePrincipal `
+        -TenantId $ServicePrincipalConnection.TenantId `
+        -ApplicationId $ServicePrincipalConnection.ApplicationId `
+        -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint -ErrorAction Continue -ErrorVariable oErr
+    If ($oErr)
     {
-        $MMAExentsionName = "MicrosoftMonitoringAgent"
-        $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json"      
+        Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
     }
-    $MMADeploymentParams = @{}
-    $MMADeploymentParams.Add("vmName", $VMName)
-    $MMADeploymentParams.Add("vmLocation", $VMLocation)
-    $MMADeploymentParams.Add("vmResourceId", $VMResourceId)
-    $MMADeploymentParams.Add("vmIdentityRequired", $VMIdentityRequired)
-    $MMADeploymentParams.Add("workspaceName",$WorkspaceName)
-    $MMADeploymentParams.Add("workspaceId",$PublicSettings.workspaceId)
-    $MMADeploymentParams.Add("workspaceResourceId", $WorkspaceResourceId)
-    $MMADeploymentParams.Add("mmaExtensionName", $MMAExentsionName)
 
-    # Create deployment name
-    $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
-
-    # Deploy solution to new VM
-    New-AzureRmResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateUri $MMATemplateLinkUri `
-                                        -Name $DeploymentName `
-                                        -TemplateParameterObject $MMADeploymentParams `
-                                        -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
-    Write-Output("VM " + $VMName + " successfully onboarded.")
-}
-else 
-{
-    Write-Warning("The VM " + $VMName + " already has the MMA agent installed. Skipping this one.")
-}
-
-# Update scope query if necessary
-$SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}                                          
-
-if (!([string]::IsNullOrEmpty($SolutionGroup)))
-{
-    if (!($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
+    # Set subscription to work against
+    $SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+    If ($oErr)
     {
-        $NewQuery = $SolutionGroup.Properties.Query.Replace('(',"(`"$VMName`", ")
-        $ComputerGroupQueryTemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/updateKQLScopeQueryV2.json"                                       
+        Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
+    }
 
-        # Add all of the parameters
-        $QueryDeploymentParams = @{}
-        $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
-        $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
-        $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
-        $QueryDeploymentParams.Add("category", $SolutionType)
-        $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
-        $QueryDeploymentParams.Add("query", $NewQuery)
-        $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
-        $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
+    if ([string]::IsNullOrEmpty($VMSubscriptionId))
+    {
+        # Use the same subscription as the Automation account if not passed in
+        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId
+    }
+    else
+    {
+        # VM is in a different subscription so set the context to this subscription
+        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId VMSubscriptionId
+
+        # Register Automation provider if it is not registered on the subscription
+        $AutomationProvider = Get-AzureRMResourceProvider -ProviderNamespace Microsoft.Automation `
+            -AzureRmContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
+        if ([string]::IsNullOrEmpty($AutomationProvider))
+        {
+            Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
+        }
+    }
+
+    # Get existing VM that is onboarded already to get information from it
+    $ExistingVMExtension = Get-AzureRmResource -ResourceId /subscriptions/$SubscriptionId/resourceGroups/$ExistingVMResourceGroup/providers/Microsoft.Compute/virtualMachines/$ExistingVM/extensions `
+        | Where-Object {$_.Properties.type -eq "MicrosoftMonitoringAgent"}
+
+    if ([string]::IsNullOrEmpty($ExistingVMExtension))
+    {
+        throw ("Cannot find monitoring agent on exiting machine " + $ExistingVM + " in resource group " + $ExistingVMResourceGroup )
+    }
+
+    $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
+        -Name $ExistingVMExtension.Name -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
+
+    # Check if the existing VM is already onboarded
+    $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
+    if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
+    {
+        throw ("This VM " + $ExistingVM + " is not onboarded. Please onboard first as it is used to collect information")
+    }
+
+    # Get information about the workspace
+    $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext `
+        | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
+
+    # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
+    $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
+        -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
+
+    # Get details of the new VM to onboard.
+    $NewVM = Get-AzureRMVM -ResourceGroupName $ResourceGroupName -Name $VMName `
+        -AzureRmContext $NewVMSubscriptionContext
+    $VMName = $NewVM.Name
+
+    # Workspace information
+    $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
+    $WorkspaceName = $WorkspaceInfo.Name
+    $WorkspaceResourceId = $WorkspaceInfo.ResourceId
+
+    # New VM information
+    $VMResourceGroupName = $NewVM.ResourceGroupName
+    $VMName = $NewVM.Name
+    $VMLocation = $NewVM.Location
+    $VMResourceId = $NewVM.Id
+    $VMIdentityRequired = $false
+
+    # Check if the VM is already onboarded to the MMA Agent and skip if it is
+    $Onboarded = Get-AzureRmVMExtension -ResourceGroup $ResourceGroupName  -VMName $VMName `
+        -Name MicrosoftMonitoringAgent -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue
+
+    if ([string]::IsNullOrEmpty($Onboarded))
+    {
+        # Set up MMA agent information to onboard VM to the workspace
+        if ($NewVM.OSProfile.WindowsConfiguration -eq $null)
+        {
+            $MMAExentsionName = "OmsAgentForLinux"
+            $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json"
+        }
+        else
+        {
+            $MMAExentsionName = "MicrosoftMonitoringAgent"
+            $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json"
+        }
+        $MMADeploymentParams = @{}
+        $MMADeploymentParams.Add("vmName", $VMName)
+        $MMADeploymentParams.Add("vmLocation", $VMLocation)
+        $MMADeploymentParams.Add("vmResourceId", $VMResourceId)
+        $MMADeploymentParams.Add("vmIdentityRequired", $VMIdentityRequired)
+        $MMADeploymentParams.Add("workspaceName", $WorkspaceName)
+        $MMADeploymentParams.Add("workspaceId", $PublicSettings.workspaceId)
+        $MMADeploymentParams.Add("workspaceResourceId", $WorkspaceResourceId)
+        $MMADeploymentParams.Add("mmaExtensionName", $MMAExentsionName)
 
         # Create deployment name
         $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-        New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateUri $ComputerGroupQueryTemplateLinkUri `
-                                            -Name $DeploymentName `
-                                            -TemplateParameterObject $QueryDeploymentParams `
-                                            -AzureRmContext $SubscriptionContext | Write-Verbose
+        # Deploy solution to new VM
+        New-AzureRmResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateUri $MMATemplateLinkUri `
+            -Name $DeploymentName `
+            -TemplateParameterObject $MMADeploymentParams `
+            -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
+        Write-Output("VM " + $VMName + " successfully onboarded.")
+    }
+    else
+    {
+        Write-Warning("The VM " + $VMName + " already has the MMA agent installed. Skipping this one.")
+    }
+
+    # Update scope query if necessary
+    $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
+
+    if (!([string]::IsNullOrEmpty($SolutionGroup)))
+    {
+        if (!($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
+        {
+            $NewQuery = $SolutionGroup.Properties.Query.Replace('(', "(`"$VMName`", ")
+            $ComputerGroupQueryTemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/updateKQLScopeQueryV2.json"
+
+            # Add all of the parameters
+            $QueryDeploymentParams = @{}
+            $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
+            $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
+            $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
+            $QueryDeploymentParams.Add("category", $SolutionType)
+            $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
+            $QueryDeploymentParams.Add("query", $NewQuery)
+            $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
+            $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
+
+            # Create deployment name
+            $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+
+            New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateUri $ComputerGroupQueryTemplateLinkUri `
+                -Name $DeploymentName `
+                -TemplateParameterObject $QueryDeploymentParams `
+                -AzureRmContext $SubscriptionContext | Write-Verbose
+        }
     }
 }
- 
+catch
+{
+    if ($_.Exception.Message)
+    {
+        Write-Error -Message "$($_.Exception.Message)" -ErrorAction Continue
+    }
+    else
+    {
+        Write-Error -Message "$($_.Exception)" -ErrorAction Continue
+    }
+    throw "$($_.Exception)"
+}
+finally
+{
+    Write-Verbose -Message  "Runbook ended at time: $(get-Date -format r)"
+}
