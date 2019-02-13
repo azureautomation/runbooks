@@ -78,7 +78,8 @@ Param (
 )
 try
 {
-    Write-Verbose -Message  "Starting Runbook at time: $(get-Date -format r). Running PS version: $($PSVersionTable.PSVersion)"
+    $RunbookName = "Enable-AutomationSolution"
+    Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r). Running PS version: $($PSVersionTable.PSVersion)"
 
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
@@ -98,8 +99,8 @@ try
     #   Variables
     ############################################################
     $LogAnalyticsAgentExtensionName = "OMSExtension"
-    $LAagentApiVersion = "2015-06-15"
-    $LAsolutionUpdateApiVersion = "2017-04-26-preview"
+    $MMAApiVersion = "2015-06-15"
+    $SolutionApiVersion = "2017-04-26-preview"
     #endregion
 
     # Authenticate to Azure
@@ -300,9 +301,16 @@ try
 
     if ($Null -eq $Onboarded)
     {
-        # ARM template to deploy log analytics agent extension for both Linux and Windows
-        # URL of template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
-        $ArmTemplate = @'
+
+        # Set up MMA agent information to onboard VM to the workspace
+        if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
+        {
+            $MMAExentsionName = "OmsAgentForLinux"
+            $MMAOStype = "OmsAgentForLinux"
+            $MMATypeHandlerVersion = "1.4"
+#Region Linux ARM Template
+            # URL of linux template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
+            $ArmTemplate = @'
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
@@ -342,6 +350,14 @@ try
         "apiVersion": {
             "defaultValue": "2015-06-15",
             "type": "String"
+        },
+        "OStype": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "typeHandlerVersion": {
+            "defaultValue": "",
+            "type": "String"
         }
     },
     "variables": {
@@ -364,8 +380,119 @@ try
                     "location": "[parameters('vmLocation')]",
                     "properties": {
                         "publisher": "Microsoft.EnterpriseCloud.Monitoring",
-                        "type": "MicrosoftMonitoringAgent",
-                        "typeHandlerVersion": "1.0",
+                        "type": "[parameters('OStype')]",
+                        "typeHandlerVersion": "[parameters('typeHandlerVersion')]",
+                        "autoUpgradeMinorVersion": "true",
+                        "settings": {
+                            "workspaceId": "[parameters('workspaceId')]",
+                            "stopOnMultipleConnections": "true"
+                        },
+                        "protectedSettings": {
+                            "workspaceKey": "[listKeys(parameters('workspaceResourceId'), parameters('apiVersion')).primarySharedKey]",
+                            "azureResourceId": "[parameters('vmResourceId')]"
+                        }
+                    },
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'))]"
+                    ]
+                }
+            ]
+        }
+    ]
+}
+'@
+#Endregion
+            # Create temporary file to store ARM template in
+            $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to create temporary file for Linux ARM template" -ErrorAction Stop
+            }
+            Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
+            }
+        }
+        elseif($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
+        {
+            $MMAExentsionName = "MicrosoftMonitoringAgent"
+            $MMAOStype = "MicrosoftMonitoringAgent"
+            $MMATypeHandlerVersion = "1.0"
+#Region Windows ARM template
+            # URL of windows template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
+            $ArmTemplate = @'
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmName": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "vmLocation": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "vmResourceId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "vmIdentityRequired": {
+            "defaultValue": "false",
+            "type": "Bool"
+        },
+        "workspaceName": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "workspaceId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "workspaceResourceId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "mmaExtensionName": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "apiVersion": {
+            "defaultValue": "2015-06-15",
+            "type": "String"
+        },
+        "OStype": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "typeHandlerVersion": {
+            "defaultValue": "",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "vmIdentity": {
+            "type": "SystemAssigned"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('vmName')]",
+            "apiVersion": "[parameters('apiVersion')]",
+            "location": "[parameters('vmLocation')]",
+            "identity": "[if(parameters('vmIdentityRequired'), variables('vmIdentity'), json('null'))]",
+            "resources": [
+                {
+                    "type": "extensions",
+                    "name": "[parameters('mmaExtensionName')]",
+                    "apiVersion": "[parameters('apiVersion')]",
+                    "location": "[parameters('vmLocation')]",
+                    "properties": {
+                        "publisher": "Microsoft.EnterpriseCloud.Monitoring",
+                        "type": "[parameters('OStype')]",
+                        "typeHandlerVersion": "[parameters('typeHandlerVersion')]",
                         "autoUpgradeMinorVersion": "true",
                         "settings": {
                             "workspaceId": "[parameters('workspaceId')]",
@@ -385,26 +512,22 @@ try
     ]
 }
 '@
-        # Create temporary file to store ARM template in
-        $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
-        if ($oErr)
-        {
-            Write-Error -Message "Failed to create temporary file for ARM template" -ErrorAction Stop
-        }
-        Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
-        if ($oErr)
-        {
-            Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
-        }
-
-        # Set up MMA agent information to onboard VM to the workspace
-        if ($Null -eq $NewVM.OSProfile.WindowsConfiguration)
-        {
-            $MMAExentsionName = "OmsAgentForLinux"
+#Endregion
+            # Create temporary file to store ARM template in
+            $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to create temporary file for Windows ARM template" -ErrorAction Stop
+            }
+            Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
+            }
         }
         else
         {
-            $MMAExentsionName = "MicrosoftMonitoringAgent"
+            Write-Error -Message "Could not determine OS of VM: $($NewVM.Name)"
         }
         $MMADeploymentParams = @{}
         $MMADeploymentParams.Add("vmName", $VMName)
@@ -415,7 +538,9 @@ try
         $MMADeploymentParams.Add("workspaceId", $PublicSettings.workspaceId)
         $MMADeploymentParams.Add("workspaceResourceId", $WorkspaceResourceId)
         $MMADeploymentParams.Add("mmaExtensionName", $MMAExentsionName)
-        $MMADeploymentParams.Add("apiVersion", $LAagentApiVersion)
+        $MMADeploymentParams.Add("apiVersion", $MMAApiVersion)
+        $MMADeploymentParams.Add("OStype", $MMAOStype)
+        $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
         # Create deployment name
         $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
@@ -448,18 +573,18 @@ try
 
     if ($Null -ne $SolutionGroup)
     {
-        if (-not (($SolutionGroup.Properties.Query -match $NewVM.VMId) -and ($SolutionGroup.Properties.Query -match $NewVM.Name)) -and $UpdateScopeQuery)
+        if (-not (($SolutionGroup.Properties.Query -match $VMResourceId) -and ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
         {
             # Original saved search query:
-            # $NewQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"
+            # $DefaultQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"
 
             # Make sure to only add VM id into VMUUID block, the same as is done by adding through the portal
             if ($SolutionGroup.Properties.Query -match 'VMUUID')
             {
                 # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
-                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$($NewVM.VMId)`",")
+                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$VMResourceId`",")
             }
-
+#Region Solution Onboarding ARM Template
             # ARM template to deploy log analytics agent extension for both Linux and Windows
             # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
             $ArmTemplate = @'
@@ -527,16 +652,17 @@ try
     ]
 }
 '@
+#Endregion
             # Create temporary file to store ARM template in
             $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
-                Write-Error -Message "Failed to create temporary file for ARM template" -ErrorAction Stop
+                Write-Error -Message "Failed to create temporary file for solution ARM template" -ErrorAction Stop
             }
             Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
-                Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
+                Write-Error -Message "Failed to write ARM template for solution onboarding to temp file" -ErrorAction Stop
             }
             # Add all of the parameters
             $QueryDeploymentParams = @{}
@@ -548,7 +674,7 @@ try
             $QueryDeploymentParams.Add("query", $NewQuery)
             $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
             $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
-            $QueryDeploymentParams.Add("apiVersion", $LAsolutionUpdateApiVersion)
+            $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
             # Create deployment name
             $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
@@ -564,11 +690,15 @@ try
             else
             {
                 Write-Output -InputObject $ObjectOutPut
-                Write-Output -InputObject "VM: $VMName successfully added to solution management: $SolutionType"
+                Write-Output -InputObject "VM: $VMName successfully added to solution: $SolutionType"
             }
 
             # Remove temp file with arm template
             Remove-Item -Path $TempFile.FullName -Force
+        }
+        else
+        {
+            Write-Warning -Message "The VM: $VMName is already onboarded to solution: $SolutionType"
         }
     }
 }
@@ -586,5 +716,5 @@ catch
 }
 finally
 {
-    Write-Verbose -Message  "Runbook ended at time: $(get-Date -format r)"
+    Write-Output -InputObject "Runbook: $RunbookName ended at time: $(get-Date -format r)"
 }
