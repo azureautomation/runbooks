@@ -14,20 +14,14 @@
 .PARAMETER VMName
     Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
 
-.PARAMETER ResourceGroupName
+.PARAMETER VMResourceGroupName
     Required. The name of the resource group that the VM is a member of.
 
-.PARAMETER SubscriptionId
-    Optional. The name subscription id where the new VM to onboard is located.
+.PARAMETER VMSubscriptionId
+    The name subscription id where the new VM to onboard is located.
     This will default to the same one as the workspace if not specified. If you
     give a different subscription id then you need to make sure the RunAs account for
     this automaiton account is added as a contributor to this subscription also.
-
-.PARAMETER ExistingVM
-    Required. The name of the existing Azure VM that is already onboarded to the Updates or ChangeTracking solution
-
-.PARAMETER ExistingVMResourceGroup
-    Required. The name of resource group that the existing VM with the solution is a member of
 
 .PARAMETER SolutionType
     Required. The name of the solution to onboard to this Automation account.
@@ -43,20 +37,21 @@
     might try and do this at the same time if run concurrently.
 
 .Example
-    .\Enable-AutomationSolution -VMName finance1 -ResourceGroupName finance `
-             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType Updates
+    .\Enable-AutomationSolution -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" -VMName finance1 -VMResourceGroupName finance `
+              -SolutionType Updates
 
 .Example
-    .\Enable-AutomationSolution -VMName finance1 -ResourceGroupName finance `
-             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType ChangeTracking -UpdateScopeQuery $False
+    .\Enable-AutomationSolution -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" -VMName finance1 -VMResourceGroupName finance `
+             -SolutionType ChangeTracking -UpdateScopeQuery $False
 
 .Example
-    .\Enable-AutomationSolution -VMName finance1 -ResourceGroupName finance -SubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" `
-             -ExistingVM hrapp1 -ExistingVMResourceGroup hr -SolutionType Updates
+    .\Enable-AutomationSolution -VMName finance1 -VMResourceGroupName finance -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" `
+             -SolutionType Updates
 
 .NOTES
     AUTHOR: Automation Team
-    LASTEDIT: November 9th, 2017
+    Contibutor: Morten Lerudjordet
+    LASTEDIT: February 13th, 2019
 #>
 
 Param (
@@ -100,7 +95,7 @@ try
     # Variables
     $LogAnalyticsAgentExtensionName = "OMSExtension"
     $LAagentApiVersion = "2015-06-15"
-    $LAupdateMgmtApiVersion = "2017-04-26-preview"
+    $LAsolutionUpdateApiVersion = "2017-04-26-preview"
 
     # Authenticate to Azure
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
@@ -301,6 +296,7 @@ try
     if ($Null -eq $Onboarded)
     {
         # ARM template to deploy log analytics agent extension for both Linux and Windows
+        # URL of template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
         $ArmTemplate = @'
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
@@ -449,9 +445,16 @@ try
     {
         if (-not ($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
         {
+            # Original saved search query: "Heartbeat | where Computer in~ (\"\") or VMUUID in~ (\"\") | distinct Computer"
+
+            # Query below will remove all machines from update management
+            #$NewQuery = "Heartbeat | where Computer in~ ("") or VMUUID in~ ("") | distinct Computer"
+
+            # Make sure to only add into Computer block
             $NewQuery = $SolutionGroup.Properties.Query.Replace('(', "(`"$VMName`", ")
 
             # ARM template to deploy log analytics agent extension for both Linux and Windows
+            # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
             $ArmTemplate = @'
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
@@ -538,7 +541,7 @@ try
             $QueryDeploymentParams.Add("query", $NewQuery)
             $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
             $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
-            $QueryDeploymentParams.Add("apiVersion", $LAupdateMgmtApiVersion)
+            $QueryDeploymentParams.Add("apiVersion", $LAsolutionUpdateApiVersion)
 
             # Create deployment name
             $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
@@ -554,7 +557,7 @@ try
             else
             {
                 Write-Output -InputObject $ObjectOutPut
-                Write-Output -InputObject "VM: $VMName successfully added to update management"
+                Write-Output -InputObject "VM: $VMName successfully added to solution management: $SolutionType"
             }
 
             # Remove temp file with arm template
