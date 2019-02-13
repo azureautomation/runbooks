@@ -62,29 +62,18 @@
 Param (
     [Parameter(Mandatory = $True)]
     [String]
-    $VMName,
-
-    [Parameter(Mandatory = $True)]
-    [String]
-    $ResourceGroupName,
-
-    [Parameter(Mandatory = $False)]
-    [String]
     $VMSubscriptionId,
 
     [Parameter(Mandatory = $True)]
     [String]
-    $ExistingVMSubscriptionId,
+    $VMResourceGroupName,
 
     [Parameter(Mandatory = $True)]
     [String]
-    $ExistingVM,
+    $VMName,
 
     [Parameter(Mandatory = $True)]
-    [String]
-    $ExistingVMResourceGroup,
-
-    [Parameter(Mandatory = $True)]
+    [ValidateSet("Updates","ChangeTracking")]
     [String]
     $SolutionType,
 
@@ -97,10 +86,10 @@ try
     Write-Verbose -Message  "Starting Runbook at time: $(get-Date -format r). Running PS version: $($PSVersionTable.PSVersion)"
 
     $VerbosePreference = "silentlycontinue"
-    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights -ErrorAction Continue -ErrorVariable oErr
-    If ($oErr)
+    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+    if ($oErr)
     {
-        Write-Error -Message "Failed to load needed modules for Runbook, check that AzureRM.Automation and AzureRM.OperationalInsights is imported into Azure Automation" -ErrorAction Stop
+        Write-Error -Message "Failed to load needed modules for Runbook, check that AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute and AzureRM.Resources is imported into Azure Automation" -ErrorAction Stop
     }
     $VerbosePreference = "Continue"
 
@@ -108,105 +97,313 @@ try
     {
         throw ("Only a solution type of Updates or ChangeTracking is currently supported. These are case sensitive ")
     }
+    # Variables
+    $LogAnalyticsAgentExtensionName = "OMSExtension"
+    $LAagentApiVersion = "2015-06-15"
+    $LAupdateMgmtApiVersion = "2017-04-26-preview"
 
     # Authenticate to Azure
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
-    Add-AzureRmAccount `
+    $Null = Add-AzureRmAccount `
         -ServicePrincipal `
         -TenantId $ServicePrincipalConnection.TenantId `
         -ApplicationId $ServicePrincipalConnection.ApplicationId `
         -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint -ErrorAction Continue -ErrorVariable oErr
-    If ($oErr)
+    if ($oErr)
     {
         Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
     }
 
     # Set subscription to work against
     $SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
-    If ($oErr)
+    if ($oErr)
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
     }
 
-    if ([string]::IsNullOrEmpty($VMSubscriptionId))
+    if ($Null -eq $VMSubscriptionId)
     {
         # Use the same subscription as the Automation account if not passed in
-        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId
+        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
+        }
+        Write-Verbose -Message "Creating azure VM context using subscription: $($NewVMSubscriptionContext.Subscription.Name)"
+
     }
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId VMSubscriptionId
-
+        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to set azure context to subscription where VM is" -ErrorAction Stop
+        }
+        Write-Verbose -Message "Creating azure VM context using subscription: $($NewVMSubscriptionContext.Subscription.Name)"
         # Register Automation provider if it is not registered on the subscription
         $AutomationProvider = Get-AzureRMResourceProvider -ProviderNamespace Microsoft.Automation `
             -AzureRmContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
-        if ([string]::IsNullOrEmpty($AutomationProvider))
+        if ($Null -eq $AutomationProvider)
         {
-            Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
+            $ObjectOutPut = Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to register Microsoft.Automation provider in: $($NewVMSubscriptionContext.Name)" -ErrorAction Stop
+            }
         }
     }
 
-    # Get existing VM that is onboarded already to get information from it
-    $ExistingVMExtension = Get-AzureRmResource -ResourceId /subscriptions/$SubscriptionId/resourceGroups/$ExistingVMResourceGroup/providers/Microsoft.Compute/virtualMachines/$ExistingVM/extensions `
-        | Where-Object {$_.Properties.type -eq "MicrosoftMonitoringAgent"}
+    # TODO : Choose what subs to search for a VM with extension better
+    $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq "in.lab.azure" -or $_.Name -eq "in.lab.rogca"}
 
-    if ([string]::IsNullOrEmpty($ExistingVMExtension))
+    # Run through each until a VM with Microsoft Monitoring Agent is found
+    $SubscriptionCounter = 0
+    foreach ($AzureRMsubscription in $AzureRMsubscriptions)
     {
-        throw ("Cannot find monitoring agent on exiting machine " + $ExistingVM + " in resource group " + $ExistingVMResourceGroup )
+        # Set subscription context
+        $OnboardedVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $AzureRmSubscription.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to set azure context to subscription: $($AzureRmSubscription.Name)" -ErrorAction Continue
+            $oErr = $Null
+        }
+        if ($Null -ne $OnboardedVMSubscriptionContext)
+        {
+            # Find existing VM that is already onboarded to the solution.
+            $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
+
+            # Find VM to use as template
+            if ($Null -ne $VMExtensions)
+            {
+                Write-Verbose -Message "Found $($VMExtensions.Count) VM(s) with Microsoft Monitoring Agent installed"
+                # Break out of loop if VM with Microsoft Monitoring Agent installed is found in a subscription
+                break
+            }
+        }
+        $SubscriptionCounter++
+        if ($SubscriptionCounter -eq $AzureRmSubscriptions.Count)
+        {
+            Write-Error -Message "Did not find any VM with Microsoft Monitoring Agent already installed. Install at least one in a subscription the AA RunAs account has access to" -ErrorAction Stop
+        }
+    }
+    $VMCounter = 0
+    foreach ($VMExtension in $VMExtensions)
+    {
+        if ($Null -ne $VMExtension.Name -and $Null -ne $VMExtension.ResourceGroupName)
+        {
+            $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $VMExtension.ResourceGroupName -VMName ($VMExtension.Name).Split('/')[0] `
+                -AzureRmContext $OnboardedVMSubscriptionContext -Name ($VMExtension.Name).Split('/')[-1]
+        }
+        if ($Null -ne $ExistingVMExtension)
+        {
+            Write-Verbose -Message "Retrieved extension config from VM: $($ExistingVMExtension.VMName)"
+            # Found VM with Microsoft Monitoring Agent installed
+            break
+        }
+        $VMCounter++
+        if ($VMCounter -eq $VMExtensions.Count)
+        {
+            Write-Error -Message "Failed to retrieve extension config for Microsoft Monitoring Agent on VM" -ErrorAction Stop
+        }
     }
 
-    $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $ExistingVMResourceGroup  -VMName $ExistingVM `
-        -Name $ExistingVMExtension.Name -AzureRmContext $SubscriptionContext -ErrorAction SilentlyContinue
-
     # Check if the existing VM is already onboarded
-    $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
-    if ([string]::IsNullOrEmpty($PublicSettings.workspaceId))
+    if ($ExistingVMExtension.PublicSettings)
     {
-        throw ("This VM " + $ExistingVM + " is not onboarded. Please onboard first as it is used to collect information")
+        $PublicSettings = ConvertFrom-Json $ExistingVMExtension.PublicSettings
+        if ($Null -eq $PublicSettings.workspaceId)
+        {
+            Write-Error -Message "This VM: $($ExistingVMExtension.VMName) is not onboarded. Please onboard first as it is used to collect information" -ErrorAction Stop
+        }
+        else
+        {
+            Write-Verbose -Message "VM: $($ExistingVMExtension.VMName) is correctly onboarded and can be used as template to onboard: $VMName"
+        }
+    }
+    else
+    {
+        Write-Error -Message "Public settings for VM extension is empty" -ErrorAction Stop
     }
 
     # Get information about the workspace
-    $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext `
+    $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
         | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to retrieve Operational Insight workspace info" -ErrorAction Stop
+    }
+    if($Null -ne $WorkspaceInfo)
+    {
+        # Workspace information
+        $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
+        $WorkspaceName = $WorkspaceInfo.Name
+        $WorkspaceResourceId = $WorkspaceInfo.ResourceId
+    }
+    else
+    {
+        Write-Error -Message "Failed to retrieve Operational Insights Workspace information" -ErrorAction Stop
+    }
 
     # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
     $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
-        -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext
-
+        -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to retrieve Operational Insight saved groups info" -ErrorAction Stop
+    }
+    Write-Verbose -Message "Retrieving VM with following details: RG: $VMResourceGroupName, Name: $VMName, SubName: $($NewVMSubscriptionContext.Subscription.Name)"
     # Get details of the new VM to onboard.
-    $NewVM = Get-AzureRMVM -ResourceGroupName $ResourceGroupName -Name $VMName `
-        -AzureRmContext $NewVMSubscriptionContext
-    $VMName = $NewVM.Name
+    $NewVM = Get-AzureRMVM -ResourceGroupName $VMResourceGroupName -Name $VMName -Status `
+        -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr | Where-Object {$_.Statuses.code -match "running"}
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to retrieve VM status data for: $VMName" -ErrorAction Stop
+    }
 
-    # Workspace information
-    $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
-    $WorkspaceName = $WorkspaceInfo.Name
-    $WorkspaceResourceId = $WorkspaceInfo.ResourceId
+    # Verifiy that VM is up and running before installing extension
+    if($Null -eq $NewVM)
+    {
+        Write-Error -Message "VM: $($NewVM.Name) is not running and can therefore not install extension" -ErrorAction Stop
+    }
+    else
+    {
+        $NewVM = Get-AzureRMVM -ResourceGroupName $VMResourceGroupName -Name $VMName `
+        -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
+        }
+        if($Null -ne $NewVM)
+        {
+            # New VM information
+            $VMResourceGroupName = $NewVM.ResourceGroupName
+            $VMName = $NewVM.Name
+            $VMLocation = $NewVM.Location
+            $VMResourceId = $NewVM.Id
+            $VMIdentityRequired = $false
+        }
+        else
+        {
+            Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
+        }
 
-    # New VM information
-    $VMResourceGroupName = $NewVM.ResourceGroupName
-    $VMName = $NewVM.Name
-    $VMLocation = $NewVM.Location
-    $VMResourceId = $NewVM.Id
-    $VMIdentityRequired = $false
+    }
 
     # Check if the VM is already onboarded to the MMA Agent and skip if it is
-    $Onboarded = Get-AzureRmVMExtension -ResourceGroup $ResourceGroupName  -VMName $VMName `
-        -Name MicrosoftMonitoringAgent -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue
-
-    if ([string]::IsNullOrEmpty($Onboarded))
+    $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
+        -Name $LogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+    if ($oErr)
     {
+        Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+    }
+
+    if ($Null -eq $Onboarded)
+    {
+        # ARM template to deploy log analytics agent extension for both Linux and Windows
+        $ArmTemplate = @'
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmName": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "vmLocation": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "vmResourceId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "vmIdentityRequired": {
+            "defaultValue": "false",
+            "type": "Bool"
+        },
+        "workspaceName": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "workspaceId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "workspaceResourceId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "mmaExtensionName": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "apiVersion": {
+            "defaultValue": "2015-06-15",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "vmIdentity": {
+            "type": "SystemAssigned"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('vmName')]",
+            "apiVersion": "[parameters('apiVersion')]",
+            "location": "[parameters('vmLocation')]",
+            "identity": "[if(parameters('vmIdentityRequired'), variables('vmIdentity'), json('null'))]",
+            "resources": [
+                {
+                    "type": "extensions",
+                    "name": "[parameters('mmaExtensionName')]",
+                    "apiVersion": "[parameters('apiVersion')]",
+                    "location": "[parameters('vmLocation')]",
+                    "properties": {
+                        "publisher": "Microsoft.EnterpriseCloud.Monitoring",
+                        "type": "MicrosoftMonitoringAgent",
+                        "typeHandlerVersion": "1.0",
+                        "autoUpgradeMinorVersion": "true",
+                        "settings": {
+                            "workspaceId": "[parameters('workspaceId')]",
+                            "azureResourceId": "[parameters('vmResourceId')]",
+                            "stopOnMultipleConnections": "true"
+                        },
+                        "protectedSettings": {
+                            "workspaceKey": "[listKeys(parameters('workspaceResourceId'), parameters('apiVersion')).primarySharedKey]"
+                        }
+                    },
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'))]"
+                    ]
+                }
+            ]
+        }
+    ]
+}
+'@
+        # Create temporary file to store ARM template in
+        $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to ccreate temporary file for ARM template" -ErrorAction Stop
+        }
+        Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
+        }
+
         # Set up MMA agent information to onboard VM to the workspace
-        if ($NewVM.OSProfile.WindowsConfiguration -eq $null)
+        if ($Null -eq $NewVM.OSProfile.WindowsConfiguration)
         {
             $MMAExentsionName = "OmsAgentForLinux"
-            $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json"
         }
         else
         {
             $MMAExentsionName = "MicrosoftMonitoringAgent"
-            $MMATemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json"
         }
         $MMADeploymentParams = @{}
         $MMADeploymentParams.Add("vmName", $VMName)
@@ -217,32 +414,120 @@ try
         $MMADeploymentParams.Add("workspaceId", $PublicSettings.workspaceId)
         $MMADeploymentParams.Add("workspaceResourceId", $WorkspaceResourceId)
         $MMADeploymentParams.Add("mmaExtensionName", $MMAExentsionName)
+        $MMADeploymentParams.Add("apiVersion", $LAagentApiVersion)
 
         # Create deployment name
         $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
-        New-AzureRmResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateUri $MMATemplateLinkUri `
+        $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
             -Name $DeploymentName `
             -TemplateParameterObject $MMADeploymentParams `
-            -AzureRmContext $NewVMSubscriptionContext | Write-Verbose
-        Write-Output("VM " + $VMName + " successfully onboarded.")
+            -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Deployment of Log Analytics agent failed" -ErrorAction Stop
+        }
+        else
+        {
+            Write-Output -InputObject $ObjectOutPut
+            Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics agent"
+        }
+
+        # Remove temp file with arm template
+        Remove-Item -Path $TempFile.FullName -Force
     }
     else
     {
-        Write-Warning("The VM " + $VMName + " already has the MMA agent installed. Skipping this one.")
+        Write-Warning -Message "The VM: $VMName already has the Log Analytics agent installed."
     }
 
     # Update scope query if necessary
     $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
 
-    if (!([string]::IsNullOrEmpty($SolutionGroup)))
+    if ($Null -ne $SolutionGroup)
     {
-        if (!($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
+        if (-not ($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
         {
             $NewQuery = $SolutionGroup.Properties.Query.Replace('(', "(`"$VMName`", ")
-            $ComputerGroupQueryTemplateLinkUri = "https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/updateKQLScopeQueryV2.json"
 
+            # ARM template to deploy log analytics agent extension for both Linux and Windows
+            $ArmTemplate = @'
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "id": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "resourceName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "category": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "displayName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "query": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "functionAlias": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "etag": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "apiVersion": {
+            "defaultValue": "2017-04-26-preview",
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "apiVersion": "[parameters('apiVersion')]",
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "location": "[parameters('location')]",
+            "name": "[parameters('resourceName')]",
+            "id": "[parameters('id')]",
+            "properties": {
+                "displayname": "[parameters('displayName')]",
+                "category": "[parameters('category')]",
+                "query": "[parameters('query')]",
+                "functionAlias": "[parameters('functionAlias')]",
+                "etag": "[parameters('etag')]",
+                "tags": [
+                    {
+                        "Name": "Group", "Value": "Computer"
+                    }
+                ]
+            }
+        }
+    ]
+}
+'@
+            # Create temporary file to store ARM template in
+            $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to ccreate temporary file for ARM template" -ErrorAction Stop
+            }
+            Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
+            }
             # Add all of the parameters
             $QueryDeploymentParams = @{}
             $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
@@ -253,14 +538,27 @@ try
             $QueryDeploymentParams.Add("query", $NewQuery)
             $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
             $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
+            $QueryDeploymentParams.Add("apiVersion", $LAupdateMgmtApiVersion)
 
             # Create deployment name
             $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-            New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateUri $ComputerGroupQueryTemplateLinkUri `
+            $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `
                 -TemplateParameterObject $QueryDeploymentParams `
-                -AzureRmContext $SubscriptionContext | Write-Verbose
+                -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to add VM: $VMName to update deployment" -ErrorAction Stop
+            }
+            else
+            {
+                Write-Output -InputObject $ObjectOutPut
+                Write-Output -InputObject "VM: $VMName successfully added to update management"
+            }
+
+            # Remove temp file with arm template
+            Remove-Item -Path $TempFile.FullName -Force
         }
     }
 }
