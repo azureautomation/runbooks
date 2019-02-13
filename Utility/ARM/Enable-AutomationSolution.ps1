@@ -21,7 +21,7 @@
     The name subscription id where the new VM to onboard is located.
     This will default to the same one as the workspace if not specified. If you
     give a different subscription id then you need to make sure the RunAs account for
-    this automaiton account is added as a contributor to this subscription also.
+    this automation account is added as a contributor to this subscription also.
 
 .PARAMETER SolutionType
     Required. The name of the solution to onboard to this Automation account.
@@ -55,7 +55,7 @@
 #>
 
 Param (
-    [Parameter(Mandatory = $True)]
+    [Parameter(Mandatory = $False)]
     [String]
     $VMSubscriptionId,
 
@@ -68,7 +68,7 @@ Param (
     $VMName,
 
     [Parameter(Mandatory = $True)]
-    [ValidateSet("Updates","ChangeTracking")]
+    [ValidateSet("Updates", "ChangeTracking")]
     [String]
     $SolutionType,
 
@@ -92,10 +92,15 @@ try
     {
         throw ("Only a solution type of Updates or ChangeTracking is currently supported. These are case sensitive ")
     }
-    # Variables
+
+    #region Variables
+    ############################################################
+    #   Variables
+    ############################################################
     $LogAnalyticsAgentExtensionName = "OMSExtension"
     $LAagentApiVersion = "2015-06-15"
     $LAsolutionUpdateApiVersion = "2017-04-26-preview"
+    #endregion
 
     # Authenticate to Azure
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
@@ -144,13 +149,13 @@ try
             $ObjectOutPut = Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
-                Write-Error -Message "Failed to register Microsoft.Automation provider in: $($NewVMSubscriptionContext.Name)" -ErrorAction Stop
+                Write-Error -Message "Failed to register Microsoft.Automation provider in: $($NewVMSubscriptionContext.Subscription.Name)" -ErrorAction Stop
             }
         }
     }
 
-    # TODO : Choose what subs to search for a VM with extension better
-    $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq "in.lab.azure" -or $_.Name -eq "in.lab.rogca"}
+    # Will try to find an already onboarded VM in both AA subscription and VM subscription
+    $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name }
 
     # Run through each until a VM with Microsoft Monitoring Agent is found
     $SubscriptionCounter = 0
@@ -199,7 +204,7 @@ try
         $VMCounter++
         if ($VMCounter -eq $VMExtensions.Count)
         {
-            Write-Error -Message "Failed to retrieve extension config for Microsoft Monitoring Agent on VM" -ErrorAction Stop
+            Write-Error -Message "Failed to find an already onboarded VM with the Microsoft Monitoring Agent installed (Log Analytics) in subscription: $($NewVMSubscriptionContext.Subscription.Name), $($SubscriptionContext.Subscription.Nam)" -ErrorAction Stop
         }
     }
 
@@ -228,7 +233,7 @@ try
     {
         Write-Error -Message "Failed to retrieve Operational Insight workspace info" -ErrorAction Stop
     }
-    if($Null -ne $WorkspaceInfo)
+    if ($Null -ne $WorkspaceInfo)
     {
         # Workspace information
         $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
@@ -256,20 +261,20 @@ try
         Write-Error -Message "Failed to retrieve VM status data for: $VMName" -ErrorAction Stop
     }
 
-    # Verifiy that VM is up and running before installing extension
-    if($Null -eq $NewVM)
+    # Verify that VM is up and running before installing extension
+    if ($Null -eq $NewVM)
     {
         Write-Error -Message "VM: $($NewVM.Name) is not running and can therefore not install extension" -ErrorAction Stop
     }
     else
     {
         $NewVM = Get-AzureRMVM -ResourceGroupName $VMResourceGroupName -Name $VMName `
-        -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
         }
-        if($Null -ne $NewVM)
+        if ($Null -ne $NewVM)
         {
             # New VM information
             $VMResourceGroupName = $NewVM.ResourceGroupName
@@ -384,7 +389,7 @@ try
         $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
-            Write-Error -Message "Failed to ccreate temporary file for ARM template" -ErrorAction Stop
+            Write-Error -Message "Failed to create temporary file for ARM template" -ErrorAction Stop
         }
         Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
@@ -443,15 +448,17 @@ try
 
     if ($Null -ne $SolutionGroup)
     {
-        if (-not ($SolutionGroup.Properties.Query -match $VMName) -and $UpdateScopeQuery)
+        if (-not (($SolutionGroup.Properties.Query -match $NewVM.VMId) -and ($SolutionGroup.Properties.Query -match $NewVM.Name)) -and $UpdateScopeQuery)
         {
-            # Original saved search query: "Heartbeat | where Computer in~ (\"\") or VMUUID in~ (\"\") | distinct Computer"
+            # Original saved search query:
+            # $NewQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"
 
-            # Query below will remove all machines from update management
-            #$NewQuery = "Heartbeat | where Computer in~ ("") or VMUUID in~ ("") | distinct Computer"
-
-            # Make sure to only add into Computer block
-            $NewQuery = $SolutionGroup.Properties.Query.Replace('(', "(`"$VMName`", ")
+            # Make sure to only add VM id into VMUUID block, the same as is done by adding through the portal
+            if ($SolutionGroup.Properties.Query -match 'VMUUID')
+            {
+                # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
+                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$($NewVM.VMId)`",")
+            }
 
             # ARM template to deploy log analytics agent extension for both Linux and Windows
             # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
@@ -524,7 +531,7 @@ try
             $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
-                Write-Error -Message "Failed to ccreate temporary file for ARM template" -ErrorAction Stop
+                Write-Error -Message "Failed to create temporary file for ARM template" -ErrorAction Stop
             }
             Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
