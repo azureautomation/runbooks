@@ -11,17 +11,17 @@
     new VM to the same Log Analytics workspace and Automation Account.
     This Runbook needs to be run from the Automation account that you wish to connect the new VM to.
 
-.PARAMETER VMName
-    Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
-
-.PARAMETER VMResourceGroupName
-    Required. The name of the resource group that the VM is a member of.
-
 .PARAMETER VMSubscriptionId
     The name subscription id where the new VM to onboard is located.
     This will default to the same one as the workspace if not specified. If you
     give a different subscription id then you need to make sure the RunAs account for
     this automation account is added as a contributor to this subscription also.
+
+.PARAMETER VMResourceGroupName
+    Required. The name of the resource group that the VM is a member of.
+
+.PARAMETER VMName
+    Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
 
 .PARAMETER SolutionType
     Required. The name of the solution to onboard to this Automation account.
@@ -156,7 +156,7 @@ try
     }
 
     # Will try to find an already onboarded VM in both AA subscription and VM subscription
-    $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name }
+    $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name}
 
     # Run through each until a VM with Microsoft Monitoring Agent is found
     $SubscriptionCounter = 0
