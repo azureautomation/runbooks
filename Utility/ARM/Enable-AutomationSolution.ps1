@@ -53,7 +53,6 @@
     Contibutor: Morten Lerudjordet
     LASTEDIT: February 13th, 2019
 #>
-
 Param (
     [Parameter(Mandatory = $False)]
     [String]

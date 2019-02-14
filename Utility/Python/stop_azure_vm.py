@@ -70,7 +70,10 @@ class StopVMThread(threading.Thread):
         self.vm_name = vm_name
     def run(self):
         print "Stopping " + self.vm_name + " in resource group " + self.resource_group
+        sys.stdout.flush()
         stop_vm(self.resource_group, self.vm_name)
+        print "Stopped " + self.vm_name + " in resource group " + self.resource_group
+        sys.stdout.flush()
 
 def stop_vm(resource_group, vm_name):
     """ Stops a vm in the specified resource group """
@@ -128,7 +131,7 @@ for group in groups:
     vms = compute_client.virtual_machines.list(group.name)
     for vm in vms:
         vm_detail = compute_client.virtual_machines.get(group.name, vm.name, expand='instanceView')
-        if vm_detail.instance_view.statuses[1].code == 'PowerState/deallocated':
+        if vm_detail.instance_view.statuses[1].code == 'PowerState/running':
             stop_vm_thread = StopVMThread(group.name, vm.name)
             stop_vm_thread.start()
             vm_threads_list.append(stop_vm_thread)

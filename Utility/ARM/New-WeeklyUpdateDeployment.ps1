@@ -82,7 +82,7 @@ Add-AzureRmAccount `
 Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID  | Write-Verbose 
 
 # Find out the resource group and account name
-$AutomationResource = Find-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 foreach ($Automation in $AutomationResource)
 {
     $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue

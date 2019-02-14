@@ -2,6 +2,10 @@
 .SYNOPSIS 
     This Azure Automation runbook imports the latest version of the Azure modules from the PowerShell Gallery.
 
+    *** NOTE: Since the Update Azure Modules runbook has been open-sourced, there is no reason to use
+    the Update-AzureModule.ps1 runbook in most contexts anymore. Instead, consider invoking or scheduling
+    the Update Azure Modules runbook directly. You can find more info here: https://aka.ms/UpdateAzureModules.
+
 .DESCRIPTION
     This Azure Automation runbook imports the latest version of the Azure modules from the PowerShell Gallery.
     It requires that this runbook be run from the automation service and that the RunAs account is enabled on the 
@@ -19,20 +23,23 @@
     Optional. A PowerShell HashTable or a JSON dictionary which contains module version overrides. Please be
     careful of version incompatibility between modules when overriding module versions.
 
+.PARAMETER AzureEnvironment
+    Optional. The name of the target Azure environment (one of the values returned by 'Get-AzureRmEnvironment | select Name').
+
       
 .EXAMPLE
     Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount
 
 .EXAMPLE
-    Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides @{'Azure'="4.0.2"; 'Azure.Storage'="3.0.2"; 'AzureRM.Profile'="3.0.1"; 'AzureRM.Automation'="3.0.1"; 'AzureRM.Compute'="3.0.1"; 'AzureRM.Resources' = "4.0.1"; 'AzureRM.Sql' = "3.0.1"; 'AzureRM.Storage'="3.0.2"}
+    Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides @{'Azure'="4.0.2"; 'Azure.Storage'="3.0.2"; 'AzureRM.Profile'="3.0.1"; 'AzureRM.Automation'="3.0.1"; 'AzureRM.Compute'="3.0.1"; 'AzureRM.Resources' = "4.0.1"; 'AzureRM.Sql' = "3.0.1"; 'AzureRM.Storage'="3.0.2"} -AzureEnvironment 'AzureCloud'
 
 .EXAMPLE
     Update-AzureModule -AutomationResourceGroup contoso -AutomationAccountName contosoaccount -ModuleVersionOverrides '{"Azure" : "4.0.2", "AzureRM.Sql" : "3.0.1", "AzureRM.Automation" : "3.0.1", "Azure.Storage" : "3.0.2", "AzureRM.Resources" : "4.0.1", "AzureRM.Storage" : "3.0.2", "AzureRM.Compute" : "3.0.1", "AzureRM.Profile" : "3.0.1"}'
 
 
 .NOTES
-    AUTHOR: Automation Team
-    LASTEDIT: Feb 17th, 2017 
+    AUTHOR: Automation Team, Chase Dafnis
+    LASTEDIT: Nov 6th, 2018 
 #>
 Param
 (
@@ -43,8 +50,17 @@ Param
     [String] $AutomationAccount,
 
     [Parameter(Mandatory=$False)]
-    [object] $ModuleVersionOverrides
+    [object] $ModuleVersionOverrides,
+
+    [Parameter(Mandatory=$False)]
+    [String] $AzureEnvironment = 'AzureCloud'
     )
+
+$warningMessage = 'Since the Update Azure Modules runbook has been open-sourced, there is no reason to use ' +
+    'the Update-AzureModule.ps1 runbook in most contexts anymore. Instead, consider invoking or scheduling ' +
+    'the Update Azure Modules runbook directly. You can find more info here: https://aka.ms/UpdateAzureModules.'
+
+Write-Warning $warningMessage
 
 $versionOverrides = ""
 # Try to parse module version overrides
@@ -70,18 +86,21 @@ if ($ModuleVersionOverrides) {
 
 try
 {
+    # Pull Azure environment settings
+    $AzureEnvironmentSettings = Get-AzureRmEnvironment -Name $AzureEnvironment
+
     # Azure management uri
-    $ResourceAppIdURI = "https://management.core.windows.net/"
+    $ResourceAppIdURI = $AzureEnvironmentSettings.ActiveDirectoryServiceEndpointResourceId
 
     # Path to modules in automation container
     $ModulePath = "C:\Modules"
 
     # Login uri for Azure AD
-    $LoginURI = "https://login.windows.net/"
+    $LoginURI = $AzureEnvironmentSettings.ActiveDirectoryAuthority
 
-    # Find AzureRM.Automation module and load the Azure AD client library
-    $PathToAutomationModule = Get-ChildItem (Join-Path $ModulePath AzureRM.Automation) -Recurse
-    Add-Type -Path (Join-Path $PathToAutomationModule "Microsoft.IdentityModel.Clients.ActiveDirectory.dll")
+    # Find AzureRM.Profile module and load the Azure AD client library
+    $PathToProfileModule = Get-ChildItem (Join-Path $ModulePath AzureRM.Profile) -Recurse
+    Add-Type -Path (Join-Path $PathToProfileModule "Microsoft.IdentityModel.Clients.ActiveDirectory.dll")
 
     # Get RunAsConnection
     $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
@@ -104,7 +123,7 @@ try
  
     # Create a runbook job
     $JobId = [GUID]::NewGuid().ToString()
-    $URI =  “https://management.azure.com/subscriptions/$SubscriptionId/"`
+    $URI =  "$($AzureEnvironmentSettings.ResourceManagerUrl)subscriptions/$SubscriptionId/"`
          +"resourceGroups/$($AutomationResourceGroup)/providers/Microsoft.Automation/"`
          +"automationAccounts/$AutomationAccount/jobs/$($JobId)?api-version=2015-10-31"
  
@@ -117,6 +136,7 @@ try
                    "name":"Update-AutomationAzureModulesForAccount"
                },
                "parameters":{
+                    "AzureEnvironment":"$AzureEnvironment",
                     "ResourceGroupName":"$AutomationResourceGroup",
                     "AutomationAccountName":"$AutomationAccount",
                     "ModuleVersionOverrides":"$versionOverrides"
@@ -132,6 +152,7 @@ try
                    "name":"Update-AutomationAzureModulesForAccount"
                },
                "parameters":{
+                    "AzureEnvironment":"$AzureEnvironment",
                     "ResourceGroupName":"$AutomationResourceGroup",
                     "AutomationAccountName":"$AutomationAccount"
                }

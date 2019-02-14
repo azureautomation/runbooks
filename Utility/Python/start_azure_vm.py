@@ -71,7 +71,10 @@ class StartVMThread(threading.Thread):
         self.vm_name = vm_name
     def run(self):
         print "Starting " + self.vm_name + " in resource group " + self.resource_group
+        sys.stdout.flush()
         start_vm(self.resource_group, self.vm_name)
+        print "Started " + self.vm_name + " in resource group " + self.resource_group
+        sys.stdout.flush()
 
 def start_vm(resource_group, vm_name):
     """ Starts a vm in the specified resource group """
