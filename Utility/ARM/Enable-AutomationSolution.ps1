@@ -88,11 +88,6 @@ try
     }
     $VerbosePreference = "Continue"
 
-    if ($SolutionType -cne "Updates" -and $SolutionType -cne "ChangeTracking")
-    {
-        throw ("Only a solution type of Updates or ChangeTracking is currently supported. These are case sensitive ")
-    }
-
     #region Variables
     ############################################################
     #   Variables
