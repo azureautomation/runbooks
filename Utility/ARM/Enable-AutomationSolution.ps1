@@ -93,8 +93,10 @@ try
     #   Variables
     ############################################################
     $LogAnalyticsAgentExtensionName = "OMSExtension"
-    $MMAApiVersion = "2015-06-15"
+    $MMAApiVersion = "2018-10-01"
+    $WorkspacesApiVersion = "2017-04-26-preview"
     $SolutionApiVersion = "2017-04-26-preview"
+
     #endregion
 
     # Authenticate to Azure
@@ -294,10 +296,19 @@ try
 
     # Check if the VM is already onboarded to the MMA Agent and skip if it is
     $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
-        -Name $LogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        -Name $LogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
     if ($oErr)
     {
-        Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+        if($oErr.Exception.Message -match "ResourceNotFound")
+        {
+            # VM does not have OMS extension installed
+            $Onboarded = $Null
+        }
+        else
+        {
+            Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+        }
+
     }
 
     if ($Null -eq $Onboarded)
@@ -352,6 +363,10 @@ try
             "defaultValue": "2015-06-15",
             "type": "String"
         },
+        "workspacesApiVersion": {
+            "defaultValue": "2017-04-26-preview",
+            "type": "String"
+        },
         "OStype": {
             "defaultValue": "",
             "type": "String"
@@ -389,7 +404,7 @@ try
                             "stopOnMultipleConnections": "true"
                         },
                         "protectedSettings": {
-                            "workspaceKey": "[listKeys(parameters('workspaceResourceId'), parameters('apiVersion')).primarySharedKey]",
+                            "workspaceKey": "[listKeys(parameters('workspaceResourceId'), parameters('workspacesApiVersion')).primarySharedKey]",
                             "azureResourceId": "[parameters('vmResourceId')]"
                         }
                     },
@@ -460,7 +475,11 @@ try
             "type": "String"
         },
         "apiVersion": {
-            "defaultValue": "2015-06-15",
+            "defaultValue": "2018-10-01",
+            "type": "String"
+        },
+        "workspacesApiVersion": {
+            "defaultValue": "2017-04-26-preview",
             "type": "String"
         },
         "OStype": {
@@ -501,7 +520,7 @@ try
                             "stopOnMultipleConnections": "true"
                         },
                         "protectedSettings": {
-                            "workspaceKey": "[listKeys(parameters('workspaceResourceId'), parameters('apiVersion')).primarySharedKey]"
+                            "workspaceKey": "[listKeys(parameters('workspaceResourceId'), parameters('workspacesApiVersion')).primarySharedKey]"
                         }
                     },
                     "dependsOn": [
@@ -540,6 +559,7 @@ try
         $MMADeploymentParams.Add("workspaceResourceId", $WorkspaceResourceId)
         $MMADeploymentParams.Add("mmaExtensionName", $MMAExentsionName)
         $MMADeploymentParams.Add("apiVersion", $MMAApiVersion)
+        $MMADeploymentParams.Add("workspacesApiVersion", $WorkspacesApiVersion)
         $MMADeploymentParams.Add("OStype", $MMAOStype)
         $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
