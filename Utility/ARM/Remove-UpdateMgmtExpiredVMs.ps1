@@ -17,6 +17,7 @@ try
     $LogAnalyticsAgentExtensionName = "OMSExtension"
     $LAagentApiVersion = "2015-06-15"
     $LAsolutionUpdateApiVersion = "2017-04-26-preview"
+    $SolutionType = "Updates"
     #endregion
 
     # Authenticate to Azure
@@ -31,7 +32,17 @@ try
         Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
     }
 
-    $AzureRmSubscriptions = Get-AzureRmSubscription
+    # Set subscription to work against
+    $SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
+    }
+
+    # Get all VMs AA account has read access to
+    $AllAzureVMs = Get-AzureRmSubscription |
+        Foreach-object { $Context = Set-AzureRmContext -SubscriptionId $_.SubscriptionId;Get-AzureRmVM -AzureRmContext $Context} |
+        Select-Object -Property ResourceGroupName, Name, VmId
 
     # Get information about the workspace
     $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
@@ -64,16 +75,21 @@ try
     $UpdatesQuery = $SolutionGroup.Properties.Query
 
     # Get all VMs from Computer and VMUUID  in Query
-    $VmIds = (((Select-String -InputObject $UpdatesQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_}
-    $VmNames = (((Select-String -InputObject $UpdatesQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_}
+    $VmIds = (((Select-String -InputObject $UpdatesQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l="VmId";e={$_}}
+    $VmNames = (((Select-String -InputObject $UpdatesQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l="Name";e={$_}}
 
+    $Test = $AllAzureVMs
+    # Get VM that are no longer alive
+    $RemovedVmIds = $AllAzureVMs | Where-Object {$VmIds.VmId -notcontains $_.VmId}
+    $RemovedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $Test -Property VmId -PassThru | Where-Object {$_.SideIndicator -eq "<="}
+    $RemovedVms = $AllAzureVMs | Where-Object {$VmNames -contains $_.Name} | Select-Object -Property SubscriptionId, Name, VmId
     # Fetch all VMs by their ID's and check if they are still in use
-    foreach ($VmId in $VmIds)
+    foreach ($RemovedVmId in $RemovedVmIds)
     {
 
     }
     # Fetch all VMs by their Names and check if they are still in use
-    foreach ($VmName in $VmNames)
+    foreach ($RemovedVm in $RemovedVms)
     {
 
     }
