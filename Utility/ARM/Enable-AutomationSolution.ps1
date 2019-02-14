@@ -96,7 +96,6 @@ try
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
     $SolutionApiVersion = "2017-04-26-preview"
-
     #endregion
 
     # Authenticate to Azure
