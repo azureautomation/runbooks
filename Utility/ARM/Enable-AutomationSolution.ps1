@@ -139,7 +139,7 @@ try
         $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
-            Write-Error -Message "Failed to set azure context to subscription where VM is" -ErrorAction Stop
+            Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop
         }
         Write-Verbose -Message "Creating azure VM context using subscription: $($NewVMSubscriptionContext.Subscription.Name)"
         # Register Automation provider if it is not registered on the subscription
@@ -156,59 +156,66 @@ try
     }
 
     # Will try to find an already onboarded VM in both AA subscription and VM subscription
+    # TODO: More depth on the subscription the logic uses to find an existing VM with OMSExtension installed on
     $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name}
 
-    # Run through each until a VM with Microsoft Monitoring Agent is found
-    $SubscriptionCounter = 0
-    foreach ($AzureRMsubscription in $AzureRMsubscriptions)
+    if($Null -ne $AzureRmSubscriptions)
     {
-        # Set subscription context
-        $OnboardedVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $AzureRmSubscription.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
-        if ($oErr)
+        # Run through each until a VM with Microsoft Monitoring Agent is found
+        $SubscriptionCounter = 0
+        foreach ($AzureRMsubscription in $AzureRMsubscriptions)
         {
-            Write-Error -Message "Failed to set azure context to subscription: $($AzureRmSubscription.Name)" -ErrorAction Continue
-            $oErr = $Null
-        }
-        if ($Null -ne $OnboardedVMSubscriptionContext)
-        {
-            # Find existing VM that is already onboarded to the solution.
-            $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
-
-            # Find VM to use as template
-            if ($Null -ne $VMExtensions)
+            # Set subscription context
+            $OnboardedVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $AzureRmSubscription.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
             {
-                Write-Verbose -Message "Found $($VMExtensions.Count) VM(s) with Microsoft Monitoring Agent installed"
-                # Break out of loop if VM with Microsoft Monitoring Agent installed is found in a subscription
-                break
+                Write-Error -Message "Failed to set azure context to subscription: $($AzureRmSubscription.Name)" -ErrorAction Continue
+                $oErr = $Null
+            }
+            if ($Null -ne $OnboardedVMSubscriptionContext)
+            {
+                # Find existing VM that is already onboarded to the solution.
+                $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
+
+                # Find VM to use as template
+                if ($Null -ne $VMExtensions)
+                {
+                    Write-Verbose -Message "Found $($VMExtensions.Count) VM(s) with Microsoft Monitoring Agent installed"
+                    # Break out of loop if VM with Microsoft Monitoring Agent installed is found in a subscription
+                    break
+                }
+            }
+            $SubscriptionCounter++
+            if ($SubscriptionCounter -eq $AzureRmSubscriptions.Count)
+            {
+                Write-Error -Message "Did not find any VM with Microsoft Monitoring Agent already installed. Install at least one in a subscription the AA RunAs account has access to" -ErrorAction Stop
             }
         }
-        $SubscriptionCounter++
-        if ($SubscriptionCounter -eq $AzureRmSubscriptions.Count)
+        $VMCounter = 0
+        foreach ($VMExtension in $VMExtensions)
         {
-            Write-Error -Message "Did not find any VM with Microsoft Monitoring Agent already installed. Install at least one in a subscription the AA RunAs account has access to" -ErrorAction Stop
+            if ($Null -ne $VMExtension.Name -and $Null -ne $VMExtension.ResourceGroupName)
+            {
+                $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $VMExtension.ResourceGroupName -VMName ($VMExtension.Name).Split('/')[0] `
+                    -AzureRmContext $OnboardedVMSubscriptionContext -Name ($VMExtension.Name).Split('/')[-1]
+            }
+            if ($Null -ne $ExistingVMExtension)
+            {
+                Write-Verbose -Message "Retrieved extension config from VM: $($ExistingVMExtension.VMName)"
+                # Found VM with Microsoft Monitoring Agent installed
+                break
+            }
+            $VMCounter++
+            if ($VMCounter -eq $VMExtensions.Count)
+            {
+                Write-Error -Message "Failed to find an already onboarded VM with the Microsoft Monitoring Agent installed (Log Analytics) in subscription: $($NewVMSubscriptionContext.Subscription.Name), $($SubscriptionContext.Subscription.Nam)" -ErrorAction Stop
+            }
         }
     }
-    $VMCounter = 0
-    foreach ($VMExtension in $VMExtensions)
+    else
     {
-        if ($Null -ne $VMExtension.Name -and $Null -ne $VMExtension.ResourceGroupName)
-        {
-            $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $VMExtension.ResourceGroupName -VMName ($VMExtension.Name).Split('/')[0] `
-                -AzureRmContext $OnboardedVMSubscriptionContext -Name ($VMExtension.Name).Split('/')[-1]
-        }
-        if ($Null -ne $ExistingVMExtension)
-        {
-            Write-Verbose -Message "Retrieved extension config from VM: $($ExistingVMExtension.VMName)"
-            # Found VM with Microsoft Monitoring Agent installed
-            break
-        }
-        $VMCounter++
-        if ($VMCounter -eq $VMExtensions.Count)
-        {
-            Write-Error -Message "Failed to find an already onboarded VM with the Microsoft Monitoring Agent installed (Log Analytics) in subscription: $($NewVMSubscriptionContext.Subscription.Name), $($SubscriptionContext.Subscription.Nam)" -ErrorAction Stop
-        }
+        Write-Error -Message "Make sure the AA RunAs account has contributor rights on all subscriptions in play." -ErrorAction Stop
     }
-
     # Check if the existing VM is already onboarded
     if ($ExistingVMExtension.PublicSettings)
     {
@@ -557,7 +564,7 @@ try
         else
         {
             Write-Output -InputObject $ObjectOutPut
-            Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics agent"
+            Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics MMA agent"
         }
 
         # Remove temp file with arm template
@@ -565,7 +572,7 @@ try
     }
     else
     {
-        Write-Warning -Message "The VM: $VMName already has the Log Analytics agent installed."
+        Write-Warning -Message "The VM: $VMName already has the Log Analytics MMA agent installed."
     }
 
     # Update scope query if necessary
