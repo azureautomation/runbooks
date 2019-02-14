@@ -155,7 +155,7 @@ try
     # TODO: More depth on the subscription the logic uses to find an existing VM with OMSExtension installed on
     $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name}
 
-    if($Null -ne $AzureRmSubscriptions)
+    if ($Null -ne $AzureRmSubscriptions)
     {
         # Run through each until a VM with Microsoft Monitoring Agent is found
         $SubscriptionCounter = 0
@@ -299,7 +299,7 @@ try
         -Name $LogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
     if ($oErr)
     {
-        if($oErr.Exception.Message -match "ResourceNotFound")
+        if ($oErr.Exception.Message -match "ResourceNotFound")
         {
             # VM does not have OMS extension installed
             $Onboarded = $Null
@@ -319,125 +319,22 @@ try
         {
             $MMAExentsionName = "OmsAgentForLinux"
             $MMAOStype = "OmsAgentForLinux"
-            $MMATypeHandlerVersion = "1.4"
-#Region Linux ARM Template
-            # URL of linux template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
-            $ArmTemplate = @'
-{
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-        "vmName": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "vmLocation": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "vmResourceId": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "vmIdentityRequired": {
-            "defaultValue": "false",
-            "type": "Bool"
-        },
-        "workspaceName": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "workspaceId": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "workspaceResourceId": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "mmaExtensionName": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "apiVersion": {
-            "defaultValue": "2015-06-15",
-            "type": "String"
-        },
-        "workspacesApiVersion": {
-            "defaultValue": "2017-04-26-preview",
-            "type": "String"
-        },
-        "OStype": {
-            "defaultValue": "",
-            "type": "String"
-        },
-        "typeHandlerVersion": {
-            "defaultValue": "",
-            "type": "String"
+            $MMATypeHandlerVersion = "1.7"
         }
-    },
-    "variables": {
-        "vmIdentity": {
-            "type": "SystemAssigned"
-        }
-    },
-    "resources": [
-        {
-            "type": "Microsoft.Compute/virtualMachines",
-            "name": "[parameters('vmName')]",
-            "apiVersion": "[parameters('apiVersion')]",
-            "location": "[parameters('vmLocation')]",
-            "identity": "[if(parameters('vmIdentityRequired'), variables('vmIdentity'), json('null'))]",
-            "resources": [
-                {
-                    "type": "extensions",
-                    "name": "[parameters('mmaExtensionName')]",
-                    "apiVersion": "[parameters('apiVersion')]",
-                    "location": "[parameters('vmLocation')]",
-                    "properties": {
-                        "publisher": "Microsoft.EnterpriseCloud.Monitoring",
-                        "type": "[parameters('OStype')]",
-                        "typeHandlerVersion": "[parameters('typeHandlerVersion')]",
-                        "autoUpgradeMinorVersion": "true",
-                        "settings": {
-                            "workspaceId": "[parameters('workspaceId')]",
-                            "stopOnMultipleConnections": "true"
-                        },
-                        "protectedSettings": {
-                            "workspaceKey": "[listKeys(parameters('workspaceResourceId'), parameters('workspacesApiVersion')).primarySharedKey]",
-                            "azureResourceId": "[parameters('vmResourceId')]"
-                        }
-                    },
-                    "dependsOn": [
-                        "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'))]"
-                    ]
-                }
-            ]
-        }
-    ]
-}
-'@
-#Endregion
-            # Create temporary file to store ARM template in
-            $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to create temporary file for Linux ARM template" -ErrorAction Stop
-            }
-            Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
-            }
-        }
-        elseif($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
+        elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
         {
             $MMAExentsionName = "MicrosoftMonitoringAgent"
             $MMAOStype = "MicrosoftMonitoringAgent"
             $MMATypeHandlerVersion = "1.0"
-#Region Windows ARM template
-            # URL of windows template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
-            $ArmTemplate = @'
+        }
+        else
+        {
+            Write-Error -Message "Could not determine OS of VM: $($NewVM.Name)"
+        }
+        #Region Windows & Linux ARM template
+        # URL of original windows template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
+        # URL of original linux template:   https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json
+        $ArmTemplate = @'
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
@@ -532,23 +429,19 @@ try
     ]
 }
 '@
-#Endregion
-            # Create temporary file to store ARM template in
-            $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to create temporary file for Windows ARM template" -ErrorAction Stop
-            }
-            Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
-            }
-        }
-        else
+        #Endregion
+        # Create temporary file to store ARM template in
+        $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
         {
-            Write-Error -Message "Could not determine OS of VM: $($NewVM.Name)"
+            Write-Error -Message "Failed to create temporary file for Windows ARM template" -ErrorAction Stop
         }
+        Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to write arm template for log analytics agent installation to temp file" -ErrorAction Stop
+        }
+
         $MMADeploymentParams = @{}
         $MMADeploymentParams.Add("vmName", $VMName)
         $MMADeploymentParams.Add("vmLocation", $VMLocation)
@@ -605,7 +498,7 @@ try
                 # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
                 $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$($NewVM.VmId)`",")
             }
-#Region Solution Onboarding ARM Template
+            #Region Solution Onboarding ARM Template
             # ARM template to deploy log analytics agent extension for both Linux and Windows
             # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
             $ArmTemplate = @'
@@ -673,7 +566,7 @@ try
     ]
 }
 '@
-#Endregion
+            #Endregion
             # Create temporary file to store ARM template in
             $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
