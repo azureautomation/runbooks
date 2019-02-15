@@ -79,66 +79,68 @@ try
     {
 
         $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
-
-        $SolutionQuery = $SolutionGroup.Properties.Query
-
-        if($Null -ne $SolutionQuery)
+        # Check that solution is deployed
+        if($Null -ne $SolutionGroup)
         {
-            # Get all VMs from Computer and VMUUID  in Query
-            $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l="VmId";e={$_}}
-            $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l="Name";e={$_}}
+            $SolutionQuery = $SolutionGroup.Properties.Query
 
-            # Get VM Ids that are no longer alive
-            if($Null -ne $VmIds)
+            if($Null -ne $SolutionQuery)
             {
-                $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
-            }
-            else
-            {
-                Write-Output -InputObject "Found no VM Ids in saved search indicating VMs onboarded to solution"
-            }
+                # Get all VMs from Computer and VMUUID  in Query
+                $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l="VmId";e={$_}}
+                $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l="Name";e={$_}}
 
-            # Get VM Names that are no longer alive
-            if($Null -ne $VmNames)
-            {
-                $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
-            }
-            else
-            {
-                Write-Output -InputObject "Found no VM Names in saved search indicating VMs onboarded to solution"
-            }
-
-            # Remove deleted VM Ids from saved search query
-            foreach($DeletedVmId in $DeletedVmIds)
-            {
-                if($Null -eq $UpdatedQuery)
+                # Get VM Ids that are no longer alive
+                if($Null -ne $VmIds)
                 {
-                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                    $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
                 }
                 else
                 {
-                    $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                    Write-Output -InputObject "There are no VM Ids in saved search"
                 }
 
-            }
-            # Remove deleted VM Names from saved search query
-            foreach($DeletedVm in $DeletedVms)
-            {
-                if($Null -eq $UpdatedQuery)
+                # Get VM Names that are no longer alive
+                if($Null -ne $VmNames)
                 {
-                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                    $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
                 }
                 else
                 {
-                    $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                    Write-Output -InputObject "There are no VM Names in saved search"
                 }
-            }
-            if ($Null -ne $UpdatedQuery)
-            {
+
+                # Remove deleted VM Ids from saved search query
+                foreach($DeletedVmId in $DeletedVmIds)
+                {
+                    if($Null -eq $UpdatedQuery)
+                    {
+                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                    }
+                    else
+                    {
+                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                    }
+
+                }
+                # Remove deleted VM Names from saved search query
+                foreach($DeletedVm in $DeletedVms)
+                {
+                    if($Null -eq $UpdatedQuery)
+                    {
+                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                    }
+                    else
+                    {
+                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                    }
+                }
+                if ($Null -ne $UpdatedQuery)
+                {
 #Region Solution Onboarding ARM Template
-                # ARM template to deploy log analytics agent extension for both Linux and Windows
-                # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
-                $ArmTemplate = @'
+                    # ARM template to deploy log analytics agent extension for both Linux and Windows
+                    # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
+                    $ArmTemplate = @'
 {
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
@@ -204,57 +206,62 @@ try
 }
 '@
 #Endregion
-                # Create temporary file to store ARM template in
-                $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
-                if ($oErr)
-                {
-                    Write-Error -Message "Failed to create temporary file for solution ARM template" -ErrorAction Stop
-                }
-                Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
-                if ($oErr)
-                {
-                    Write-Error -Message "Failed to write ARM template for solution to temp file" -ErrorAction Stop
-                }
-                # Add all of the parameters
-                $QueryDeploymentParams = @{}
-                $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
-                $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
-                $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
-                $QueryDeploymentParams.Add("category", $SolutionType)
-                $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
-                $QueryDeploymentParams.Add("query", $UpdatedQuery)
-                $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
-                $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
-                $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
+                    # Create temporary file to store ARM template in
+                    $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
+                    if ($oErr)
+                    {
+                        Write-Error -Message "Failed to create temporary file for solution ARM template" -ErrorAction Stop
+                    }
+                    Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
+                    if ($oErr)
+                    {
+                        Write-Error -Message "Failed to write ARM template for solution to temp file" -ErrorAction Stop
+                    }
+                    # Add all of the parameters
+                    $QueryDeploymentParams = @{}
+                    $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
+                    $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
+                    $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
+                    $QueryDeploymentParams.Add("category", $SolutionType)
+                    $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
+                    $QueryDeploymentParams.Add("query", $UpdatedQuery)
+                    $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
+                    $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
+                    $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
-                # Create deployment name
-                $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+                    # Create deployment name
+                    $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-                $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
-                    -Name $DeploymentName `
-                    -TemplateParameterObject $QueryDeploymentParams `
-                    -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-                if ($oErr)
-                {
-                    Write-Error -Message "Failed to update solution type: $SolutionType saved search" -ErrorAction Stop
+                    $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
+                        -Name $DeploymentName `
+                        -TemplateParameterObject $QueryDeploymentParams `
+                        -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                    if ($oErr)
+                    {
+                        Write-Error -Message "Failed to update solution type: $SolutionType saved search" -ErrorAction Stop
+                    }
+                    else
+                    {
+                        Write-Output -InputObject $ObjectOutPut
+                        Write-Output -InputObject "Successfully updated solution type: $SolutionType saved search"
+                    }
+
+                    # Remove temp file with arm template
+                    Remove-Item -Path $TempFile.FullName -Force
                 }
                 else
                 {
-                    Write-Output -InputObject $ObjectOutPut
-                    Write-Output -InputObject "Successfully updated solution type: $SolutionType saved search"
+                    Write-Output -InputObject "No retired VMs found, therefore no update to solution saved search will be done"
                 }
-
-                # Remove temp file with arm template
-                Remove-Item -Path $TempFile.FullName -Force
             }
             else
             {
-                Write-Output -InputObject "No retired VMs found, therefore no update to solution saved search will be done"
+                Write-Warning -Message "Failed to retrieve saved search query for solution: $SolutionType"
             }
         }
         else
         {
-            Write-Warning -Message "Failed to retrieve saved search query for solution: $SolutionType"
+            Write-Output -InputObject "Solution: $SolutionType is not deployed"
         }
     }
 }
