@@ -129,8 +129,25 @@ try
     ############################################################
     # Check if AA asset variable is set  for Log Analytics workspace subscription ID to use
     $LogAnalyticsSolutionSubscriptionId = Get-AutomationVariable -Name "LASolutionSubscriptionId" -ErrorAction SilentlyContinue
+    if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
+    {
+        Write-Output -InputObject "Using AA asset variable for Log Analytics subscription id"
+    }
+    else
+    {
+        Write-Output -InputObject "Will try to discover Log Analytics subscription id"
+    }
+
     # Check if AA asset variable is set  for Log Analytics workspace ID to use
     $LogAnalyticsSolutionWorkspaceId = Get-AutomationVariable -Name "LASolutionWorkspaceId" -ErrorAction SilentlyContinue
+    if ($Null -ne $LogAnalyticsSolutionWorkspaceId)
+    {
+        Write-Output -InputObject "Using AA asset variable for Log Analytics workspace id"
+    }
+    else
+    {
+        Write-Output -InputObject "Will try to discover Log Analytics workspace id"
+    }
 
     $LogAnalyticsAgentExtensionName = "OMSExtension"
     $MMAApiVersion = "2018-10-01"
@@ -304,6 +321,7 @@ try
             $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
             $WorkspaceName = $WorkspaceInfo.Name
             $WorkspaceResourceId = $WorkspaceInfo.ResourceId
+            $WorkspaceId = $WorkspaceInfo.CustomerId
             $WorkspaceLocation = $WorkspaceInfo.Location
         }
         else
@@ -334,6 +352,7 @@ try
             $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
             $WorkspaceName = $WorkspaceInfo.Name
             $WorkspaceResourceId = $WorkspaceInfo.ResourceId
+            $WorkspaceId = $WorkspaceInfo.CustomerId
             $WorkspaceLocation = $WorkspaceInfo.Location
         }
         else
@@ -412,12 +431,14 @@ try
             $MMAExentsionName = "OmsAgentForLinux"
             $MMAOStype = "OmsAgentForLinux"
             $MMATypeHandlerVersion = "1.7"
+            Write-Output -InputObject "Deploying MMA agent to Linux VM"
         }
         elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
         {
             $MMAExentsionName = "MicrosoftMonitoringAgent"
             $MMAOStype = "MicrosoftMonitoringAgent"
             $MMATypeHandlerVersion = "1.0"
+            Write-Output -InputObject "Deploying MMA agent to Windows VM"
         }
         else
         {
@@ -540,7 +561,7 @@ try
         $MMADeploymentParams.Add("vmResourceId", $VMResourceId)
         $MMADeploymentParams.Add("vmIdentityRequired", $VMIdentityRequired)
         $MMADeploymentParams.Add("workspaceName", $WorkspaceName)
-        $MMADeploymentParams.Add("workspaceId", $PublicSettings.workspaceId)
+        $MMADeploymentParams.Add("workspaceId", $WorkspaceId)
         $MMADeploymentParams.Add("workspaceResourceId", $WorkspaceResourceId)
         $MMADeploymentParams.Add("mmaExtensionName", $MMAExentsionName)
         $MMADeploymentParams.Add("apiVersion", $MMAApiVersion)
