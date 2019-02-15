@@ -10,15 +10,13 @@ try
     }
     $VerbosePreference = "Continue"
 
-    #region Variables
+#region Variables
     ############################################################
     #   Variables
     ############################################################
-    $LogAnalyticsAgentExtensionName = "OMSExtension"
-    $LAagentApiVersion = "2015-06-15"
-    $LAsolutionUpdateApiVersion = "2017-04-26-preview"
+    $SolutionApiVersion = "2017-04-26-preview"
     $SolutionTypes = @("Updates", "ChangeTracking")
-    #endregion
+#endregion
 
     # Authenticate to Azure
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
@@ -42,7 +40,7 @@ try
     # Get all VMs AA account has read access to
     $AllAzureVMs = Get-AzureRmSubscription |
         Foreach-object { $Context = Set-AzureRmContext -SubscriptionId $_.SubscriptionId;Get-AzureRmVM -AzureRmContext $Context} |
-        Select-Object -Property ResourceGroupName, Name, VmId
+        Select-Object -Property Name, VmId
 
     # Get information about the workspace
     $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
@@ -120,7 +118,7 @@ try
                     $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
                 }
             }
-            if ($UpdatedQuery)
+            if ($Null -ne $UpdatedQuery)
             {
 #Region Solution Onboarding ARM Template
                 # ARM template to deploy log analytics agent extension for both Linux and Windows
@@ -233,6 +231,10 @@ try
 
                 # Remove temp file with arm template
                 Remove-Item -Path $TempFile.FullName -Force
+            }
+            else
+            {
+                Write-Output -InputObject "No retired VMs found, therefore no update to solution saved search will be done"
             }
         }
         else
