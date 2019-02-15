@@ -152,7 +152,7 @@ try
     }
 
     # Will try to find an already onboarded VM in both AA subscription and VM subscription
-    # TODO: More depth on the subscription the logic uses to find an existing VM with OMSExtension installed on
+    # TODO: Find a way to make getting correct subscription with a VM using the correct Log Analytics workspace
     $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name}
 
     if ($Null -ne $AzureRmSubscriptions)
