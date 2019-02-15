@@ -293,7 +293,7 @@ try
         }
         # Get information about the workspace
         $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
-            | Where-Object {$_.CustomerId -eq $LogAnalyticsSolutionWorkspaceId}
+            | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve Operational Insight workspace information" -ErrorAction Stop
@@ -308,7 +308,7 @@ try
         }
         else
         {
-            Write-Error -Message "Failed to retrieve Operational Insights workspace information" -ErrorAction Stop
+            Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
         }
         # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
         $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName -ResourceGroupName $WorkspaceResourceGroupName `
