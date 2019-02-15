@@ -167,17 +167,7 @@ try
     }
 
     # set subscription of Log Analytic workspace used for Update Management and Change Tracking, else assume its in the same as the AA account
-    if ($Null -eq $LogAnalyticsSolutionSubscriptionId)
-    {
-        # Use the same subscription as the Automation account if not passed in
-        $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
-        if ($oErr)
-        {
-            Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
-        }
-        Write-Verbose -Message "Creating azure VM context using subscription: $($LASubscriptionContext.Subscription.Name)"
-    }
-    else
+    if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
     {
         # VM is in a different subscription so set the context to this subscription
         $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -277,9 +267,9 @@ try
         if ($Null -ne $WorkspaceInfo)
         {
             # Workspace information
+            $WorkspaceResourceId = $WorkspaceInfo.ResourceId
             $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
             $WorkspaceName = $WorkspaceInfo.Name
-            $WorkspaceResourceId = $WorkspaceInfo.ResourceId
             $WorkspaceLocation = $WorkspaceInfo.Location
         }
         else
@@ -287,7 +277,7 @@ try
             Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
         }
         # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-        $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName -ResourceGroupName $WorkspaceResourceGroupName `
+        $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
             -WorkspaceName $WorkspaceName -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
