@@ -1,6 +1,21 @@
+<#
+.SYNOPSIS
+    Maintanance Runbook to update and remove retired VMs from solution saved searched in Log Analytics.
+    Solutions supported are Update Management and Change Tracking.
+
+.DESCRIPTION
+    This Runbooks assumes both Azure Automation account and Log Analytics account is in the same subscription
+    For best effect schedule this Runbook to run on a recurring schedule to periodically search for retired VMs.
+
+.NOTES
+    AUTHOR: Morten Lerudjordet
+    LASTEDIT: February 13th, 2019
+#>
+#Requires -Version 5.0
 try
 {
-    Write-Verbose -Message  "Starting Runbook at time: $(get-Date -format r). Running PS version: $($PSVersionTable.PSVersion)"
+    $RunbookName = "Remove-RetiredVMsAutomationSolution"
+    Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
@@ -84,7 +99,7 @@ try
             }
 
             # Get VM Names that are no longer alive
-            if($Null -ne $VmIds)
+            if($Null -ne $VmNames)
             {
                 $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
             }
@@ -257,5 +272,5 @@ catch
 }
 finally
 {
-    Write-Verbose -Message  "Runbook ended at time: $(get-Date -format r)"
+    Write-Output -InputObject "Runbook: $RunbookName ended at time: $(get-Date -format r)"
 }
