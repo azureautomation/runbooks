@@ -3,9 +3,19 @@
     Maintanance Runbook to update and remove retired VMs from solution saved searched in Log Analytics.
     Solutions supported are Update Management and Change Tracking.
 
+    To set what Log Analytics workspace to use for Update and Change Tracking management (bypassing the logic that search for an existing onboarded VM),
+    create the following AA variable assets:
+        LASolutionSubscriptionId and populate with subscription ID of where the Log Analytics workspace is located
+        LASolutionWorkspaceId and populate with the Workspace Id of the Log Analytics workspace
+
 .DESCRIPTION
     This Runbooks assumes both Azure Automation account and Log Analytics account is in the same subscription
     For best effect schedule this Runbook to run on a recurring schedule to periodically search for retired VMs.
+
+    .COMPONENT
+    To predefine what Log Analytics workspace to use, create the following AA variable assets:
+        LASolutionSubscriptionId
+        LASolutionWorkspaceId
 
 .NOTES
     AUTHOR: Morten Lerudjordet
@@ -25,13 +35,33 @@ try
     }
     $VerbosePreference = "Continue"
 
-#region Variables
+    #region Variables
     ############################################################
     #   Variables
     ############################################################
+    $LogAnalyticsSolutionSubscriptionId = Get-AutomationVariable -Name "LASolutionSubscriptionId" -ErrorAction SilentlyContinue
+    if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
+    {
+        Write-Output -InputObject "Using AA asset variable for Log Analytics subscription id"
+    }
+    else
+    {
+        Write-Output -InputObject "Will try to discover Log Analytics subscription id"
+    }
+
+    # Check if AA asset variable is set  for Log Analytics workspace ID to use
+    $LogAnalyticsSolutionWorkspaceId = Get-AutomationVariable -Name "LASolutionWorkspaceId" -ErrorAction SilentlyContinue
+    if ($Null -ne $LogAnalyticsSolutionWorkspaceId)
+    {
+        Write-Output -InputObject "Using AA asset variable for Log Analytics workspace id"
+    }
+    else
+    {
+        Write-Output -InputObject "Will try to discover Log Analytics workspace id"
+    }
     $SolutionApiVersion = "2017-04-26-preview"
     $SolutionTypes = @("Updates", "ChangeTracking")
-#endregion
+    #endregion
 
     # Authenticate to Azure
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
@@ -54,7 +84,7 @@ try
 
     # Get all VMs AA account has read access to
     $AllAzureVMs = Get-AzureRmSubscription |
-        Foreach-object { $Context = Set-AzureRmContext -SubscriptionId $_.SubscriptionId;Get-AzureRmVM -AzureRmContext $Context} |
+        Foreach-object { $Context = Set-AzureRmContext -SubscriptionId $_.SubscriptionId; Get-AzureRmVM -AzureRmContext $Context} |
         Select-Object -Property Name, VmId
 
     # Get information about the workspace
@@ -75,23 +105,23 @@ try
     {
         Write-Error -Message "Failed to retrieve Operational Insight saved groups info" -ErrorAction Stop
     }
-    foreach($SolutionType in $SolutionTypes)
+    foreach ($SolutionType in $SolutionTypes)
     {
         Write-Output -InputObject "Processing solution type: $SolutionType"
         $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
         # Check that solution is deployed
-        if($Null -ne $SolutionGroup)
+        if ($Null -ne $SolutionGroup)
         {
             $SolutionQuery = $SolutionGroup.Properties.Query
 
-            if($Null -ne $SolutionQuery)
+            if ($Null -ne $SolutionQuery)
             {
                 # Get all VMs from Computer and VMUUID  in Query
-                $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l="VmId";e={$_}}
-                $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l="Name";e={$_}}
+                $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_}}
+                $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_}}
 
                 # Get VM Ids that are no longer alive
-                if($Null -ne $VmIds)
+                if ($Null -ne $VmIds)
                 {
                     $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
                 }
@@ -101,7 +131,7 @@ try
                 }
 
                 # Get VM Names that are no longer alive
-                if($Null -ne $VmNames)
+                if ($Null -ne $VmNames)
                 {
                     $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
                 }
@@ -111,9 +141,9 @@ try
                 }
 
                 # Remove deleted VM Ids from saved search query
-                foreach($DeletedVmId in $DeletedVmIds)
+                foreach ($DeletedVmId in $DeletedVmIds)
                 {
-                    if($Null -eq $UpdatedQuery)
+                    if ($Null -eq $UpdatedQuery)
                     {
                         $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                     }
@@ -124,9 +154,9 @@ try
 
                 }
                 # Remove deleted VM Names from saved search query
-                foreach($DeletedVm in $DeletedVms)
+                foreach ($DeletedVm in $DeletedVms)
                 {
-                    if($Null -eq $UpdatedQuery)
+                    if ($Null -eq $UpdatedQuery)
                     {
                         $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
                     }
@@ -137,7 +167,7 @@ try
                 }
                 if ($Null -ne $UpdatedQuery)
                 {
-#Region Solution Onboarding ARM Template
+                    #Region Solution Onboarding ARM Template
                     # ARM template to deploy log analytics agent extension for both Linux and Windows
                     # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
                     $ArmTemplate = @'
@@ -205,7 +235,7 @@ try
     ]
 }
 '@
-#Endregion
+                    #Endregion
                     # Create temporary file to store ARM template in
                     $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
