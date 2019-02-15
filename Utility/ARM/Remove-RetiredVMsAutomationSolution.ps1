@@ -77,7 +77,7 @@ try
     }
     foreach($SolutionType in $SolutionTypes)
     {
-
+        Write-Output -InputObject "Processing solution type: $SolutionType"
         $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
         # Check that solution is deployed
         if($Null -ne $SolutionGroup)
