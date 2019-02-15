@@ -3,8 +3,13 @@
     This sample automation runbook onboards an Azure VM for either the Update or ChangeTracking (which includes Inventory) solution.
     It requires an existing Azure VM to already be onboarded to the solution as it uses this information to onboard the
     new VM to the same Log Analytics workspace and Automation Account.
-    It will search for this existing VM in both the onboarding VMs subscription and in the AA subscription
-    This Runbook needs to be run from the Automation account, and it's RunAs account will need contributor access rights to the subscription the onboaring VM is in.
+    The Runbook will search for an existing VM in both the onboarding VMs subscription and in the AA subscription.
+    It is required to run this from an Automation account, and it's RunAs account will need contributor access rights to the subscription the onboaring VM is in.
+
+    To set what Log Analytics workspace to use for Update and Change Tracking management (bypassing the logic that search for an existing onboarded VM),
+    create the following AA variable assets:
+        LASolutionSubscriptionId and populate with subscription ID of where the Log Analytics workspace is located
+        LASolutionWorkspaceId and populate with the Workspace Id of the Log Analytics workspace
 
 .DESCRIPTION
     This sample automation runbook onboards an Azure VM for either the Update or ChangeTracking (which includes Inventory) solution.
