@@ -124,6 +124,19 @@ try
                 if ($Null -ne $VmIds)
                 {
                     $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
+                    # Remove deleted VM Ids from saved search query
+                    foreach ($DeletedVmId in $DeletedVmIds)
+                    {
+                        if ($Null -eq $UpdatedQuery)
+                        {
+                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                        }
+                        else
+                        {
+                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                        }
+
+                    }
                 }
                 else
                 {
@@ -134,37 +147,24 @@ try
                 if ($Null -ne $VmNames)
                 {
                     $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
+                    # Remove deleted VM Names from saved search query
+                    foreach ($DeletedVm in $DeletedVms)
+                    {
+                        if ($Null -eq $UpdatedQuery)
+                        {
+                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                        }
+                        else
+                        {
+                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                        }
+                    }
                 }
                 else
                 {
                     Write-Output -InputObject "There are no VM Names in saved search"
                 }
 
-                # Remove deleted VM Ids from saved search query
-                foreach ($DeletedVmId in $DeletedVmIds)
-                {
-                    if ($Null -eq $UpdatedQuery)
-                    {
-                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
-                    }
-                    else
-                    {
-                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
-                    }
-
-                }
-                # Remove deleted VM Names from saved search query
-                foreach ($DeletedVm in $DeletedVms)
-                {
-                    if ($Null -eq $UpdatedQuery)
-                    {
-                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
-                    }
-                    else
-                    {
-                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
-                    }
-                }
                 if ($Null -ne $UpdatedQuery)
                 {
                     #Region Solution Onboarding ARM Template
