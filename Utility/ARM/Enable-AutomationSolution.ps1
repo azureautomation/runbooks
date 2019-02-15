@@ -53,6 +53,7 @@
     Contibutor: Morten Lerudjordet
     LASTEDIT: February 13th, 2019
 #>
+#Requires -Version 5.0
 Param (
     [Parameter(Mandatory = $False)]
     [String]
@@ -330,7 +331,7 @@ try
         {
             Write-Error -Message "Could not determine OS of VM: $($NewVM.Name)"
         }
-        #Region Windows & Linux ARM template
+#Region Windows & Linux ARM template
         # URL of original windows template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaWindowsV3.json
         # URL of original linux template:   https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createMmaLinuxV3.json
         $ArmTemplate = @'
@@ -428,7 +429,7 @@ try
     ]
 }
 '@
-        #Endregion
+#Endregion
         # Create temporary file to store ARM template in
         $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
@@ -497,7 +498,7 @@ try
                 # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
                 $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$($NewVM.VmId)`",")
             }
-            #Region Solution Onboarding ARM Template
+#Region Solution Onboarding ARM Template
             # ARM template to deploy log analytics agent extension for both Linux and Windows
             # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
             $ArmTemplate = @'
@@ -565,7 +566,7 @@ try
     ]
 }
 '@
-            #Endregion
+#Endregion
             # Create temporary file to store ARM template in
             $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)

@@ -41,6 +41,7 @@
     Contibutor: Morten Lerudjordet
     LASTEDIT: February 13th, 2019
 #>
+#Requires -Version 5.0
 Param (
     [Parameter(Mandatory = $False)]
     [Object]$WebHookData
