@@ -599,7 +599,7 @@ try
                 -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
-                Write-Error -Message "Failed to add VM: $VMName to update deployment" -ErrorAction Stop
+                Write-Error -Message "Failed to add VM: $VMName to solution: $SolutionType" -ErrorAction Stop
             }
             else
             {
