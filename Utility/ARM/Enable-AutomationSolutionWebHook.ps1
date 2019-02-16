@@ -238,10 +238,23 @@ try
     # Check if Log Analytics workspace is set through a AA asset
     if ($Null -eq $LogAnalyticsSolutionWorkspaceId)
     {
-        # Use subscription defined in an AA variable asset, if not exist try to find a VM with extension installed from AA subscription or from the subscription of the onboarding VM
-        $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name} |
-            # Sort array so VM subscription will be search first for exiting onboarded VMs
-        Sort-Object -Property {$NewVMSubscriptionContext.Subscription.Name}
+        # Set order to sort subscriptions by
+        $SortOrder = @($NewVMSubscriptionContext.Subscription.Name, $SubscriptionContext.Subscription.Name)
+        # Get all subscriptions the AA account has access to
+        $AzureRmSubscriptions = Get-AzureRmSubscription |
+            # Sort array so VM subscription will be search first for exiting onboarded VMs, then it will try AA subscription before moving on to others it has access to
+        Sort-Object -Property {
+            $SortRank = $SortOrder.IndexOf($($_.Name.ToLower()))
+            if ($SortRank -ne -1)
+            {
+                $SortRank
+            }
+            else
+            {
+                [System.Double]::PositiveInfinity
+            }
+        }
+
         if ($Null -ne $AzureRmSubscriptions)
         {
             # Run through each until a VM with Microsoft Monitoring Agent is found
