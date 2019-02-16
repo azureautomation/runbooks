@@ -24,7 +24,7 @@
 
 .PARAMETER VMSubscriptionId
     The name subscription id where the new VM to onboard is located.
-    This will default to the same one as the AA account is located in if not specified. If you
+    This will default to the same one as the Azure Automation account is located in if not specified. If you
     give a different subscription id then you need to make sure the RunAs account for
     this automation account is added as a contributor to this subscription also.
 
@@ -199,7 +199,9 @@ try
     if ($Null -eq $LogAnalyticsSolutionWorkspaceId)
     {
         # Use subscription defined in an AA variable asset, if not exist try to find a VM with extension installed from AA subscription or from the subscription of the onboarding VM
-        $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name}
+        $AzureRmSubscriptions = Get-AzureRmSubscription | Where-Object {$_.Name -eq $NewVMSubscriptionContext.Subscription.Name -or $_.Name -eq $SubscriptionContext.Subscription.Name} |
+            # Sort array so VM subscription will be search first for exiting onboarded VMs
+        Sort-Object -Property {$NewVMSubscriptionContext.Subscription.Name}
         if ($Null -ne $AzureRmSubscriptions)
         {
             # Run through each until a VM with Microsoft Monitoring Agent is found
