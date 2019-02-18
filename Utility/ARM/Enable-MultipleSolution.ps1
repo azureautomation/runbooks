@@ -150,7 +150,6 @@ try
             Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
         }
         Write-Verbose -Message "Creating azure VM context using subscription: $($NewVMSubscriptionContext.Subscription.Name)"
-
     }
     else
     {
@@ -161,6 +160,18 @@ try
             Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop
         }
         Write-Verbose -Message "Creating azure VM context using subscription: $($NewVMSubscriptionContext.Subscription.Name)"
+    }
+
+    # set subscription of Log Analytic workspace used for Update Management and Change Tracking, else assume its in the same as the AA account
+    if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
+    {
+        # VM is in a different subscription so set the context to this subscription
+        $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to set azure context to subscription where Log Analytics workspace is" -ErrorAction Stop
+        }
+        Write-Verbose -Message "Creating azure VM context using subscription: $($LASubscriptionContext.Subscription.Name)"
     }
 
     # Find out the resource group and account name
