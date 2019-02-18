@@ -57,21 +57,15 @@ Param (
     [String]
     $VMSubscriptionId,
 
-    [Parameter(
-        Mandatory = $True
-    )]
+    [Parameter(Mandatory = $True)]
     [String]
     $VMResourceGroup,
 
-    [Parameter(
-        Mandatory = $False
-    )]
+    [Parameter(Mandatory = $False)]
     [String]
     $VMName,
 
-    [Parameter(
-        Mandatory = $True
-    )]
+    [Parameter(Mandatory = $True)]
     [ValidateSet("Updates", "ChangeTracking")]
     [String]
     $SolutionType
@@ -171,7 +165,7 @@ try
         {
             Write-Error -Message "Failed to set azure context to subscription where Log Analytics workspace is" -ErrorAction Stop
         }
-        Write-Verbose -Message "Creating azure VM context using subscription: $($LASubscriptionContext.Subscription.Name)"
+        Write-Verbose -Message "Creating Log Analytics context using subscription: $($LASubscriptionContext.Subscription.Name)"
     }
 
     # Find out the resource group and account name
@@ -423,6 +417,7 @@ try
                         -AzureRmContext $SubscriptionContext -ErrorAction Stop
                     $Jobs.Add($VM.VMId, $Job)
                     # Submitted job successfully, exiting while loop
+                    Write-Verbose -Message "Added VM id: $($VM.VMId) to AA job"
                     break
                 }
                 catch
@@ -464,13 +459,20 @@ try
         }
         if ($ActiveJob.Status -eq "Completed")
         {
-            $VirutalMachineId = $RunningJob.VMId
-            if ($SolutionGroup)
+            if($Null -ne $RunningJob.VMId)
             {
-                if (-not ($SolutionGroup.Properties.Query -match $VirutalMachineId))
+                $VirutalMachineId = $RunningJob.VMId
+                if ($SolutionGroup)
                 {
-                    $MachineList += "`"$VirutalMachineId`", "
+                    if (-not ($SolutionGroup.Properties.Query -match $VirutalMachineId))
+                    {
+                        $MachineList += "`"$VirutalMachineId`", "
+                    }
                 }
+            }
+            else
+            {
+                Write-Warning -Message "Failed to retrieve VM Id stored in AA job"
             }
         }
         $JobsResults += $ActiveJob

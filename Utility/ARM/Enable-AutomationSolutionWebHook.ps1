@@ -232,7 +232,7 @@ try
         {
             Write-Error -Message "Failed to set azure context to subscription where Log Analytics workspace is" -ErrorAction Stop
         }
-        Write-Verbose -Message "Creating azure VM context using subscription: $($LASubscriptionContext.Subscription.Name)"
+        Write-Verbose -Message "Creating Log Analytics context using subscription: $($LASubscriptionContext.Subscription.Name)"
     }
 
     # Check if Log Analytics workspace is set through a AA asset
