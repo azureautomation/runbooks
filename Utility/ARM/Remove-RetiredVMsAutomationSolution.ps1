@@ -87,24 +87,41 @@ try
         Foreach-object { $Context = Set-AzureRmContext -SubscriptionId $_.SubscriptionId; Get-AzureRmVM -AzureRmContext $Context} |
         Select-Object -Property Name, VmId
 
-    # Get information about the workspace
-    $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-    if ($oErr)
+    if($Null -ne $LogAnalyticsSolutionWorkspaceId)
     {
-        Write-Error -Message "Failed to retrieve Operational Insight workspace info" -ErrorAction Stop
+        $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr |
+            Where-Object {$_.CustomerId -eq $LogAnalyticsSolutionWorkspaceId}
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to retrieve Log Analytic workspace info" -ErrorAction Stop
+        }
     }
-    if ($Null -eq $WorkspaceInfo)
+    else
     {
-        Write-Error -Message "Failed to retrieve Operational Insights Workspace information" -ErrorAction Stop
+        # Get information about the workspace
+        $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to retrieve Log Analytic workspace info" -ErrorAction Stop
+        }
+        if ($Null -eq $WorkspaceInfo -and $WorkspaceInfo.Count -gt 1)
+        {
+            Write-Error -Message "Failed to retrieve Log Analytic workspace information. Or multiple Log Analytic workspaces was returned" -ErrorAction Stop
+        }
     }
 
+
     # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-    $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
-        -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-    if ($oErr)
+    if($Null -ne $WorkspaceInfo)
     {
-        Write-Error -Message "Failed to retrieve Operational Insight saved groups info" -ErrorAction Stop
+        $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
+            -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to retrieve Operational Insight saved groups info" -ErrorAction Stop
+        }
     }
+
     foreach ($SolutionType in $SolutionTypes)
     {
         Write-Output -InputObject "Processing solution type: $SolutionType"
