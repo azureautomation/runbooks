@@ -22,29 +22,23 @@
     https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1. If this Runbook is
     not present, it will be automatically imported.
 
-    .COMPONENT
+.COMPONENT
     To predefine what Log Analytics workspace to use, create the following AA variable assets:
         LASolutionSubscriptionId
         LASolutionWorkspaceId
 
-.PARAMETER VMName
-    Optional. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
-    If this is not specified, all VMs in the resource group will be onboarded.
+.PARAMETER VMSubscriptionId
+    Optional. The name subscription id where the new VM to onboard is located.
+    This will default to the same one as the workspace if not specified. If you
+    give a different subscription id then you need to make sure the RunAs account for
+    this automation account is added as a contributor to this subscription also.
 
 .PARAMETER VMResourceGroup
     Required. The name of the resource group that the VM is a member of.
 
-.PARAMETER SubscriptionId
-    Optional. The name subscription id where the new VM to onboard is located.
-    This will default to the same one as the workspace if not specified. If you
-    give a different subscription id then you need to make sure the RunAs account for
-    this automaiton account is added as a contributor to this subscription also.
-
-.PARAMETER AlreadyOnboardedVM
-    Required. The name of the existing Azure VM that is already onboarded to the Updates or ChangeTracking solution
-
-.PARAMETER AlreadyOnboardedVMResourceGroup
-    Required. The name of resource group that the existing VM with the solution is a member of
+.PARAMETER VMName
+    Optional. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
+    If this is not specified, all VMs in the resource group will be onboarded.
 
 .PARAMETER SolutionType
     Required. The name of the solution to onboard to this Automation account.
