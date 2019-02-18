@@ -52,7 +52,7 @@
 #>
 #Requires -Version 5.0
 Param (
-    [Parameter(Mandatory = $False)]
+    [Parameter(Mandatory = $True)]
     [Object]$WebHookData
 )
 try
@@ -72,7 +72,7 @@ try
             }
             else
             {
-                Write-Warning -Message "Missing VMSubscriptionId in input data, will assume VM to onboard is in same subscription as Azure Automation"
+                Write-Warning -Message "Missing VMSubscriptionId in input data, will assume VM to onboard is in same subscription as Azure Automation account"
                 $VMSubscriptionId = $Null
             }
             if ($Null -ne $ObjectData.VMResourceGroupName)

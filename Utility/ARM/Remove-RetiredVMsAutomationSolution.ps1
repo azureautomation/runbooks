@@ -12,7 +12,7 @@
     This Runbooks assumes both Azure Automation account and Log Analytics account is in the same subscription
     For best effect schedule this Runbook to run on a recurring schedule to periodically search for retired VMs.
 
-    .COMPONENT
+.COMPONENT
     To predefine what Log Analytics workspace to use, create the following AA variable assets:
         LASolutionSubscriptionId
         LASolutionWorkspaceId
