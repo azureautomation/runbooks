@@ -147,10 +147,12 @@ try
                         if ($Null -eq $UpdatedQuery)
                         {
                             $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                            Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
                         }
                         else
                         {
                             $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                            Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
                         }
 
                     }
@@ -170,10 +172,12 @@ try
                         if ($Null -eq $UpdatedQuery)
                         {
                             $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                            Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
                         }
                         else
                         {
                             $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                            Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
                         }
                     }
                 }
