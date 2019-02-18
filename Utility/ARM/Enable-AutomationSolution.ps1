@@ -320,32 +320,39 @@ try
     # Log Analytics workspace to use is set through AA assets
     else
     {
-        # Get information about the workspace
-        $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
-            | Where-Object {$_.CustomerId -eq $LogAnalyticsSolutionWorkspaceId}
-        if ($oErr)
+        if($Null -ne $LASubscriptionContext)
         {
-            Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
-        }
-        if ($Null -ne $WorkspaceInfo)
-        {
-            # Workspace information
-            $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
-            $WorkspaceName = $WorkspaceInfo.Name
-            $WorkspaceResourceId = $WorkspaceInfo.ResourceId
-            $WorkspaceId = $WorkspaceInfo.CustomerId
-            $WorkspaceLocation = $WorkspaceInfo.Location
+            # Get information about the workspace
+            $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
+                | Where-Object {$_.CustomerId -eq $LogAnalyticsSolutionWorkspaceId}
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
+            }
+            if ($Null -ne $WorkspaceInfo)
+            {
+                # Workspace information
+                $WorkspaceResourceGroupName = $WorkspaceInfo.ResourceGroupName
+                $WorkspaceName = $WorkspaceInfo.Name
+                $WorkspaceResourceId = $WorkspaceInfo.ResourceId
+                $WorkspaceId = $WorkspaceInfo.CustomerId
+                $WorkspaceLocation = $WorkspaceInfo.Location
+            }
+            else
+            {
+                Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
+            }
+            # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
+            $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+                -WorkspaceName $WorkspaceName -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
+            }
         }
         else
         {
-            Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
-        }
-        # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-        $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-            -WorkspaceName $WorkspaceName -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-        if ($oErr)
-        {
-            Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
+            Write-Error -Message "Log Analytics subscription context not set, check AA assets has correct value and AA runAs account has access to subscription." -ErrorAction Stop
         }
     }
 
