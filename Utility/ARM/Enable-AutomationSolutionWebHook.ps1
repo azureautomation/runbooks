@@ -22,42 +22,28 @@
         LASolutionSubscriptionId
         LASolutionWorkspaceId
 
-.PARAMETER VMSubscriptionId
-    The name subscription id where the new VM to onboard is located.
-    This will default to the same one as the Azure Automation account is located in if not specified. If you
-    give a different subscription id then you need to make sure the RunAs account for
-    this automation account is added as a contributor to this subscription also.
-
-.PARAMETER VMResourceGroupName
-    Required. The name of the resource group that the VM is a member of.
-
-.PARAMETER VMName
-    Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
-
-.PARAMETER SolutionType
-    Required. The name of the solution to onboard to this Automation account.
-    It must be either "Updates" or "ChangeTracking". ChangeTracking also includes the inventory solution.
-
-.PARAMETER UpdateScopeQuery
-    Optional. Default is true. Indicates whether to add this VM to the list of computers to enable for this solution.
-    Solutions enable an optional scope configuration to be set on them that contains a query of computers
-    to target the solution to. If you are calling this Runbook from a parent runbook that is onboarding
-    multiple VMs concurrently, then you will want to set this to false and then do a final update of the
-    search query with the list of onboarded computers to avoid any possible conflicts that this Runbook
-    might do when reading, adding this VM, and updating the query since multiple versions of this Runbook
-    might try and do this at the same time if run concurrently.
-
-.Example
-    .\Enable-AutomationSolution -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" -VMName finance1 -VMResourceGroupName finance `
-              -SolutionType Updates
-
-.Example
-    .\Enable-AutomationSolution -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" -VMName finance1 -VMResourceGroupName finance `
-             -SolutionType ChangeTracking -UpdateScopeQuery $False
-
-.Example
-    .\Enable-AutomationSolution -VMName finance1 -VMResourceGroupName finance -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" `
-             -SolutionType Updates
+.PARAMETER WebHookData
+    The following parameters will need to be passed as a JSON object for this runbook to function correctly:
+        VMSubscriptionId:
+                The name subscription id where the new VM to onboard is located.
+                This will default to the same one as the azure automation account if not specified. If you
+                give a different subscription id then you need to make sure the RunAs account for
+                this automation account is added as a contributor to this subscription also.
+        VMResourceGroupName:
+                Required. The name of the resource group that the VM is a member of.
+        VMName:
+                Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
+        SolutionType:
+                Defaults to "Updates" if not set. The name of the solution to onboard to this Automation account.
+                It must be either "Updates" or "ChangeTracking". ChangeTracking also includes the inventory solution.
+        UpdateScopeQuery:
+                Optional. Default is true. Indicates whether to add this VM to the list of computers to enable for this solution.
+                Solutions enable an optional scope configuration to be set on them that contains a query of computers
+                to target the solution to. If you are calling this Runbook from a parent runbook that is onboarding
+                multiple VMs concurrently, then you will want to set this to false and then do a final update of the
+                search query with the list of onboarded computers to avoid any possible conflicts that this Runbook
+                might do when reading, adding this VM, and updating the query since multiple versions of this Runbook
+                might try and do this at the same time if run concurrently.
 
 .NOTES
     AUTHOR: Automation Team
@@ -66,31 +52,74 @@
 #>
 #Requires -Version 5.0
 Param (
-    [Parameter(Mandatory = $False)]
-    [String]
-    $VMSubscriptionId,
-
     [Parameter(Mandatory = $True)]
-    [String]
-    $VMResourceGroupName,
-
-    [Parameter(Mandatory = $True)]
-    [String]
-    $VMName,
-
-    [Parameter(Mandatory = $True)]
-    [ValidateSet("Updates", "ChangeTracking")]
-    [String]
-    $SolutionType,
-
-    [Parameter(Mandatory = $False)]
-    [Boolean]
-    $UpdateScopeQuery = $True
+    [Object]$WebHookData
 )
 try
 {
-    $RunbookName = "Enable-AutomationSolution"
+    $RunbookName = "Enable-AutomationSolutionWebHook"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
+
+    # Parse input
+    if ($Null -ne $WebHookData)
+    {
+        if ($Null -ne $WebhookData.RequestBody)
+        {
+            $ObjectData = ConvertFrom-Json -InputObject $WebhookData.RequestBody
+            if ($Null -ne $ObjectData.VMSubscriptionId)
+            {
+                $VMSubscriptionId = $ObjectData.VMSubscriptionId
+            }
+            else
+            {
+                Write-Warning -Message "Missing VMSubscriptionId in input data, will assume VM to onboard is in same subscription as Azure Automation account"
+                $VMSubscriptionId = $Null
+            }
+            if ($Null -ne $ObjectData.VMResourceGroupName)
+            {
+                $VMResourceGroupName = $ObjectData.VMResourceGroupName
+            }
+            else
+            {
+                Write-Error -Message "Missing VMResourceGroupName in input data" -ErrorAction Stop
+            }
+            if ($Null -ne $ObjectData.VMName)
+            {
+                $VMName = $ObjectData.VMName
+            }
+            else
+            {
+                Write-Error -Message "Missing VMName in input data" -ErrorAction Stop
+            }
+            if ($Null -ne $ObjectData.SolutionType)
+            {
+                $SolutionType = $ObjectData.SolutionType
+            }
+            else
+            {
+                Write-Warning -Message "Missing SolutionType in input data, using default set to Updates"
+                $SolutionType = "Updates"
+            }
+            if ($Null -ne $ObjectData.UpdateScopeQuery)
+            {
+                $UpdateScopeQuery = $ObjectData.UpdateScopeQuery
+            }
+            else
+            {
+                Write-Verbose -Message "Missing UpdateScopeQuery in input data, using default set to True"
+                $UpdateScopeQuery = $True
+            }
+        }
+        else
+        {
+            Write-Error -Message "Input data in request body is empty " -ErrorAction Stop
+        }
+
+    }
+    else
+    {
+        Write-Error -Message "Input data from webhook is empty" -ErrorAction Stop
+    }
 
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
@@ -125,6 +154,7 @@ try
     {
         Write-Output -InputObject "Will try to discover Log Analytics workspace id"
     }
+
     $LogAnalyticsAgentExtensionName = "OMSExtension"
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
@@ -184,7 +214,17 @@ try
     }
 
     # set subscription of Log Analytic workspace used for Update Management and Change Tracking, else assume its in the same as the AA account
-    if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
+    if ($Null -eq $LogAnalyticsSolutionSubscriptionId)
+    {
+        # Use the same subscription as the Automation account if not passed in
+        $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
+        }
+        Write-Verbose -Message "Creating azure VM context using subscription: $($LASubscriptionContext.Subscription.Name)"
+    }
+    else
     {
         # VM is in a different subscription so set the context to this subscription
         $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -412,6 +452,7 @@ try
 
     if ($Null -eq $Onboarded)
     {
+
         # Set up MMA agent information to onboard VM to the workspace
         if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
         {
