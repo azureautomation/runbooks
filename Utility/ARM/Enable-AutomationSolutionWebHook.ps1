@@ -66,7 +66,7 @@ try
         if ($Null -ne $WebhookData.RequestBody)
         {
             $ObjectData = ConvertFrom-Json -InputObject $WebhookData.RequestBody
-            if ($Null -ne $ObjectData.VMSubscriptionId)
+            if ($Null -ne $ObjectData.VMSubscriptionId -and "" -ne $ObjectData.VMSubscriptionId)
             {
                 $VMSubscriptionId = $ObjectData.VMSubscriptionId
             }
@@ -75,7 +75,7 @@ try
                 Write-Warning -Message "Missing VMSubscriptionId in input data, will assume VM to onboard is in same subscription as Azure Automation account"
                 $VMSubscriptionId = $Null
             }
-            if ($Null -ne $ObjectData.VMResourceGroupName)
+            if ($Null -ne $ObjectData.VMResourceGroupName -and "" -ne $ObjectData.VMResourceGroupName)
             {
                 $VMResourceGroupName = $ObjectData.VMResourceGroupName
             }
@@ -83,7 +83,7 @@ try
             {
                 Write-Error -Message "Missing VMResourceGroupName in input data" -ErrorAction Stop
             }
-            if ($Null -ne $ObjectData.VMName)
+            if ($Null -ne $ObjectData.VMName -and "" -ne $ObjectData.VMName)
             {
                 $VMName = $ObjectData.VMName
             }
@@ -91,16 +91,23 @@ try
             {
                 Write-Error -Message "Missing VMName in input data" -ErrorAction Stop
             }
-            if ($Null -ne $ObjectData.SolutionType)
+            if ($Null -ne $ObjectData.SolutionType -and "" -ne $ObjectData.SolutionType)
             {
-                $SolutionType = $ObjectData.SolutionType
+                if ($ObjectData.SolutionType -cne "Updates" -and $ObjectData.SolutionType -cne "ChangeTracking")
+                {
+                    $SolutionType = $ObjectData.SolutionType
+                }
+                else
+                {
+                    Write-Error -Message "Only a solution type of Updates or ChangeTracking is currently supported. These are case sensitive." -ErrorAction Stop
+                }
             }
             else
             {
                 Write-Warning -Message "Missing SolutionType in input data, using default set to Updates"
                 $SolutionType = "Updates"
             }
-            if ($Null -ne $ObjectData.UpdateScopeQuery)
+            if ($Null -ne $ObjectData.UpdateScopeQuery -and "" -ne $ObjectData.UpdateScopeQuery)
             {
                 $UpdateScopeQuery = $ObjectData.UpdateScopeQuery
             }
@@ -178,6 +185,10 @@ try
     if ($oErr)
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
+    }
+    else
+    {
+        Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
     }
     # set subscription of VM onboarded, else assume its in the same as the AA account
     if ($Null -eq $VMSubscriptionId)
@@ -360,7 +371,7 @@ try
     # Log Analytics workspace to use is set through AA assets
     else
     {
-        if($Null -ne $LASubscriptionContext)
+        if ($Null -ne $LASubscriptionContext)
         {
             # Get information about the workspace
             $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `

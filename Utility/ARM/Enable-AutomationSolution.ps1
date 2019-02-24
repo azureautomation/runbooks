@@ -79,7 +79,7 @@ Param (
     $VMName,
 
     [Parameter(Mandatory = $True)]
-    [ValidateSet("Updates", "ChangeTracking")]
+    [ValidateSet("Updates", "ChangeTracking", IgnoreCase = $False)]
     [String]
     $SolutionType,
 
@@ -132,7 +132,7 @@ try
     #endregion
 
     # Fetch AA RunAs account detail from connection object asset
-    $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+    $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
     $Null = Add-AzureRmAccount `
         -ServicePrincipal `
         -TenantId $ServicePrincipalConnection.TenantId `
@@ -149,8 +149,12 @@ try
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
     }
+    else
+    {
+        Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
+    }
     # set subscription of VM onboarded, else assume its in the same as the AA account
-    if ($Null -eq $VMSubscriptionId)
+    if ($Null -eq $VMSubscriptionId -or "" -eq $VMSubscriptionId)
     {
         # Use the same subscription as the Automation account if not passed in
         $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -320,7 +324,7 @@ try
     # Log Analytics workspace to use is set through AA assets
     else
     {
-        if($Null -ne $LASubscriptionContext)
+        if ($Null -ne $LASubscriptionContext)
         {
             # Get information about the workspace
             $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
