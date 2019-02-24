@@ -169,7 +169,7 @@ try
     #endregion
 
     # Fetch AA RunAs account detail from connection object asset
-    $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+    $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
     $Null = Add-AzureRmAccount `
         -ServicePrincipal `
         -TenantId $ServicePrincipalConnection.TenantId `
