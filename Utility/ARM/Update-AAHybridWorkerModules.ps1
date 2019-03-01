@@ -21,10 +21,6 @@ PREREQUISITES:
             Latest AzureRM & AzureRM.Automation module installed on hybrid workers for first time run using Install-Module from admin PS command line
             Make sure AzureRM.Profile has repository equal to PSGallery (use Get-InstalledModule) to check, if not use Uninstall-Module and Install-Module to rectify.
 
-            Optional Azure Automation Assets if parameter input is used:
-                AAresourceGroupName             = Name of Resource Group Azure Automation resides in
-                AAaccountName                   = Name of Azure Automation account
-
             Mandatory Azure Automation Assets:
                 AAhybridWorkerAdminCredentials  = Credential object that contains username & password for an account that is local admin on the hybrid worker(s).
                                                   If hybrid worker group contains more than one worker, the account must be allowed to do remoting to all workers.
@@ -67,16 +63,6 @@ PREREQUISITES:
             URL of repository location. Set this parameter with the ModuleRepositoryName = the new repo to add.
             Running the Runbook once will add the new repository to hybrid workers and sets it as trusted.
             Then set AllRepositories = $true to make the Runbook search all repositories for adding modules from AA or updating them locally
-
-.PARAMETER AutomationResourceGroupName
-            Must be either a parameter input or an AA variable asset.
-            Name of Resource Group the Azure Automation resides in.
-            This parameter can also be set as an AA variable asset with the name AAresourceGroupName
-
-.PARAMETER AutomationAccountName
-            Must be either a parameter input or an AA variable asset.
-            Name of Azure Automation account.
-            This parameter can also be set as an AA variable asset with the name AAaccountName
 #>
 #Requires -Version 5.0
 #Requires -Module AzureRM.Profile, AzureRM.Automation
@@ -88,9 +74,7 @@ Param(
     [bool]$UpdateOnly = $false,
     [bool]$AllRepositories = $false,
     [String]$ModuleRepositoryName = "PSGallery",
-    [String]$ModuleSourceLocation = "",
-    [String]$AutomationResourceGroupName = "",
-    [String]$AutomationAccountName = ""
+    [String]$ModuleSourceLocation = ""
 )
 try
 {
@@ -107,25 +91,32 @@ try
     {
         Write-Error -Message "Failed to load needed modules for Runbook." -ErrorAction Stop
     }
+    #region Fetch AA account information from running Runbook
+    $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+    foreach ($Automation in $AutomationResource)
+    {
+        $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+        if (!([string]::IsNullOrEmpty($Job)))
+        {
+            $AutomationInformation = @{}
+            $AutomationInformation.Add("SubscriptionId", $Automation.SubscriptionId)
+            $AutomationInformation.Add("Location", $Automation.Location)
+            $AutomationInformation.Add("ResourceGroupName", $Job.ResourceGroupName)
+            $AutomationInformation.Add("AutomationAccountName", $Job.AutomationAccountName)
+            $AutomationInformation.Add("RunbookName", $Job.RunbookName)
+            $AutomationInformation.Add("JobId", $Job.JobId.Guid)
+            break;
+        }
+    }
+    #endregion
 
     #region Variables
-    # Azure Automation details through assets
-    if ($Null -eq $AutomationResourceGroupName)
-    {
-        $AutomationResourceGroupName = Get-AutomationVariable -Name "AAresourceGroupName" -ErrorAction Stop
-    }
-    else
-    {
-        Write-Verbose -Message "Using AutomationResourceGroupName from input parameter and not from AA asset"
-    }
-    if ($Null -eq $AutomationAccountName)
-    {
-        $AutomationAccountName = Get-AutomationVariable -Name "AAaccountName" -ErrorAction Stop
-    }
-    else
-    {
-        Write-Verbose -Message "Using AutomationAccountName from input parameter and not from AA asset"
-    }
+    # Extract AA account information of running Runbook
+    $AutomationResourceGroupName = $AutomationInformation.ResourceGroupName
+    Write-Verbose -Message "Using AA account with resource group name: $AutomationResourceGroupName"
+    $AutomationAccountName = $AutomationInformation.AutomationAccountName
+    Write-Verbose -Message "Using AA account with name: $AutomationAccountName"
     # Admin credentials for hybrid workers must exist as an credential asset in AA
     $AAworkerCredential = Get-AutomationPSCredential -Name "AAhybridWorkerAdminCredentials" -ErrorAction Stop
 
