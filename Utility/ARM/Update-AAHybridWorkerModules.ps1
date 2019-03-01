@@ -113,10 +113,25 @@ try
 
     #region Variables
     # Extract AA account information of running Runbook
-    $AutomationResourceGroupName = $AutomationInformation.ResourceGroupName
-    Write-Verbose -Message "Using AA account with resource group name: $AutomationResourceGroupName"
-    $AutomationAccountName = $AutomationInformation.AutomationAccountName
-    Write-Verbose -Message "Using AA account with name: $AutomationAccountName"
+    if ($Null -ne $AutomationInformation.ResourceGroupName)
+    {
+        $AutomationResourceGroupName = $AutomationInformation.ResourceGroupName
+        Write-Verbose -Message "Using AA account with resource group name: $AutomationResourceGroupName"
+    }
+    else
+    {
+        Write-Error -Message "Failed to retrieve AA resource group name of account running Runbook" -ErrorAction Stop
+    }
+    if ($Null -ne $AutomationInformation.AutomationAccountName)
+    {
+        $AutomationAccountName = $AutomationInformation.AutomationAccountName
+        Write-Verbose -Message "Using AA account with name: $AutomationAccountName"
+    }
+    else
+    {
+        Write-Error -Message "Failed to retrieve AA name of account running Runbook" -ErrorAction Stop
+    }
+
     # Admin credentials for hybrid workers must exist as an credential asset in AA
     $AAworkerCredential = Get-AutomationPSCredential -Name "AAhybridWorkerAdminCredentials" -ErrorAction Stop
 
