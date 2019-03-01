@@ -24,6 +24,8 @@ PREREQUISITES:
             Optional Azure Automation Assets if parameter input is used:
                 AAresourceGroupName             = Name of Resource Group Azure Automation resides in
                 AAaccountName                   = Name of Azure Automation account
+
+            Mandatory Azure Automation Assets:
                 AAhybridWorkerAdminCredentials  = Credential object that contains username & password for an account that is local admin on the hybrid worker(s).
                                                   If hybrid worker group contains more than one worker, the account must be allowed to do remoting to all workers.
 
@@ -75,12 +77,6 @@ PREREQUISITES:
             Must be either a parameter input or an AA variable asset.
             Name of Azure Automation account.
             This parameter can also be set as an AA variable asset with the name AAaccountName
-
-.PARAMETER AAworkerCredential
-            Must be either a parameter input or an AA credential asset.
-            Credential object that contains username & password for an account that is local admin on the hybrid worker(s).
-            If hybrid worker group contains more than one worker, the account must be allowed to do remoting to all workers.
-            This parameter can also be set as an AA variable asset with the name AAhybridWorkerAdminCredentials
 #>
 #Requires -Version 5.0
 #Requires -Module AzureRM.Profile, AzureRM.Automation
@@ -94,8 +90,7 @@ Param(
     [String]$ModuleRepositoryName = "PSGallery",
     [String]$ModuleSourceLocation = "",
     [String]$AutomationResourceGroupName = "",
-    [String]$AutomationResourceGroupName = "",
-    [System.Management.Automation.PSCredential]$AAworkerCredential = ""
+    [String]$AutomationAccountName = ""
 )
 try
 {
@@ -114,7 +109,7 @@ try
     }
 
     #region Variables
-    # Azure Automation environment
+    # Azure Automation details through assets
     if ($Null -eq $AutomationResourceGroupName)
     {
         $AutomationResourceGroupName = Get-AutomationVariable -Name "AAresourceGroupName" -ErrorAction Stop
@@ -131,14 +126,8 @@ try
     {
         Write-Verbose -Message "Using AutomationAccountName from input parameter and not from AA asset"
     }
-    if ($Null -eq $AAworkerCredential)
-    {
-        $AAworkerCredential = Get-AutomationPSCredential -Name "AAhybridWorkerAdminCredentials" -ErrorAction Stop
-    }
-    else
-    {
-        Write-Verbose -Message "Using AAworkerCredential from input parameter and not from AA asset"
-    }
+    # Admin credentials for hybrid workers must exist as an credential asset in AA
+    $AAworkerCredential = Get-AutomationPSCredential -Name "AAhybridWorkerAdminCredentials" -ErrorAction Stop
 
     # Azure Automation Login for Resource Manager
     $AzureConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
