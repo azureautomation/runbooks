@@ -104,7 +104,8 @@ try
     {
         Write-Error -Message "Powershell version must be 5.1 or higher. Current version: $($PSVersionTable.PSVersion)" -ErrorAction Stop
     }
-    Write-Output -InputObject "Starting Runbook at time: $(Get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion).`nWorker Name: $($env:COMPUTERNAME)"
+    $RunbookName = "Update-AAHybridWorkerModules"
+    Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation -ErrorAction Continue -ErrorVariable oErr
     If ($oErr)
@@ -144,7 +145,6 @@ try
     $AzureRunAsCertificate = Get-AutomationCertificate -Name "AzureRunAsCertificate" -ErrorAction Stop
 
     # Local variables
-    $RunbookName = "Update-AAHybridWorkerModules"
     $RunbookJobHistoryDays = -1
     #endregion
 
@@ -680,5 +680,5 @@ catch
 }
 finally
 {
-    Write-Output -InputObject "Runbook ended at time: $(get-Date -format r)"
+    Write-Output -InputObject "Runbook: $RunbookName ended at time: $(get-Date -format r)"
 }
