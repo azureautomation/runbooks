@@ -28,7 +28,7 @@ PREREQUISITES:
 .PARAMETER UpdateAllHybridGroups
             If $true the Runbook will try to remote to all hybrid workers in every hybrid group attached to AA account
             $false will only update the hybrid workers in the same hybrid group the update Runbook is running on
-            Default is $true
+            Default is $false
 
 .PARAMETER ForceReinstallofModule
             If $true the Runbook will try to force a uninstall-module and install-module if update-module fails
@@ -67,7 +67,7 @@ PREREQUISITES:
 #Requires -Version 5.0
 #Requires -Module AzureRM.Profile, AzureRM.Automation
 Param(
-    [bool]$UpdateAllHybridGroups = $true,
+    [bool]$UpdateAllHybridGroups = $false,
     [bool]$ForceInstallModule = $false,
     [bool]$UpdateToNewestModule = $false,
     [bool]$SyncOnly = $false,
