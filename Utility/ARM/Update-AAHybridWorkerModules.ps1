@@ -91,61 +91,10 @@ try
     {
         Write-Error -Message "Failed to load needed modules for Runbook." -ErrorAction Stop
     }
-    #region Fetch AA account information from running Runbook
-    $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
-
-    foreach ($Automation in $AutomationResource)
-    {
-        $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
-        if (!([string]::IsNullOrEmpty($Job)))
-        {
-            $AutomationInformation = @{}
-            $AutomationInformation.Add("SubscriptionId", $Automation.SubscriptionId)
-            $AutomationInformation.Add("Location", $Automation.Location)
-            $AutomationInformation.Add("ResourceGroupName", $Job.ResourceGroupName)
-            $AutomationInformation.Add("AutomationAccountName", $Job.AutomationAccountName)
-            $AutomationInformation.Add("RunbookName", $Job.RunbookName)
-            $AutomationInformation.Add("JobId", $Job.JobId.Guid)
-            break;
-        }
-    }
-    #endregion
-
-    #region Variables
-    # Extract AA account information of running Runbook
-    if ($Null -ne $AutomationInformation.ResourceGroupName)
-    {
-        $AutomationResourceGroupName = $AutomationInformation.ResourceGroupName
-        Write-Verbose -Message "Using AA account with resource group name: $AutomationResourceGroupName"
-    }
-    else
-    {
-        Write-Error -Message "Failed to retrieve AA resource group name of account running Runbook" -ErrorAction Stop
-    }
-    if ($Null -ne $AutomationInformation.AutomationAccountName)
-    {
-        $AutomationAccountName = $AutomationInformation.AutomationAccountName
-        Write-Verbose -Message "Using AA account with name: $AutomationAccountName"
-    }
-    else
-    {
-        Write-Error -Message "Failed to retrieve AA name of account running Runbook" -ErrorAction Stop
-    }
-
-    # Admin credentials for hybrid workers must exist as an credential asset in AA
-    $AAworkerCredential = Get-AutomationPSCredential -Name "AAhybridWorkerAdminCredentials" -ErrorAction Stop
-
+    #region Authenticate to Azure
     # Azure Automation Login for Resource Manager
     $AzureConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
     $AzureRunAsCertificate = Get-AutomationCertificate -Name "AzureRunAsCertificate" -ErrorAction Stop
-
-    # Local variables
-    $RunbookJobHistoryDays = -1
-    #endregion
-
-    $VerbosePreference = "continue"
-
-    #region Authenticate to Azure
     # ADD certificate if it is not in the cert store of the user
     if ((Test-Path Cert:\CurrentUser\My\$($AzureConnection.CertificateThumbprint)) -eq $false)
     {
@@ -206,6 +155,55 @@ try
         Write-Error -Message "Failed to fetch hybrid worker(s)" -ErrorAction Stop
     }
     #endregion
+    #region Fetch AA account information from running Runbook
+    $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+    foreach ($Automation in $AutomationResource)
+    {
+        $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+        if (!([string]::IsNullOrEmpty($Job)))
+        {
+            $AutomationInformation = @{}
+            $AutomationInformation.Add("SubscriptionId", $Automation.SubscriptionId)
+            $AutomationInformation.Add("Location", $Automation.Location)
+            $AutomationInformation.Add("ResourceGroupName", $Job.ResourceGroupName)
+            $AutomationInformation.Add("AutomationAccountName", $Job.AutomationAccountName)
+            $AutomationInformation.Add("RunbookName", $Job.RunbookName)
+            $AutomationInformation.Add("JobId", $Job.JobId.Guid)
+            break;
+        }
+    }
+    #endregion
+
+    #region Variables
+    # Extract AA account information of running Runbook
+    if ($Null -ne $AutomationInformation.ResourceGroupName)
+    {
+        $AutomationResourceGroupName = $AutomationInformation.ResourceGroupName
+        Write-Verbose -Message "Using AA account with resource group name: $AutomationResourceGroupName"
+    }
+    else
+    {
+        Write-Error -Message "Failed to retrieve AA resource group name of account running Runbook" -ErrorAction Stop
+    }
+    if ($Null -ne $AutomationInformation.AutomationAccountName)
+    {
+        $AutomationAccountName = $AutomationInformation.AutomationAccountName
+        Write-Verbose -Message "Using AA account with name: $AutomationAccountName"
+    }
+    else
+    {
+        Write-Error -Message "Failed to retrieve AA name of account running Runbook" -ErrorAction Stop
+    }
+
+    # Admin credentials for hybrid workers must exist as an credential asset in AA
+    $AAworkerCredential = Get-AutomationPSCredential -Name "AAhybridWorkerAdminCredentials" -ErrorAction Stop
+
+    # Local variables
+    $RunbookJobHistoryDays = -1
+    #endregion
+
+    $VerbosePreference = "continue"
 
     #region Code to run remote
     $ScriptBlock =
