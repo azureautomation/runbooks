@@ -105,7 +105,7 @@ else {
 foreach ($VM in $VMs) {
 	$StartRtn = $VM | Start-AzureRmVM -ErrorAction Continue
 
-	if (!$StartRtn.IsSuccessStatusCode) {
+	if ($StartRtn.Status -ne "Succeeded") {
 		# The VM failed to start, so send notice
         Write-Output ($VM.Name + " failed to start")
         Write-Error ($VM.Name + " failed to start. Error was:") -ErrorAction Continue
