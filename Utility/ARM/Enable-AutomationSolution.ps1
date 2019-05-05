@@ -61,8 +61,7 @@
 
 .NOTES
     AUTHOR: Automation Team
-    Contibutor: Morten Lerudjordet
-    LASTEDIT: February 13th, 2019
+    Contributor: Morten Lerudjordet
 #>
 #Requires -Version 5.0
 Param (
