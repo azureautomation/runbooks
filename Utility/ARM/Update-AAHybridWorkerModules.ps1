@@ -139,22 +139,6 @@ try
     }
     #endregion
 
-    #region Get data from AA
-    # Get modules installed in AA
-    Write-Verbose -Message "Retrieving installed modules in AA"
-    $AAInstalledModules = Get-AzureRMAutomationModule -AutomationAccountName $AutomationAccountName -ResourceGroupName $AutomationResourceGroupName |
-        Where-Object -FilterScript {$_.ProvisioningState -eq "Succeeded"}
-
-    # Get names of hybrid workers in all groups
-    Write-Verbose -Message "Fetching name of all hybrid worker groups"
-    # Get groups but filter out the ones with GUID in them as they are not legitimate groups
-    $AAworkerGroups = (Get-AzureRMAutomationHybridWorkerGroup -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -ErrorAction SilentlyContinue -ErrorVariable oErr) |
-        Where-Object -FilterScript {$_.Name -notmatch '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'}
-    if ($oErr)
-    {
-        Write-Error -Message "Failed to fetch hybrid worker(s)" -ErrorAction Stop
-    }
-    #endregion
     #region Fetch AA account information from running Runbook
     $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
 
@@ -205,6 +189,22 @@ try
 
     $VerbosePreference = "continue"
 
+    #region Get data from AA
+    # Get modules installed in AA
+    Write-Verbose -Message "Retrieving installed modules in AA"
+    $AAInstalledModules = Get-AzureRMAutomationModule -AutomationAccountName $AutomationAccountName -ResourceGroupName $AutomationResourceGroupName |
+        Where-Object -FilterScript {$_.ProvisioningState -eq "Succeeded"}
+
+    # Get names of hybrid workers in all groups
+    Write-Verbose -Message "Fetching name of all hybrid worker groups"
+    # Get groups but filter out the ones with GUID in them as they are not legitimate groups
+    $AAworkerGroups = (Get-AzureRMAutomationHybridWorkerGroup -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -ErrorAction SilentlyContinue -ErrorVariable oErr) |
+        Where-Object -FilterScript {$_.Name -notmatch '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}'}
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to fetch hybrid worker(s)" -ErrorAction Stop
+    }
+    #endregion
     #region Code to run remote
     $ScriptBlock =
     {
