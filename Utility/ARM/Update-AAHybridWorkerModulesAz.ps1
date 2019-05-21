@@ -1,6 +1,7 @@
 <#
 NAME:       Update-AAHybridWorkerModulesAz
-AUTHOR:     Morten Lerudjordet
+AUTHOR:     Morten Lerudjordet & Automation Team
+
 
 DESCRIPTION:
             This Runbook will check installed modules in AA account and attempt to download them from the configured trusted repositories on to the hybrid worker(s)
