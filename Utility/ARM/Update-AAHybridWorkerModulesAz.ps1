@@ -86,7 +86,7 @@ try
     $RunbookName = "Update-AAHybridWorkerModulesAz"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
     $VerbosePreference = "silentlycontinue"
-    Import-Module -Name Az.Accounts, Az.Automation -ErrorAction Continue -ErrorVariable oErr
+    Import-Module -Name Az.Accounts, Az.Automation, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     If ($oErr)
     {
         Write-Error -Message "Failed to load needed modules for Runbook." -ErrorAction Stop
