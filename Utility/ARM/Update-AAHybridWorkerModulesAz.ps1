@@ -605,7 +605,7 @@ try
     {
         if (($AAworkerGroup.Name -ne $CurrentWorkerGroup) -and (-not $UpdateAllHybridGroups))
         {
-            Write-Output -InputObject "Skipping updating the hybrid worker group: $AAworkerGroup as UpdateAllHybridGroups is set to $UpdateAllHybridGroups"
+            Write-Output -InputObject "Skipping updating the hybrid worker group: $($AAworkerGroup.Name) as UpdateAllHybridGroups is set to $UpdateAllHybridGroups"
         }
         else
         {
