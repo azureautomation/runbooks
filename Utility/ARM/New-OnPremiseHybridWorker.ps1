@@ -208,11 +208,17 @@ foreach ($Module in $Modules) {
     $CurrentModule = Get-Module -Name $ModuleName -ListAvailable | where "Version" -eq $ModuleVersion
 
     if (!$CurrentModule) {
+    
+        if (($ModuleName -eq "AzureRm") -and (Get-InstalledModule -Name Az)) {
+            Write-Output "$ModuleName was not found but Az module is installed instead. Enabling ARM Aliases.."
+            Enable-AzureRmAlias
+        } else {
 
-        $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force
-        Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
-
-    } else {
+            $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force
+            Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
+        }
+    }
+    else {
         Write-Output "     Required version $ModuleVersion of $ModuleName is installed..."
     }
 }
