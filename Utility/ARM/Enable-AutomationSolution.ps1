@@ -61,8 +61,7 @@
 
 .NOTES
     AUTHOR: Automation Team
-    Contibutor: Morten Lerudjordet
-    LASTEDIT: February 13th, 2019
+    Contributor: Morten Lerudjordet
 #>
 #Requires -Version 5.0
 Param (
@@ -79,7 +78,7 @@ Param (
     $VMName,
 
     [Parameter(Mandatory = $True)]
-    [ValidateSet("Updates", "ChangeTracking")]
+    [ValidateSet("Updates", "ChangeTracking", IgnoreCase = $False)]
     [String]
     $SolutionType,
 
@@ -132,7 +131,7 @@ try
     #endregion
 
     # Fetch AA RunAs account detail from connection object asset
-    $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
+    $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
     $Null = Add-AzureRmAccount `
         -ServicePrincipal `
         -TenantId $ServicePrincipalConnection.TenantId `
@@ -149,8 +148,12 @@ try
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
     }
+    else
+    {
+        Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
+    }
     # set subscription of VM onboarded, else assume its in the same as the AA account
-    if ($Null -eq $VMSubscriptionId)
+    if ($Null -eq $VMSubscriptionId -or "" -eq $VMSubscriptionId)
     {
         # Use the same subscription as the Automation account if not passed in
         $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -320,7 +323,7 @@ try
     # Log Analytics workspace to use is set through AA assets
     else
     {
-        if($Null -ne $LASubscriptionContext)
+        if ($Null -ne $LASubscriptionContext)
         {
             # Get information about the workspace
             $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
@@ -715,6 +718,93 @@ try
             Write-Warning -Message "The VM: $VMName is already onboarded to solution: $SolutionType"
         }
     }
+    else
+    {
+        Write-Warning -Message "The VM: $VMName already has the Log Analytics MMA agent installed."
+    }
+
+    # Update scope query if necessary
+    $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
+
+    if ($Null -ne $SolutionGroup)
+    {
+        if (-not (($SolutionGroup.Properties.Query -match $VMResourceId) -and ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
+        {
+            # Original saved search query:
+            # $DefaultQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"
+
+            # Make sure to only add VM id into VMUUID block, the same as is done by adding through the portal
+            if ($SolutionGroup.Properties.Query -match 'VMUUID')
+            {
+                # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
+                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$($NewVM.VmId)`",")
+            }
+            #Region Solution Onboarding ARM Template
+            # ARM template to deploy log analytics agent extension for both Linux and Windows
+            # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
+            $ArmTemplate = @'
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "id": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "resourceName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "category": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "displayName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "query": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "functionAlias": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "etag": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "apiVersion": {
+            "defaultValue": "2017-04-26-preview",
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "apiVersion": "[parameters('apiVersion')]",
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "location": "[parameters('location')]",
+            "name": "[parameters('resourceName')]",
+            "id": "[parameters('id')]",
+            "properties": {
+                "displayname": "[parameters('displayName')]",
+                "category": "[parameters('category')]",
+                "query": "[parameters('query')]",
+                "functionAlias": "[parameters('functionAlias')]",
+                "etag": "[parameters('etag')]",
+                "tags": [
+                    {
+                        "Name": "Group", "Value": "Computer"
+                    }
+                ]
+            }
+        }
+    ]
 }
 catch
 {

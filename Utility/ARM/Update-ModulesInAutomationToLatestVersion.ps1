@@ -144,7 +144,7 @@ function _doImport {
         if($Dependencies -and $Dependencies.Length -gt 0) {
             $Dependencies = $Dependencies.Split("|")
 
-            # parse depencencies, which are in the format: module1name:module1version:|module2name:module2version:
+            # parse dependencies, which are in the format: module1name:module1version:|module2name:module2version:
             $Dependencies | ForEach-Object {
 
                 if($_ -and $_.Length -gt 0) {
@@ -154,7 +154,7 @@ function _doImport {
 
                     # check if we already imported this dependency module during execution of this script
                     if(!$ModulesImported.Contains($DependencyName)) {
-                        # Logg errors if occures
+                        # Log errors if occurs
                         $AutomationModule = Get-AzureRmAutomationModule `
                             -ResourceGroupName $ResourceGroupName `
                             -AutomationAccountName $AutomationAccountName `

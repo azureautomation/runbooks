@@ -51,12 +51,12 @@
 #>
 #Requires -Version 5.0
 Param (
-    [Parameter(Mandatory = $True)]
+    [Parameter(Mandatory = $true)]
     [Object]$WebHookData
 )
 try
 {
-    $RunbookName = "Enable-AutomationSolutionWebHook"
+    $RunbookName = "Enable-AutomationSolutionWebHookAz"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     # Parse input
@@ -113,7 +113,7 @@ try
             else
             {
                 Write-Verbose -Message "Missing UpdateScopeQuery in input data, using default set to True"
-                $UpdateScopeQuery = $True
+                $UpdateScopeQuery = $true
             }
         }
         else
@@ -128,10 +128,10 @@ try
     }
 
     $VerbosePreference = "silentlycontinue"
-    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+    Import-Module -Name Az.Account, Az.Automation, Az.OperationalInsights, Az.Compute, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)
     {
-        Write-Error -Message "Failed to load needed modules for Runbook, check that AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute and AzureRM.Resources is imported into Azure Automation" -ErrorAction Stop
+        Write-Error -Message "Failed to load needed modules for Runbook, check that Az.Automation, Az.OperationalInsights, Az.Compute and Az.Resources is imported into Azure Automation" -ErrorAction Stop
     }
     $VerbosePreference = "Continue"
 
@@ -169,7 +169,7 @@ try
 
     # Fetch AA RunAs account detail from connection object asset
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
-    $Null = Add-AzureRmAccount `
+    $Null = Add-AzAccount `
         -ServicePrincipal `
         -TenantId $ServicePrincipalConnection.TenantId `
         -ApplicationId $ServicePrincipalConnection.ApplicationId `
@@ -180,7 +180,7 @@ try
     }
 
     # Set subscription of AA account
-    $SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+    $SubscriptionContext = Set-AzContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
@@ -193,7 +193,7 @@ try
     if ($Null -eq $VMSubscriptionId)
     {
         # Use the same subscription as the Automation account if not passed in
-        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
@@ -204,18 +204,18 @@ try
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop
         }
         Write-Verbose -Message "Creating azure VM context using subscription: $($NewVMSubscriptionContext.Subscription.Name)"
         # Register Automation provider if it is not registered on the subscription
-        $AutomationProvider = Get-AzureRMResourceProvider -ProviderNamespace Microsoft.Automation `
-            -AzureRmContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
+        $AutomationProvider = Get-AzResourceProvider -ProviderNamespace Microsoft.Automation `
+            -AzContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
         if ($Null -eq $AutomationProvider)
         {
-            $ObjectOutPut = Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            $ObjectOutPut = Register-AzResourceProvider -ProviderNamespace Microsoft.Automation -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
                 Write-Error -Message "Failed to register Microsoft.Automation provider in: $($NewVMSubscriptionContext.Subscription.Name)" -ErrorAction Stop
@@ -227,7 +227,7 @@ try
     if ($Null -eq $LogAnalyticsSolutionSubscriptionId)
     {
         # Use the same subscription as the Automation account if not passed in
-        $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $LASubscriptionContext = Set-AzContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
@@ -237,7 +237,7 @@ try
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $LASubscriptionContext = Set-AzContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where Log Analytics workspace is" -ErrorAction Stop
@@ -251,7 +251,7 @@ try
         # Set order to sort subscriptions by
         $SortOrder = @($NewVMSubscriptionContext.Subscription.Name, $SubscriptionContext.Subscription.Name)
         # Get all subscriptions the AA account has access to
-        $AzureRmSubscriptions = Get-AzureRmSubscription |
+        $AzSubscriptions = Get-AzSubscription |
             # Sort array so VM subscription will be search first for exiting onboarded VMs, then it will try AA subscription before moving on to others it has access to
         Sort-Object -Property {
             $SortRank = $SortOrder.IndexOf($($_.Name.ToLower()))
@@ -265,23 +265,23 @@ try
             }
         }
 
-        if ($Null -ne $AzureRmSubscriptions)
+        if ($Null -ne $AzSubscriptions)
         {
             # Run through each until a VM with Microsoft Monitoring Agent is found
             $SubscriptionCounter = 0
-            foreach ($AzureRMsubscription in $AzureRMsubscriptions)
+            foreach ($Azsubscription in $Azsubscriptions)
             {
                 # Set subscription context
-                $OnboardedVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $AzureRmSubscription.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+                $OnboardedVMSubscriptionContext = Set-AzContext -SubscriptionId $AzSubscription.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
                 if ($oErr)
                 {
-                    Write-Error -Message "Failed to set azure context to subscription: $($AzureRmSubscription.Name)" -ErrorAction Continue
+                    Write-Error -Message "Failed to set azure context to subscription: $($AzSubscription.Name)" -ErrorAction Continue
                     $oErr = $Null
                 }
                 if ($Null -ne $OnboardedVMSubscriptionContext)
                 {
                     # Find existing VM that is already onboarded to the solution.
-                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
+                    $VMExtensions = Get-AzResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
 
                     # Find VM to use as template
                     if ($Null -ne $VMExtensions)
@@ -292,7 +292,7 @@ try
                     }
                 }
                 $SubscriptionCounter++
-                if ($SubscriptionCounter -eq $AzureRmSubscriptions.Count)
+                if ($SubscriptionCounter -eq $AzSubscriptions.Count)
                 {
                     Write-Error -Message "Did not find any VM with Microsoft Monitoring Agent already installed. Install at least one in a subscription the AA RunAs account has access to" -ErrorAction Stop
                 }
@@ -302,8 +302,8 @@ try
             {
                 if ($Null -ne $VMExtension.Name -and $Null -ne $VMExtension.ResourceGroupName)
                 {
-                    $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $VMExtension.ResourceGroupName -VMName ($VMExtension.Name).Split('/')[0] `
-                        -AzureRmContext $OnboardedVMSubscriptionContext -Name ($VMExtension.Name).Split('/')[-1]
+                    $ExistingVMExtension = Get-AzVMExtension -ResourceGroup $VMExtension.ResourceGroupName -VMName ($VMExtension.Name).Split('/')[0] `
+                        -AzContext $OnboardedVMSubscriptionContext -Name ($VMExtension.Name).Split('/')[-1]
                 }
                 if ($Null -ne $ExistingVMExtension)
                 {
@@ -340,7 +340,7 @@ try
             Write-Error -Message "Public settings for VM extension is empty" -ErrorAction Stop
         }
         # Get information about the workspace
-        $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
+        $WorkspaceInfo = Get-AzOperationalInsightsWorkspace -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
             | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
         if ($oErr)
         {
@@ -360,8 +360,8 @@ try
             Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
         }
         # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-        $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-            -WorkspaceName $WorkspaceName -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+            -WorkspaceName $WorkspaceName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
@@ -373,7 +373,7 @@ try
         if ($Null -ne $LASubscriptionContext)
         {
             # Get information about the workspace
-            $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
+            $WorkspaceInfo = Get-AzOperationalInsightsWorkspace -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
                 | Where-Object {$_.CustomerId -eq $LogAnalyticsSolutionWorkspaceId}
             if ($oErr)
             {
@@ -393,8 +393,8 @@ try
                 Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
             }
             # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-            $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-                -WorkspaceName $WorkspaceName -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+                -WorkspaceName $WorkspaceName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
                 Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
@@ -408,8 +408,8 @@ try
 
     Write-Verbose -Message "Retrieving VM with following details: RG: $VMResourceGroupName, Name: $VMName, SubName: $($NewVMSubscriptionContext.Subscription.Name)"
     # Get details of the new VM to onboard.
-    $NewVM = Get-AzureRMVM -ResourceGroupName $VMResourceGroupName -Name $VMName -Status `
-        -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr | Where-Object {$_.Statuses.code -match "running"}
+    $NewVM = Get-AzVM -ResourceGroupName $VMResourceGroupName -Name $VMName -Status `
+        -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr | Where-Object {$_.Statuses.code -match "running"}
     if ($oErr)
     {
         Write-Error -Message "Failed to retrieve VM status data for: $VMName" -ErrorAction Stop
@@ -422,8 +422,8 @@ try
     }
     else
     {
-        $NewVM = Get-AzureRMVM -ResourceGroupName $VMResourceGroupName -Name $VMName `
-            -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        $NewVM = Get-AzVM -ResourceGroupName $VMResourceGroupName -Name $VMName `
+            -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
@@ -444,8 +444,8 @@ try
     }
 
     # Check if the VM is already onboarded to the Log Analytics workspace
-    $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
-        -Name $LogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+    $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
+        -Name $LogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
     if ($oErr)
     {
         if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -611,10 +611,10 @@ try
         $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
-        $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
+        $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
             -Name $DeploymentName `
             -TemplateParameterObject $MMADeploymentParams `
-            -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Deployment of Log Analytics agent failed" -ErrorAction Stop
@@ -744,10 +744,10 @@ try
             # Create deployment name
             $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-            $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
+            $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `
                 -TemplateParameterObject $QueryDeploymentParams `
-                -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
                 Write-Error -Message "Failed to add VM: $VMName to solution: $SolutionType" -ErrorAction Stop
