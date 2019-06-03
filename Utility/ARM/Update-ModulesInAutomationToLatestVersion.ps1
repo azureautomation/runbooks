@@ -203,44 +203,54 @@ function doModuleImport {
         do
         {
             $ActualUrl = $ModuleContentUrl
-            $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Ignore).Headers.Location
+            $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Continue -ErrorVariable oErr).Headers.Location
         }
-        while(!$ModuleContentUrl.Contains(".nupkg"))
-
+        while(!$ModuleContentUrl.Contains(".nupkg") -and $Null -eq $oErr)
+        if($oErr)
+        {
+            Write-Error -Message "Failed to retrieve storage location of module"
+            $oErr = $Null
+        }
         $ActualUrl = $ModuleContentUrl
 
         if($ModuleVersion)
         {
-            Write-Output -InputObject "Importing $ModuleName module of version $ModuleVersion to Automation"
+            Write-Output -InputObject "Importing version: $ModuleVersion of module: $ModuleName module to Automation account"
         }
         else
         {
-            Write-Output -InputObject "Importing $ModuleName module of version $($SearchResult.Version) to Automation"
+            Write-Output -InputObject "Importing version: $($SearchResult.Version) of module: $ModuleName module to Automation account"
         }
-
-        $AutomationModule = New-AzureRmAutomationModule `
+        if(-not ([string]::IsNullOrEmpty($ActualUrl)))
+        {
+            $AutomationModule = New-AzureRmAutomationModule `
             -ResourceGroupName $ResourceGroupName `
             -AutomationAccountName $AutomationAccountName `
             -Name $ModuleName `
-            -ContentLink $ActualUrl
+            -ContentLink $ActualUrl -ErrorAction continue
+            while(
+                (!([string]::IsNullOrEmpty($AutomationModule))) -and
+                $AutomationModule.ProvisioningState -ne "Created" -and
+                $AutomationModule.ProvisioningState -ne "Succeeded" -and
+                $AutomationModule.ProvisioningState -ne "Failed" -and
+                $Null -eq $oErr
+            )
+            {
+                Write-Verbose -Message "Polling for module import completion"
+                Start-Sleep -Seconds 10
+                $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule -ErrorAction continue -ErrorVariable oErr
+            }
 
-        while(
-            (!([string]::IsNullOrEmpty($AutomationModule))) -and
-            $AutomationModule.ProvisioningState -ne "Created" -and
-            $AutomationModule.ProvisioningState -ne "Succeeded" -and
-            $AutomationModule.ProvisioningState -ne "Failed"
-        )
+            if($AutomationModule.ProvisioningState -eq "Failed" -or $oErr -ne $Null) {
+                Write-Error "Import of $ModuleName module to Automation account failed." -ErrorAction
+            }
+            else {
+                Write-Output -InputObject "Import of $ModuleName module to Automation account succeeded."
+            }
+        }
+        else
         {
-            Write-Verbose -Message "Polling for module import completion"
-            Start-Sleep -Seconds 10
-            $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule
-        }
-
-        if($AutomationModule.ProvisioningState -eq "Failed") {
-            Write-Error "Importing $ModuleName module to Automation failed."
-        }
-        else {
-            Write-Output -InputObject "Importing $ModuleName module to Automation succeeded."
+            Write-Error -Message "Failed to retrieve download URL of module: $ModuleName in Gallery, update of module aborted" -ErrorId continue
         }
     }
 }
@@ -255,7 +265,7 @@ try
     {
         Write-Output -InputObject ("Logging in to Azure...")
 
-        Add-AzureRmAccount `
+        $Null = Add-AzureRmAccount `
             -ServicePrincipal `
             -TenantId $RunAsConnection.TenantId `
             -ApplicationId $RunAsConnection.ApplicationId `
@@ -264,7 +274,8 @@ try
         {
             Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
         }
-        Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
+        $Subscription = Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
+        Write-Output -InputObject "Running in subscription: $($Subscription.Name)"
         if($oErr)
         {
             Write-Error -Message "Failed to select Azure subscription" -ErrorAction Stop
@@ -297,6 +308,7 @@ try
                         break;
                 }
             }
+            Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
         }
     }
     else
