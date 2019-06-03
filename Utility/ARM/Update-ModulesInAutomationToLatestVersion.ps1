@@ -90,8 +90,10 @@ $VerbosePreference = "silentlycontinue"
 $RunbookName = "Update-ModulesInAutomationToLatestVersion"
 Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 Import-Module -Name AzureRM.Profile, AzureRM.Automation,AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
-If($oErr) {
-    Write-Error -Message "Failed to load needed modules for Runbook. Error: $($oErr.Message)" -ErrorAction Stop
+if($oErr)
+{
+    Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
+    throw "Check AA account for modules"
 }
 $VerbosePreference = "continue"
 $ErrorActionPreference = "stop"
