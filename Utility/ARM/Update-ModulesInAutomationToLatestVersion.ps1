@@ -53,16 +53,11 @@
     If an automation account is not specified, then it will use the current one for the automation account
     if it is run from the automation service
 
-
-.PARAMETER NewModuleName
-    Optional. The name of a module in the PowerShell gallery to import after all existing modules are updated
-
 .PARAMETER UpdateAzureModulesOnly
     Optional. Set to $false to have logic try to update all modules installed in account.
     Default is $true, and this will only update Azure modules
 
 .EXAMPLE
-    Update-ModulesInAutomationToLatestVersion -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -NewModuleName "AzureRM.Batch" -UpdateAzureModulesOnly $false
     Update-ModulesInAutomationToLatestVersion -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount"
     Update-ModulesInAutomationToLatestVersion -UpdateAzureModulesOnly $false
     Update-ModulesInAutomationToLatestVersion
@@ -79,9 +74,6 @@ param(
 
     [Parameter(Mandatory=$false)]
     [String] $AutomationAccountName,
-
-    [Parameter(Mandatory=$false)]
-    [String] $NewModuleName,
 
     [Parameter(Mandatory=$false)]
     [Bool] $UpdateAzureModulesOnly = $true
@@ -418,49 +410,6 @@ try
     else
     {
         Write-Error -Message "No modules found in AA account: $AutomationAccountName" -ErrorAction Stop
-    }
-    # Import module if specified
-    if (!([string]::IsNullOrEmpty($NewModuleName)))
-    {
-        # Check if module exists in the gallery
-        $Filter = @($ModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
-        $Url = "$PsGalleryApiUrl/Packages?`$filter=$Filter and IsLatestVersion"
-
-        # Fetch results and filter them with -like, and then shape the output
-        $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
-        Select-Object @{n='Name';ex={$_.title.'#text'}},
-                    @{n='Version';ex={$_.properties.version}},
-                    @{n='Url';ex={$_.Content.src}},
-                    @{n='Dependencies';ex={$_.properties.Dependencies}},
-                    @{n='Owners';ex={$_.properties.Owners}}
-        If($oErr) {
-            # Will stop runbook, though message will not be logged
-            Write-Error -Message "Failed to query Gallery" -ErrorAction Stop
-        }
-
-        if($SearchResult.Length -and $SearchResult.Length -gt 1) {
-            $SearchResult = $SearchResult | Where-Object -FilterScript {
-                return $_.Name -eq $NewModuleName
-            }
-        }
-
-        if(!$SearchResult) {
-            throw "Could not find module '$NewModuleName' on PowerShell Gallery."
-        }
-
-        if ($NewModuleName -notin $Modules.Name)
-        {
-            Write-Output -InputObject "Importing latest version of '$NewModuleName' into your automation account"
-
-            doModuleImport `
-                -ResourceGroupName $ResourceGroupName `
-                -AutomationAccountName $AutomationAccountName `
-                -ModuleName $NewModuleName
-        }
-        else
-        {
-            Write-Output -InputObject ("Module $NewModuleName is already in the automation account")
-        }
     }
 }
 catch
