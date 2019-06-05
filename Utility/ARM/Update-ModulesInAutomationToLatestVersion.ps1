@@ -33,15 +33,12 @@
 <#
 .SYNOPSIS
     This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an
-    Automation account.If a new module to import is specified, it will import that module from the PowerShell Gallery
-    after all other modules are updated from the gallery.
+    Automation account. If UpdateAzureModulesOnly is set this runbook will only update the Azure modules.
 
 .DESCRIPTION
     This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an
     Automation account. By connecting the runbook to an Automation schedule, you can ensure all modules in
     your Automation account stay up to date.
-    If a new module to import is specified, it will import that module from the PowerShell Gallery
-    after all other modules are updated from the gallery.
 
 .PARAMETER ResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
@@ -112,140 +109,158 @@ function doModuleImport {
         [Parameter(Mandatory=$false)]
         [String] $ModuleVersion
     )
+    #region Constants
+    $AzureSdkOwnerName = "azure-sdk"
+    $PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2'
+    #endregion
+    try {
+        $Filter = @($ModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
+        $Url = "$PsGalleryApiUrl/Packages?`$filter=$Filter and IsLatestVersion"
 
-    $Filter = @($ModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
-    $Url = "$PsGalleryApiUrl/Packages?`$filter=$Filter and IsLatestVersion"
-
-    # Fetch results and filter them with -like, and then shape the output
-    $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
-    Select-Object @{n='Name';ex={$_.title.'#text'}},
-                  @{n='Version';ex={$_.properties.version}},
-                  @{n='Url';ex={$_.Content.src}},
-                  @{n='Dependencies';ex={$_.properties.Dependencies}},
-                  @{n='Owners';ex={$_.properties.Owners}}
-    If($oErr) {
-        # Will stop runbook, though message will not be logged
-        Write-Error -Message "Stopping runbook" -ErrorAction Stop
-    }
-    # Should not be needed as filter will only return one hit, though will keep the code to strip away if search ever get multiple hits
-    if($SearchResult.Length -and $SearchResult.Length -gt 1) {
-        $SearchResult = $SearchResult | Where-Object -FilterScript {
-            return $_.Name -eq $ModuleName
-        }
-    }
-
-    if(!$SearchResult) {
-        Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module you imported from a different location"
-    }
-    else
-    {
-        $ModuleName = $SearchResult.Name # get correct casing for the module name
-
-        if(!$ModuleVersion)
+        # Fetch results and filter them with -like, and then shape the output
+        $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
+        Select-Object @{n='Name';ex={$_.title.'#text'}},
+                    @{n='Version';ex={$_.properties.version}},
+                    @{n='Url';ex={$_.Content.src}},
+                    @{n='Dependencies';ex={$_.properties.Dependencies}},
+                    @{n='Owners';ex={$_.properties.Owners}}
+        If($oErr)
         {
-            # get latest version
-            $ModuleContentUrl = $SearchResult.Url
+            # Will stop runbook, though message will not be logged
+            Write-Error -Message "Failed to retrieve module details from Gallery" -ErrorAction Stop
+        }
+        # Should not be needed as filter will only return one hit, though will keep the code to strip away if search ever get multiple hits
+        if($SearchResult.Length -and $SearchResult.Length -gt 1) {
+            $SearchResult = $SearchResult | Where-Object -FilterScript {
+                return $_.Name -eq $ModuleName
+            }
+        }
+
+        if(!$SearchResult) {
+            Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module you imported from a different location"
         }
         else
         {
-            $ModuleContentUrl = "$PsGalleryApiUrl/package/$ModuleName/$ModuleVersion"
-        }
+            $ModuleName = $SearchResult.Name # get correct casing for the module name
 
-        # Make sure module dependencies are imported
-        $Dependencies = $SearchResult.Dependencies
+            if(!$ModuleVersion)
+            {
+                # get latest version
+                $ModuleContentUrl = $SearchResult.Url
+            }
+            else
+            {
+                $ModuleContentUrl = "$PsGalleryApiUrl/package/$ModuleName/$ModuleVersion"
+            }
 
-        if($Dependencies -and $Dependencies.Length -gt 0) {
-            $Dependencies = $Dependencies.Split("|")
+            # Make sure module dependencies are imported
+            $Dependencies = $SearchResult.Dependencies
 
-            # parse dependencies, which are in the format: module1name:module1version:|module2name:module2version:
-            $Dependencies | ForEach-Object {
+            if($Dependencies -and $Dependencies.Length -gt 0) {
+                $Dependencies = $Dependencies.Split("|")
 
-                if($_ -and $_.Length -gt 0) {
-                    $Parts = $_.Split(":")
-                    $DependencyName = $Parts[0]
-                    $DependencyVersion = $Parts[1] -replace "[^0-9.]", ''
+                # parse dependencies, which are in the format: module1name:module1version:|module2name:module2version:
+                $Dependencies | ForEach-Object {
 
-                    # check if we already imported this dependency module during execution of this script
-                    if(!$ModulesImported.Contains($DependencyName)) {
-                        # Log errors if occurs
-                        $AutomationModule = Get-AzureRmAutomationModule `
-                            -ResourceGroupName $ResourceGroupName `
-                            -AutomationAccountName $AutomationAccountName `
-                            -Name $DependencyName `
-                            -ErrorAction Continue
+                    if($_ -and $_.Length -gt 0) {
+                        $Parts = $_.Split(":")
+                        $DependencyName = $Parts[0]
+                        $DependencyVersion = $Parts[1] -replace "[^0-9.]", ''
 
-                        # check if Automation account already contains this dependency module of the right version
-                        if((!$AutomationModule) -or $AutomationModule.Version -ne $DependencyVersion) {
-
-                            Write-Output -InputObject "Importing dependency module $DependencyName of version $DependencyVersion first."
-
-                            # this dependency module has not been imported, import it first
-                            doModuleImport `
+                        # check if we already imported this dependency module during execution of this script
+                        if(!$ModulesImported.Contains($DependencyName)) {
+                            # Log errors if occurs
+                            $AutomationModule = Get-AzureRmAutomationModule `
                                 -ResourceGroupName $ResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
-                                -ModuleName $DependencyName `
-                                -ModuleVersion $DependencyVersion -ErrorAction Stop
+                                -Name $DependencyName `
+                                -ErrorAction Continue
 
-                            $ModulesImported += $DependencyName
+                            # check if Automation account already contains this dependency module of the right version
+                            if((!$AutomationModule) -or $AutomationModule.Version -ne $DependencyVersion) {
+
+                                Write-Output -InputObject "Importing dependency module $DependencyName of version $DependencyVersion first."
+
+                                # this dependency module has not been imported, import it first
+                                doModuleImport `
+                                    -ResourceGroupName $ResourceGroupName `
+                                    -AutomationAccountName $AutomationAccountName `
+                                    -ModuleName $DependencyName `
+                                    -ModuleVersion $DependencyVersion -ErrorAction Stop
+
+                                $ModulesImported += $DependencyName
+                            }
                         }
                     }
                 }
             }
-        }
 
-        # Find the actual blob storage location of the module
-        do
-        {
-            $ActualUrl = $ModuleContentUrl
-            $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Continue -ErrorVariable oErr).Headers.Location
-        }
-        while(!$ModuleContentUrl.Contains(".nupkg") -and $Null -eq $oErr)
-        if($oErr)
-        {
-            Write-Error -Message "Failed to retrieve storage location of module"
-            $oErr = $Null
-        }
-        $ActualUrl = $ModuleContentUrl
-
-        if($ModuleVersion)
-        {
-            Write-Output -InputObject "Importing version: $ModuleVersion of module: $ModuleName module to Automation account"
-        }
-        else
-        {
-            Write-Output -InputObject "Importing version: $($SearchResult.Version) of module: $ModuleName module to Automation account"
-        }
-        if(-not ([string]::IsNullOrEmpty($ActualUrl)))
-        {
-            $AutomationModule = New-AzureRmAutomationModule `
-            -ResourceGroupName $ResourceGroupName `
-            -AutomationAccountName $AutomationAccountName `
-            -Name $ModuleName `
-            -ContentLink $ActualUrl -ErrorAction continue
-            while(
-                (!([string]::IsNullOrEmpty($AutomationModule))) -and
-                $AutomationModule.ProvisioningState -ne "Created" -and
-                $AutomationModule.ProvisioningState -ne "Succeeded" -and
-                $AutomationModule.ProvisioningState -ne "Failed" -and
-                $Null -eq $oErr
-            )
+            # Find the actual blob storage location of the module
+            do
             {
-                Write-Verbose -Message "Polling for module import completion"
-                Start-Sleep -Seconds 10
-                $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule -ErrorAction continue -ErrorVariable oErr
+                $ActualUrl = $ModuleContentUrl
+                $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Continue -ErrorVariable oErr).Headers.Location
             }
+            while(!$ModuleContentUrl.Contains(".nupkg") -and $Null -eq $oErr)
+            if($oErr)
+            {
+                Write-Error -Message "Failed to retrieve storage location of module"
+                $oErr = $Null
+            }
+            $ActualUrl = $ModuleContentUrl
 
-            if($AutomationModule.ProvisioningState -eq "Failed" -or $oErr -ne $Null) {
-                Write-Error "Import of $ModuleName module to Automation account failed." -ErrorAction
+            if($ModuleVersion)
+            {
+                Write-Output -InputObject "Importing version: $ModuleVersion of module: $ModuleName module to Automation account"
             }
-            else {
-                Write-Output -InputObject "Import of $ModuleName module to Automation account succeeded."
+            else
+            {
+                Write-Output -InputObject "Importing version: $($SearchResult.Version) of module: $ModuleName module to Automation account"
             }
+            if(-not ([string]::IsNullOrEmpty($ActualUrl)))
+            {
+                $AutomationModule = New-AzureRmAutomationModule `
+                -ResourceGroupName $ResourceGroupName `
+                -AutomationAccountName $AutomationAccountName `
+                -Name $ModuleName `
+                -ContentLink $ActualUrl -ErrorAction continue
+                while(
+                    (!([string]::IsNullOrEmpty($AutomationModule))) -and
+                    $AutomationModule.ProvisioningState -ne "Created" -and
+                    $AutomationModule.ProvisioningState -ne "Succeeded" -and
+                    $AutomationModule.ProvisioningState -ne "Failed" -and
+                    $Null -eq $oErr
+                )
+                {
+                    Write-Verbose -Message "Polling for module import completion"
+                    Start-Sleep -Seconds 10
+                    $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule -ErrorAction continue -ErrorVariable oErr
+                }
+
+                if($AutomationModule.ProvisioningState -eq "Failed" -or $oErr -ne $Null) {
+                    Write-Error "Import of $ModuleName module to Automation account failed." -ErrorAction
+                }
+                else {
+                    Write-Output -InputObject "Import of $ModuleName module to Automation account succeeded."
+                }
+            }
+            else
+            {
+                Write-Error -Message "Failed to retrieve download URL of module: $ModuleName in Gallery, update of module aborted" -ErrorId continue
+            }
+        }
+    }
+    catch
+    {
+        if ($_.Exception.Message)
+        {
+            Write-Error -Message "$($_.Exception.Message)" -ErrorAction Continue
         }
         else
         {
-            Write-Error -Message "Failed to retrieve download URL of module: $ModuleName in Gallery, update of module aborted" -ErrorId continue
+            Write-Error -Message "$($_.Exception)" -ErrorAction Continue
         }
+        throw "$($_.Exception)"
     }
 }
 #endregion
@@ -327,7 +342,7 @@ try
                 -Name $Module.Name -ErrorAction continue -ErrorVariable oErr
             if($oErr)
             {
-                Write-Error -Message "Failed to retrieve module: $($Module.Name) from AA account: $AutomationAccountName. Skipping update process" -ErrorAction Continue
+                Write-Error -Message "Failed to retrieve module: $($Module.Name) from AA account: $AutomationAccountName. Skipping update of this module." -ErrorAction Continue
                 $oErr = $Null
             }
             else
@@ -345,7 +360,8 @@ try
                             @{n='Url';ex={$_.Content.src}},
                             @{n='Dependencies';ex={$_.properties.Dependencies}},
                             @{n='Owners';ex={$_.properties.Owners}}
-                if($oErr) {
+                if($oErr)
+                {
                     Write-Error -Message "Failed to query Gallery for module $ModuleName" -ErrorAction Continue
                     $oErr = $Null
                 }
