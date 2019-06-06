@@ -1,44 +1,11 @@
-﻿<#PSScriptInfo
-
-.VERSION 1.03
-
-.GUID fa658952-8f94-45ac-9c94-f5fe23d0fcf9
-
-.AUTHOR Automation Team
-
-.COMPANYNAME Microsoft
-
-.COPYRIGHT
-
-.TAGS AzureAutomation OMS Module Utility
-
-.LICENSEURI
-
-.PROJECTURI https://github.com/azureautomation/runbooks/blob/master/Utility/Update-ModulesInAutomationToLatestVersion.ps1
-
-.ICONURI
-
-.EXTERNALMODULEDEPENDENCIES
-
-.REQUIREDSCRIPTS
-
-.EXTERNALSCRIPTDEPENDENCIES
-
-.RELEASENOTES
-
-#>
-
 #Requires -Module AzureRM.Profile, AzureRM.Automation,AzureRM.Resources
 
 <#
 .SYNOPSIS
-    This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an
-    Automation account. If UpdateAzureModulesOnly is set this runbook will only update the Azure modules.
+    This Azure Automation runbook imports a module and all of it's dependencies into AA from PowerShell Gallery
 
 .DESCRIPTION
-    This Azure/OMS Automation runbook imports the latest version on PowerShell Gallery of all modules in an
-    Automation account. By connecting the runbook to an Automation schedule, you can ensure all modules in
-    your Automation account stay up to date.
+    This Azure Automation runbook imports a module named as parameter input to AA from PowerShell Gallery.
 
 .PARAMETER ResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
@@ -49,15 +16,9 @@
     Optional. The name of the Automation account to update all modules for.
     If an automation account is not specified, then it will use the current one for the automation account
     if it is run from the automation service
-
-.PARAMETER UpdateAzureModulesOnly
-    Optional. Set to $false to have logic try to update all modules installed in account.
-    Default is $true, and this will only update Azure modules
-
 .EXAMPLE
-    Update-ModulesInAutomationToLatestVersion -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount"
-    Update-ModulesInAutomationToLatestVersion -UpdateAzureModulesOnly $false
-    Update-ModulesInAutomationToLatestVersion
+    Import-PSGalleryModulesInAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -NewModuleName "Az"
+    Import-PSGalleryModulesInAA -NewModuleName "Az"
 
 .NOTES
     AUTHOR: Automation Team
@@ -76,7 +37,7 @@ param(
     [String] $NewModuleName
 )
 $VerbosePreference = "silentlycontinue"
-$RunbookName = "Update-ModulesInAutomationToLatestVersion"
+$RunbookName = "Import-PSGalleryModulesInAA"
 Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 Import-Module -Name AzureRM.Profile, AzureRM.Automation,AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
 if($oErr)
@@ -89,7 +50,6 @@ $ErrorActionPreference = "stop"
 $ModulesImported = @()
 
 #region Constants
-$script:AzureSdkOwnerName = "azure-sdk"
 $script:PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2'
 #endregion
 
@@ -123,10 +83,11 @@ function doModuleImport {
         If($oErr)
         {
             # Will stop runbook, though message will not be logged
-            Write-Error -Message "Failed to retrieve module details from Gallery" -ErrorAction Stop
+            Write-Error -Message "Failed to retrieve details of module: $ModuleName from Gallery" -ErrorAction Stop
         }
         # Should not be needed as filter will only return one hit, though will keep the code to strip away if search ever get multiple hits
-        if($SearchResult.Length -and $SearchResult.Length -gt 1) {
+        if($SearchResult.Length -and $SearchResult.Length -gt 1)
+        {
             $SearchResult = $SearchResult | Where-Object -FilterScript {
                 return $_.Name -eq $ModuleName
             }
@@ -146,7 +107,7 @@ function doModuleImport {
             }
             else
             {
-                $ModuleContentUrl = "$script:PsGalleryApiUrl/package/$ModuleName/$ModuleVersion"
+                $ModuleContentUrl = "$($script:PsGalleryApiUrl)/package/$ModuleName/$ModuleVersion"
             }
 
             # Make sure module dependencies are imported
@@ -161,7 +122,15 @@ function doModuleImport {
                     if($_ -and $_.Length -gt 0) {
                         $Parts = $_.Split(":")
                         $DependencyName = $Parts[0]
-                        $DependencyVersion = $Parts[1] -replace "[^0-9.]", ''
+                        # Gallery is returning double the same version on some modules: Az.Aks:[1.0.1, 1.0.1] some do [1.0.1, ]
+                        if($Parts[1] -match ",")
+                        {
+                            $DependencyVersion = (($Parts[1]).Split(","))[0] -replace "[^0-9.]", ''
+                        }
+                        else
+                        {
+                            $DependencyVersion = $Parts[1] -replace "[^0-9.]", ''
+                        }
 
                         # check if we already imported this dependency module during execution of this script
                         if(!$ModulesImported.Contains($DependencyName)) {
@@ -170,19 +139,19 @@ function doModuleImport {
                                 -ResourceGroupName $ResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
                                 -Name $DependencyName `
-                                -ErrorAction Continue
+                                -ErrorAction silentlycontinue
 
                             # check if Automation account already contains this dependency module of the right version
                             if((!$AutomationModule) -or $AutomationModule.Version -ne $DependencyVersion) {
 
-                                Write-Output -InputObject "Importing dependency module $DependencyName of version $DependencyVersion first."
+                                Write-Output -InputObject "Importing dependency module $DependencyName with version $DependencyVersion first."
 
                                 # this dependency module has not been imported, import it first
                                 doModuleImport `
                                     -ResourceGroupName $ResourceGroupName `
                                     -AutomationAccountName $AutomationAccountName `
                                     -ModuleName $DependencyName `
-                                    -ModuleVersion $DependencyVersion -ErrorAction Stop
+                                    -ModuleVersion $DependencyVersion -ErrorAction Continue
 
                                 $ModulesImported += $DependencyName
                             }
@@ -195,14 +164,10 @@ function doModuleImport {
             do
             {
                 $ActualUrl = $ModuleContentUrl
-                $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction Continue -ErrorVariable oErr).Headers.Location
+                $ModuleContentUrl = (Invoke-WebRequest -Uri $ModuleContentUrl -MaximumRedirection 0 -UseBasicParsing -ErrorAction SilentlyContinue).Headers.Location
             }
-            while(!$ModuleContentUrl.Contains(".nupkg") -and $Null -eq $oErr)
-            if($oErr)
-            {
-                Write-Error -Message "Failed to retrieve storage location of module"
-                $oErr = $Null
-            }
+            while(-not ($ModuleContentUrl.Contains(".nupkg")) )
+
             $ActualUrl = $ModuleContentUrl
 
             if($ModuleVersion)
@@ -230,13 +195,14 @@ function doModuleImport {
                 {
                     Write-Verbose -Message "Polling for module import completion"
                     Start-Sleep -Seconds 10
-                    $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule -ErrorAction continue -ErrorVariable oErr
+                    $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule -ErrorAction silentlycontinue -ErrorVariable oErr
                 }
-
                 if($AutomationModule.ProvisioningState -eq "Failed" -or $oErr -ne $Null) {
-                    Write-Error "Import of $ModuleName module to Automation account failed." -ErrorAction
+                    Write-Error "Import of $ModuleName module to Automation account failed." -ErrorAction Continue
+                    $oErr = $Null
                 }
-                else {
+                else
+                {
                     Write-Output -InputObject "Import of $ModuleName module to Automation account succeeded."
                 }
             }
@@ -312,16 +278,22 @@ try
     {
         Write-Error -Message "Check that AzureRunAsConnection is configured for AA account: $AutomationAccountName" -ErrorAction Stop
     }
-
+    $Modules = Get-AzureRmAutomationModule `
+        -ResourceGroupName $ResourceGroupName `
+        -AutomationAccountName $AutomationAccountName -ErrorAction continue -ErrorVariable oErr
+    if($oErr)
+    {
+        Write-Error -Message "Failed to retrieve modules in AA account $AutomationAccountName" -ErrorAction Stop
+    }
     # Import module if specified
-    if (!([string]::IsNullOrEmpty($ModuleName)))
+    if (!([string]::IsNullOrEmpty($NewModuleName)))
     {
         # Check if module exists in the gallery
-        $Filter = @($ModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
+        $Filter = @($NewModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
         $Url = "$script:PsGalleryApiUrl/Packages?`$filter=$Filter and IsLatestVersion"
 
         # Fetch results and filter them with -like, and then shape the output
-        $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
+        $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $NewModuleName } |
         Select-Object @{n='Name';ex={$_.title.'#text'}},
                     @{n='Version';ex={$_.properties.version}},
                     @{n='Url';ex={$_.Content.src}},
@@ -349,12 +321,16 @@ try
             doModuleImport `
                 -ResourceGroupName $ResourceGroupName `
                 -AutomationAccountName $AutomationAccountName `
-                -ModuleName $NewModuleName
+                -ModuleName $NewModuleName -ErrorAction Continue
         }
         else
         {
             Write-Output -InputObject ("Module $NewModuleName is already in the automation account")
         }
+    }
+    else
+    {
+        Write-Warning -Message "No Module name was entered"
     }
 }
 catch
