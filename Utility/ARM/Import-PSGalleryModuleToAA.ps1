@@ -17,8 +17,8 @@
     If an automation account is not specified, then it will use the current one for the automation account
     if it is run from the automation service
 .EXAMPLE
-    Import-PSGalleryModulesInAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -NewModuleName "Az"
-    Import-PSGalleryModulesInAA -NewModuleName "Az"
+    Import-PSGalleryModulesInAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -NewModuleName "AzureRM"
+    Import-PSGalleryModulesInAA -NewModuleName "AzureRM"
 
 .NOTES
     AUTHOR: Automation Team
@@ -46,11 +46,18 @@ if($oErr)
     throw "Check AA account for modules"
 }
 $VerbosePreference = "continue"
-$ErrorActionPreference = "stop"
-$ModulesImported = @()
 
+#region Variables
+$script:ModulesImported = @()
+# track depth of module dependencies import
+$script:RecursionDepth = 0
+# Make sure not to try to import dependencies of dependencies, like AzureRM module where some of the sub modules have different version dependencies on AzureRM.Accounts
+$script:RecursionDepthLimit = 3
+#endregion
 #region Constants
 $script:PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2'
+# Set to true if need to debug code locally
+$Debug = $true
 #endregion
 
 #region Functions
@@ -70,6 +77,8 @@ function doModuleImport {
         [String] $ModuleVersion
     )
     try {
+        # Track recursion depth
+        $script:RecursionDepth ++
         $Filter = @($ModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
         $Url = "$script:PsGalleryApiUrl/Packages?`$filter=$Filter and IsLatestVersion"
 
@@ -93,14 +102,14 @@ function doModuleImport {
             }
         }
 
-        if(!$SearchResult) {
+        if(-not $SearchResult) {
             Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module you imported from a different location"
         }
         else
         {
             $ModuleName = $SearchResult.Name # get correct casing for the module name
 
-            if(!$ModuleVersion)
+            if(-not $ModuleVersion)
             {
                 # get latest version
                 $ModuleContentUrl = $SearchResult.Url
@@ -113,13 +122,15 @@ function doModuleImport {
             # Make sure module dependencies are imported
             $Dependencies = $SearchResult.Dependencies
 
-            if($Dependencies -and $Dependencies.Length -gt 0) {
+            if($Dependencies -and $Dependencies.Length -gt 0)
+            {
                 $Dependencies = $Dependencies.Split("|")
 
                 # parse dependencies, which are in the format: module1name:module1version:|module2name:module2version:
                 $Dependencies | ForEach-Object {
 
-                    if($_ -and $_.Length -gt 0) {
+                    if( $_ -and $_.Length -gt 0 )
+                    {
                         $Parts = $_.Split(":")
                         $DependencyName = $Parts[0]
                         # Gallery is returning double the same version number on some modules: Az.Aks:[1.0.1, 1.0.1] some do [1.0.1, ]
@@ -131,20 +142,21 @@ function doModuleImport {
                         {
                             $DependencyVersion = $Parts[1] -replace "[^0-9.]", ''
                         }
-
                         # check if we already imported this dependency module during execution of this script
-                        if(!$ModulesImported.Contains($DependencyName)) {
-                            # Log errors if occurs
-                            $AutomationModule = Get-AzureRmAutomationModule `
+                        if( -not $script:ModulesImported.Contains($DependencyName) )
+                        {
+                             # check if Automation account already contains this dependency module of the right version
+                            $AutomationModule = $null
+                            $AutomationModule = Get-AzureRMAutomationModule `
                                 -ResourceGroupName $ResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
                                 -Name $DependencyName `
-                                -ErrorAction silentlycontinue
-
-                            # check if Automation account already contains this dependency module of the right version
-                            if((!$AutomationModule) -or $AutomationModule.Version -ne $DependencyVersion) {
-
-                                Write-Output -InputObject "Importing dependency module $DependencyName with version $DependencyVersion first."
+                                -ErrorAction SilentlyContinue
+                            # Do not downgrade version of module if newer exists in Automation account (limitation of AA that one can only have only one version of a module imported)
+                            # limit also recursion depth of dependencies search
+                            if( ($script:RecursionDepth -le $script:RecursionDepthLimit) -and ((-not $AutomationModule) -or [System.Version]$AutomationModule.Version -lt [System.Version]$DependencyVersion) )
+                            {
+                                Write-Output -InputObject "$ModuleName depends on: $DependencyName with version $DependencyVersion, importing this module first"
 
                                 # this dependency module has not been imported, import it first
                                 doModuleImport `
@@ -152,9 +164,19 @@ function doModuleImport {
                                     -AutomationAccountName $AutomationAccountName `
                                     -ModuleName $DependencyName `
                                     -ModuleVersion $DependencyVersion -ErrorAction Continue
-
-                                $ModulesImported += $DependencyName
+                                # Register module has been imported
+                                # TODO: If module import fails, do not add and remove the failed imported module from AA account
+                                $script:ModulesImported += $DependencyName
+                                $script:RecursionDepth --
                             }
+                            else
+                            {
+                                Write-Output -InputObject "$ModuleName has a dependency on: $DependencyName with version: $DependencyVersion, though this is already present in Automation account with version: $($AutomationModule.Version)"
+                            }
+                        }
+                        else
+                        {
+                            Write-Output -InputObject "$DependencyName already imported to Automation account"
                         }
                     }
                 }
@@ -180,32 +202,36 @@ function doModuleImport {
             }
             if(-not ([string]::IsNullOrEmpty($ActualUrl)))
             {
-                $AutomationModule = New-AzureRmAutomationModule `
+                $AutomationModule = New-AzureRMAutomationModule `
                 -ResourceGroupName $ResourceGroupName `
                 -AutomationAccountName $AutomationAccountName `
                 -Name $ModuleName `
                 -ContentLink $ActualUrl -ErrorAction continue
+                $oErr = $null
                 while(
-                    (!([string]::IsNullOrEmpty($AutomationModule))) -and
+                    (-not ([string]::IsNullOrEmpty($AutomationModule))) -and
                     $AutomationModule.ProvisioningState -ne "Created" -and
                     $AutomationModule.ProvisioningState -ne "Succeeded" -and
                     $AutomationModule.ProvisioningState -ne "Failed" -and
-                    $Null -eq $oErr
+                    [string]::IsNullOrEmpty($oErr)
                 )
                 {
-                    Write-Verbose -Message "Polling for module import completion"
-                    Start-Sleep -Seconds 10
-                    $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule -ErrorAction silentlycontinue -ErrorVariable oErr
+                    Start-Sleep -Seconds 5
+                    Write-Verbose -Message "Polling module import status for: $($AutomationModule.Name)"
+                    $AutomationModule = $AutomationModule | Get-AzureRMAutomationModule -ErrorAction silentlycontinue -ErrorVariable oErr
                     if($oErr)
                     {
-                        Write-Error -Message "Error retrieving module status for: $($AutomationModule.Name)" -ErrorAction Continue
-
+                        Write-Error -Message "Error fetching module status for: $($AutomationModule.Name)" -ErrorAction Continue
                     }
-                    Write-Verbose -Message "Import pull gave status: $($AutomationModule.ProvisioningState)"
+                    else
+                    {
+                        Write-Verbose -Message "Module import pull status: $($AutomationModule.ProvisioningState)"
+                    }
                 }
-                if($AutomationModule.ProvisioningState -eq "Failed" -or $Null -ne $oErr) {
-                    Write-Error "Import of $ModuleName module to Automation account failed." -ErrorAction Continue
-                    $oErr = $Null
+                if( ($AutomationModule.ProvisioningState -eq "Failed") -or $oErr ) {
+                    Write-Error -Message "Import of $($AutomationModule.Name) module to Automation account failed." -ErrorAction Continue
+                    Write-Output -InputObject "Import of $($AutomationModule.Name) module to Automation account failed."
+                    $oErr = $null
                 }
                 else
                 {
@@ -241,7 +267,7 @@ try
     {
         Write-Output -InputObject ("Logging in to Azure...")
 
-        $Null = Add-AzureRmAccount `
+        $Null = Add-AzureRMAccount `
             -ServicePrincipal `
             -TenantId $RunAsConnection.TenantId `
             -ApplicationId $RunAsConnection.ApplicationId `
@@ -250,41 +276,51 @@ try
         {
             Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
         }
-        $Subscription = Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
+        $Subscription = Select-AzureRMSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
         Write-Output -InputObject "Running in subscription: $($Subscription.Name)"
         if($oErr)
         {
             Write-Error -Message "Failed to select Azure subscription" -ErrorAction Stop
         }
-        # Find the automation account or resource group is not specified
-        if  (([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+        if(-not $Debug)
         {
-            Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
-            if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid))
+            # Find the automation account or resource group is not specified
+            if(([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
             {
-                Write-Error -Message "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters" -ErrorAction Stop
-            }
-
-            $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ErrorAction Stop
-
-            foreach ($Automation in $AutomationResource)
-            {
-                $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
-                if (!([string]::IsNullOrEmpty($Job)))
+                Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
+                if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid) )
                 {
-                        $ResourceGroupName = $Job.ResourceGroupName
-                        $AutomationAccountName = $Job.AutomationAccountName
-                        break;
+                    Write-Error -Message "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters" -ErrorAction Stop
                 }
+
+                $AutomationResource = Get-AzureRMResource -ResourceType Microsoft.Automation/AutomationAccounts -ErrorAction Stop
+
+                foreach ($Automation in $AutomationResource)
+                {
+                    $Job = Get-AzureRMAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+                    if (!([string]::IsNullOrEmpty($Job)))
+                    {
+                            $ResourceGroupName = $Job.ResourceGroupName
+                            $AutomationAccountName = $Job.AutomationAccountName
+                            break;
+                    }
+                }
+                Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
             }
-            Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+        }
+        else
+        {
+            if(([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+            {
+                Write-Error -Message "When debugging locally ResourceGroupName and AutomationAccountName parameters must be set" -ErrorAction Stop
+            }
         }
     }
     else
     {
         Write-Error -Message "Check that AzureRunAsConnection is configured for AA account: $AutomationAccountName" -ErrorAction Stop
     }
-    $Modules = Get-AzureRmAutomationModule `
+    $Modules = Get-AzureRMAutomationModule `
         -ResourceGroupName $ResourceGroupName `
         -AutomationAccountName $AutomationAccountName -ErrorAction continue -ErrorVariable oErr
     if($oErr)
@@ -336,7 +372,7 @@ try
     }
     else
     {
-        Write-Warning -Message "No Module name was entered"
+        Write-Warning -Message "No Module name to import was entered"
     }
 }
 catch
