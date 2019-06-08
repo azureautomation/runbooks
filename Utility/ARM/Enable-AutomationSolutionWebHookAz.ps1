@@ -128,7 +128,7 @@ try
     }
 
     $VerbosePreference = "silentlycontinue"
-    Import-Module -Name Az.Account, Az.Automation, Az.OperationalInsights, Az.Compute, Az.Resources -ErrorAction Continue -ErrorVariable oErr
+    Import-Module -Name Az.Accounts, Az.Automation, Az.OperationalInsights, Az.Compute, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)
     {
         Write-Error -Message "Failed to load needed modules for Runbook, check that Az.Automation, Az.OperationalInsights, Az.Compute and Az.Resources is imported into Azure Automation" -ErrorAction Stop
