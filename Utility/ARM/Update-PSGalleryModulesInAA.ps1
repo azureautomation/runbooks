@@ -1,5 +1,3 @@
-#Requires -Module AzureRM.Profile, AzureRM.Automation,AzureRM.Resources
-
 <#
 .SYNOPSIS
     This Azure Automation runbook imports the latest version of installed modules in Automation Account from PowerShell Gallery.
@@ -25,9 +23,9 @@
     Default is $true, and this will only update Azure modules
 
 .EXAMPLE
-    Update-PSGalleryModulesToAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount"
-    Update-PSGalleryModulesToAA -UpdateAzureModulesOnly $false
-    Update-PSGalleryModulesToAA
+    Update-PSGalleryModulesInAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount"
+    Update-PSGalleryModulesInAA -UpdateAzureModulesOnly $false
+    Update-PSGalleryModulesInAA
 
 .NOTES
     AUTHOR: Automation Team
@@ -46,18 +44,42 @@ param(
     [Bool] $UpdateAzureModulesOnly = $true
 )
 $VerbosePreference = "silentlycontinue"
-$RunbookName = "Update-PSGalleryModulesToAA"
+$RunbookName = "Update-PSGalleryModulesInAA"
 Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
-Import-Module -Name AzureRM.Profile, AzureRM.Automation,AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
-if($oErr)
+if((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
 {
-    Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
-    throw "Check AA account for modules"
+    Import-Module -Name AzureRM.Profile, AzureRM.Automation,AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+    if($oErr)
+    {
+        Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
+        throw "Check AA account for modules"
+    }
 }
+elseif((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Automation" -ListAvailable) -and (Get-Module -Name "Az.Resources" -ListAvailable))
+{
+    Import-Module -Name Az.Accounts, Az.Automation,Az.Resources -ErrorAction Continue -ErrorVariable oErr
+    if($oErr)
+    {
+        Write-Error -Message "Failed to load needed modules for Runbook: Az.Accounts, Az.Automation,Az.Resources" -ErrorAction Continue
+        throw "Check AA account for modules"
+    }
+    Enable-AzureRmAlias
+}
+else
+{
+    Write-Error -Message "Did not find AzureRM or Az modules installed in Automation account" -ErrorAction Stop
+}
+
 $VerbosePreference = "continue"
 $ErrorActionPreference = "stop"
-$ModulesImported = @()
 
+#region Variables
+$script:ModulesImported = @()
+# track depth of module dependencies import
+$script:RecursionDepth = 0
+# Make sure not to try to import dependencies of dependencies, like AzureRM module where some of the sub modules have different version dependencies on AzureRM.Accounts
+$script:RecursionDepthLimit = 3
+#endregion
 #region Constants
 $script:AzureSdkOwnerName = "azure-sdk"
 $script:PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2'
@@ -80,6 +102,8 @@ function doModuleImport {
         [String] $ModuleVersion
     )
     try {
+        # Track recursion depth
+        $script:RecursionDepth ++
         $Filter = @($ModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
         $Url = "$script:PsGalleryApiUrl/Packages?`$filter=$Filter and IsLatestVersion"
 
@@ -103,14 +127,14 @@ function doModuleImport {
             }
         }
 
-        if(!$SearchResult) {
+        if(-not $SearchResult) {
             Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module you imported from a different location"
         }
         else
         {
             $ModuleName = $SearchResult.Name # get correct casing for the module name
 
-            if(!$ModuleVersion)
+            if(-not $ModuleVersion)
             {
                 # get latest version
                 $ModuleContentUrl = $SearchResult.Url
@@ -123,16 +147,18 @@ function doModuleImport {
             # Make sure module dependencies are imported
             $Dependencies = $SearchResult.Dependencies
 
-            if($Dependencies -and $Dependencies.Length -gt 0) {
+            if($Dependencies -and $Dependencies.Length -gt 0)
+            {
                 $Dependencies = $Dependencies.Split("|")
 
                 # parse dependencies, which are in the format: module1name:module1version:|module2name:module2version:
                 $Dependencies | ForEach-Object {
 
-                    if($_ -and $_.Length -gt 0) {
+                    if( $_ -and $_.Length -gt 0 )
+                    {
                         $Parts = $_.Split(":")
                         $DependencyName = $Parts[0]
-                        # Gallery is returning double the same version on some modules: Az.Aks:[1.0.1, 1.0.1] some do [1.0.1, ]
+                        # Gallery is returning double the same version number on some modules: Az.Aks:[1.0.1, 1.0.1] some do [1.0.1, ]
                         if($Parts[1] -match ",")
                         {
                             $DependencyVersion = (($Parts[1]).Split(","))[0] -replace "[^0-9.]", ''
@@ -141,20 +167,21 @@ function doModuleImport {
                         {
                             $DependencyVersion = $Parts[1] -replace "[^0-9.]", ''
                         }
-
                         # check if we already imported this dependency module during execution of this script
-                        if(!$ModulesImported.Contains($DependencyName)) {
-                            # Log errors if occurs
-                            $AutomationModule = Get-AzureRmAutomationModule `
+                        if( -not $script:ModulesImported.Contains($DependencyName) )
+                        {
+                             # check if Automation account already contains this dependency module of the right version
+                            $AutomationModule = $null
+                            $AutomationModule = Get-AzureRMAutomationModule `
                                 -ResourceGroupName $ResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
                                 -Name $DependencyName `
-                                -ErrorAction silentlycontinue
-
-                            # check if Automation account already contains this dependency module of the right version
-                            if((!$AutomationModule) -or $AutomationModule.Version -ne $DependencyVersion) {
-
-                                Write-Output -InputObject "Importing dependency module $DependencyName with version $DependencyVersion first."
+                                -ErrorAction SilentlyContinue
+                            # Do not downgrade version of module if newer exists in Automation account (limitation of AA that one can only have only one version of a module imported)
+                            # limit also recursion depth of dependencies search
+                            if( ($script:RecursionDepth -le $script:RecursionDepthLimit) -and ((-not $AutomationModule) -or [System.Version]$AutomationModule.Version -lt [System.Version]$DependencyVersion) )
+                            {
+                                Write-Output -InputObject "$ModuleName depends on: $DependencyName with version $DependencyVersion, importing this module first"
 
                                 # this dependency module has not been imported, import it first
                                 doModuleImport `
@@ -162,9 +189,19 @@ function doModuleImport {
                                     -AutomationAccountName $AutomationAccountName `
                                     -ModuleName $DependencyName `
                                     -ModuleVersion $DependencyVersion -ErrorAction Continue
-
-                                $ModulesImported += $DependencyName
+                                # Register module has been imported
+                                # TODO: If module import fails, do not add and remove the failed imported module from AA account
+                                $script:ModulesImported += $DependencyName
+                                $script:RecursionDepth --
                             }
+                            else
+                            {
+                                Write-Output -InputObject "$ModuleName has a dependency on: $DependencyName with version: $DependencyVersion, though this is already present in Automation account with version: $($AutomationModule.Version)"
+                            }
+                        }
+                        else
+                        {
+                            Write-Output -InputObject "$DependencyName already imported to Automation account"
                         }
                     }
                 }
@@ -190,26 +227,36 @@ function doModuleImport {
             }
             if(-not ([string]::IsNullOrEmpty($ActualUrl)))
             {
-                $AutomationModule = New-AzureRmAutomationModule `
+                $AutomationModule = New-AzureRMAutomationModule `
                 -ResourceGroupName $ResourceGroupName `
                 -AutomationAccountName $AutomationAccountName `
                 -Name $ModuleName `
                 -ContentLink $ActualUrl -ErrorAction continue
+                $oErr = $null
                 while(
-                    (!([string]::IsNullOrEmpty($AutomationModule))) -and
+                    (-not ([string]::IsNullOrEmpty($AutomationModule))) -and
                     $AutomationModule.ProvisioningState -ne "Created" -and
                     $AutomationModule.ProvisioningState -ne "Succeeded" -and
                     $AutomationModule.ProvisioningState -ne "Failed" -and
-                    $Null -eq $oErr
+                    [string]::IsNullOrEmpty($oErr)
                 )
                 {
-                    Write-Verbose -Message "Polling for module import completion"
-                    Start-Sleep -Seconds 10
-                    $AutomationModule = $AutomationModule | Get-AzureRmAutomationModule -ErrorAction silentlycontinue -ErrorVariable oErr
+                    Start-Sleep -Seconds 5
+                    Write-Verbose -Message "Polling module import status for: $($AutomationModule.Name)"
+                    $AutomationModule = $AutomationModule | Get-AzureRMAutomationModule -ErrorAction silentlycontinue -ErrorVariable oErr
+                    if($oErr)
+                    {
+                        Write-Error -Message "Error fetching module status for: $($AutomationModule.Name)" -ErrorAction Continue
+                    }
+                    else
+                    {
+                        Write-Verbose -Message "Module import pull status: $($AutomationModule.ProvisioningState)"
+                    }
                 }
-                if($AutomationModule.ProvisioningState -eq "Failed" -or $oErr -ne $Null) {
-                    Write-Error "Import of $ModuleName module to Automation account failed." -ErrorAction Continue
-                    $oErr = $Null
+                if( ($AutomationModule.ProvisioningState -eq "Failed") -or $oErr ) {
+                    Write-Error -Message "Import of $($AutomationModule.Name) module to Automation account failed." -ErrorAction Continue
+                    Write-Output -InputObject "Import of $($AutomationModule.Name) module to Automation account failed."
+                    $oErr = $null
                 }
                 else
                 {
