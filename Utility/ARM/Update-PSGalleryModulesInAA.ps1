@@ -71,7 +71,6 @@ else
 }
 
 $VerbosePreference = "continue"
-$ErrorActionPreference = "stop"
 
 #region Variables
 $script:ModulesImported = @()
