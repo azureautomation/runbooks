@@ -98,6 +98,7 @@ elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name 
             throw "Check AA account for modules"
         }
     }
+    Write-Output -InputObject "Using AzureRM modules to execute runbook"
 }
 else
 {
