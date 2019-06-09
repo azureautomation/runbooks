@@ -202,7 +202,7 @@ function doModuleImport
                             }
                             else
                             {
-                                Write-Output -InputObject "$ModuleName has a dependency on: $DependencyName with version: $DependencyVersion, though this is already present in Automation account with version: $($AutomationModule.Version)"
+                                Write-Output -InputObject "$ModuleName has a dependency on: $DependencyName with version: $DependencyVersion, though this is already installed with version: $($AutomationModule.Version)"
                             }
                         }
                         else
