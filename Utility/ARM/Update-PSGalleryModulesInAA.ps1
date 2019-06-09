@@ -45,10 +45,10 @@ param(
     [String] $AutomationAccountName,
 
     [Parameter(Mandatory = $false)]
-    [Bool] $UpdateAzureModulesOnly = $true,
+    [switch] $UpdateAzureModulesOnly = $true,
 
     [Parameter(Mandatory = $false)]
-    [Bool] $DebugLocal = $false
+    [switch] $DebugLocal = $false
 )
 $VerbosePreference = "silentlycontinue"
 $RunbookName = "Update-PSGalleryModulesInAA"
