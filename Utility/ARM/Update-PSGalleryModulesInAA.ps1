@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
     This Azure Automation runbook imports the latest version of installed modules in Automation Account from PowerShell Gallery.
-    If UpdateAzureModulesOnly is set this runbook will only update the Azure modules.
+    It can also only update the Azure modules by setting a parameter.
 
 .DESCRIPTION
     This Azure Automation runbook imports the latest version from PowerShell Gallery of all modules in an
     Automation account. By connecting the runbook to an Automation schedule, you can ensure all modules in
-    your Automation account stay up to date.
+    your Automation account stay up to date. Or only update the Azure modules
 
 .PARAMETER ResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
@@ -22,6 +22,10 @@
     Optional. Set to $false to have logic try to update all modules installed in account.
     Default is $true, and this will only update Azure modules
 
+.PARAMETER DebugLocal
+    Optional. Set to $true if debugging script locally to switch of logic that tries to discover the Automation account it is running in
+    Default is $false
+
 .EXAMPLE
     Update-PSGalleryModulesInAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount"
     Update-PSGalleryModulesInAA -UpdateAzureModulesOnly $false
@@ -34,21 +38,24 @@
 #>
 
 param(
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [String] $ResourceGroupName,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [String] $AutomationAccountName,
 
-    [Parameter(Mandatory=$false)]
-    [Bool] $UpdateAzureModulesOnly = $true
+    [Parameter(Mandatory = $false)]
+    [Bool] $UpdateAzureModulesOnly = $true,
+
+    [Parameter(Mandatory = $false)]
+    [Bool] $DebugLocal = $false
 )
 $VerbosePreference = "silentlycontinue"
 $RunbookName = "Update-PSGalleryModulesInAA"
 Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 if((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
 {
-    Import-Module -Name AzureRM.Profile, AzureRM.Automation,AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
     if($oErr)
     {
         Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
@@ -57,12 +64,13 @@ if((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name Azur
 }
 elseif((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Automation" -ListAvailable) -and (Get-Module -Name "Az.Resources" -ListAvailable))
 {
-    Import-Module -Name Az.Accounts, Az.Automation,Az.Resources -ErrorAction Continue -ErrorVariable oErr
+    Import-Module -Name Az.Accounts, Az.Automation, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     if($oErr)
     {
         Write-Error -Message "Failed to load needed modules for Runbook: Az.Accounts, Az.Automation,Az.Resources" -ErrorAction Continue
         throw "Check AA account for modules"
     }
+    # This will negate the need to change syntax of AzureRM function names even if using Az modules
     Enable-AzureRmAlias
 }
 else
@@ -85,34 +93,34 @@ $script:PsGalleryApiUrl = 'https://www.powershellgallery.com/api/v2'
 #endregion
 
 #region Functions
-function doModuleImport {
+function doModuleImport
+{
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [String] $ResourceGroupName,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [String] $AutomationAccountName,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [String] $ModuleName,
 
         # if not specified latest version will be imported
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [String] $ModuleVersion
     )
-    try {
-        # Track recursion depth
-        $script:RecursionDepth ++
+    try
+    {
         $Filter = @($ModuleName.Trim('*').Split('*') | ForEach-Object { "substringof('$_',Id)" }) -join " and "
         $Url = "$script:PsGalleryApiUrl/Packages?`$filter=$Filter and IsLatestVersion"
 
         # Fetch results and filter them with -like, and then shape the output
         $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
-        Select-Object @{n='Name';ex={$_.title.'#text'}},
-                    @{n='Version';ex={$_.properties.version}},
-                    @{n='Url';ex={$_.Content.src}},
-                    @{n='Dependencies';ex={$_.properties.Dependencies}},
-                    @{n='Owners';ex={$_.properties.Owners}}
+            Select-Object @{n = 'Name'; ex = {$_.title.'#text'}},
+        @{n = 'Version'; ex = {$_.properties.version}},
+        @{n = 'Url'; ex = {$_.Content.src}},
+        @{n = 'Dependencies'; ex = {$_.properties.Dependencies}},
+        @{n = 'Owners'; ex = {$_.properties.Owners}}
         If($oErr)
         {
             # Will stop runbook, though message will not be logged
@@ -126,7 +134,8 @@ function doModuleImport {
             }
         }
 
-        if(-not $SearchResult) {
+        if(-not $SearchResult)
+        {
             Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module you imported from a different location"
         }
         else
@@ -148,6 +157,8 @@ function doModuleImport {
 
             if($Dependencies -and $Dependencies.Length -gt 0)
             {
+                # Track recursion depth
+                $script:RecursionDepth ++
                 $Dependencies = $Dependencies.Split("|")
 
                 # parse dependencies, which are in the format: module1name:module1version:|module2name:module2version:
@@ -169,7 +180,7 @@ function doModuleImport {
                         # check if we already imported this dependency module during execution of this script
                         if( -not $script:ModulesImported.Contains($DependencyName) )
                         {
-                             # check if Automation account already contains this dependency module of the right version
+                            # check if Automation account already contains this dependency module of the right version
                             $AutomationModule = $null
                             $AutomationModule = Get-AzureRMAutomationModule `
                                 -ResourceGroupName $ResourceGroupName `
@@ -191,6 +202,7 @@ function doModuleImport {
                                 # Register module has been imported
                                 # TODO: If module import fails, do not add and remove the failed imported module from AA account
                                 $script:ModulesImported += $DependencyName
+                                # Track recursion depth
                                 $script:RecursionDepth --
                             }
                             else
@@ -227,10 +239,10 @@ function doModuleImport {
             if(-not ([string]::IsNullOrEmpty($ActualUrl)))
             {
                 $AutomationModule = New-AzureRMAutomationModule `
-                -ResourceGroupName $ResourceGroupName `
-                -AutomationAccountName $AutomationAccountName `
-                -Name $ModuleName `
-                -ContentLink $ActualUrl -ErrorAction continue
+                    -ResourceGroupName $ResourceGroupName `
+                    -AutomationAccountName $AutomationAccountName `
+                    -Name $ModuleName `
+                    -ContentLink $ActualUrl -ErrorAction continue
                 $oErr = $null
                 while(
                     (-not ([string]::IsNullOrEmpty($AutomationModule))) -and
@@ -252,7 +264,8 @@ function doModuleImport {
                         Write-Verbose -Message "Module import pull status: $($AutomationModule.ProvisioningState)"
                     }
                 }
-                if( ($AutomationModule.ProvisioningState -eq "Failed") -or $oErr ) {
+                if( ($AutomationModule.ProvisioningState -eq "Failed") -or $oErr )
+                {
                     Write-Error -Message "Import of $($AutomationModule.Name) module to Automation account failed." -ErrorAction Continue
                     Write-Output -InputObject "Import of $($AutomationModule.Name) module to Automation account failed."
                     $oErr = $null
@@ -306,28 +319,37 @@ try
         {
             Write-Error -Message "Failed to select Azure subscription" -ErrorAction Stop
         }
-        # Find the automation account or resource group is not specified
-        if  (([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+        if(-not $DebugLocal)
         {
-            Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
-            if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid))
+            # Find the automation account or resource group is not specified
+            if  (([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
             {
-                Write-Error -Message "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters" -ErrorAction Stop
-            }
-
-            $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ErrorAction Stop
-
-            foreach ($Automation in $AutomationResource)
-            {
-                $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
-                if (!([string]::IsNullOrEmpty($Job)))
+                Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
+                if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid))
                 {
+                    Write-Error -Message "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters" -ErrorAction Stop
+                }
+
+                $AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ErrorAction Stop
+
+                foreach ($Automation in $AutomationResource)
+                {
+                    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+                    if (!([string]::IsNullOrEmpty($Job)))
+                    {
                         $ResourceGroupName = $Job.ResourceGroupName
                         $AutomationAccountName = $Job.AutomationAccountName
                         break;
+                    }
                 }
+                Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
             }
-            Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+        else
+        {
+            if(([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+            {
+                Write-Error -Message "When debugging locally ResourceGroupName and AutomationAccountName parameters must be set" -ErrorAction Stop
+            }
         }
     }
     else
@@ -365,11 +387,11 @@ try
 
                 # Fetch results and filter them with -like, and then shape the output
                 $SearchResult = Invoke-RestMethod -Method Get -Uri $Url -ErrorAction Continue -ErrorVariable oErr | Where-Object { $_.title.'#text' -like $ModuleName } |
-                Select-Object @{n='Name';ex={$_.title.'#text'}},
-                            @{n='Version';ex={$_.properties.version}},
-                            @{n='Url';ex={$_.Content.src}},
-                            @{n='Dependencies';ex={$_.properties.Dependencies}},
-                            @{n='Owners';ex={$_.properties.Owners}}
+                    Select-Object @{n = 'Name'; ex = {$_.title.'#text'}},
+                @{n = 'Version'; ex = {$_.properties.version}},
+                @{n = 'Url'; ex = {$_.Content.src}},
+                @{n = 'Dependencies'; ex = {$_.properties.Dependencies}},
+                @{n = 'Owners'; ex = {$_.properties.Owners}}
                 if($oErr)
                 {
                     Write-Error -Message "Failed to query Gallery for module $ModuleName" -ErrorAction Continue
