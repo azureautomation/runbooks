@@ -50,16 +50,8 @@ param(
 $VerbosePreference = "silentlycontinue"
 $RunbookName = "Import-PSGalleryModulesInAA"
 Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
-if((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
-{
-    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
-    if($oErr)
-    {
-        Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
-        throw "Check AA account for modules"
-    }
-}
-elseif((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Automation" -ListAvailable) -and (Get-Module -Name "Az.Resources" -ListAvailable))
+# Prefer to use Az module if available
+if((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Automation" -ListAvailable) -and (Get-Module -Name "Az.Resources" -ListAvailable))
 {
     Import-Module -Name Az.Accounts, Az.Automation, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     if($oErr)
@@ -69,6 +61,15 @@ elseif((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "A
     }
     # This will negate the need to change syntax of AzureRM function names even if using Az modules
     Enable-AzureRmAlias
+}
+elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
+{
+    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+    if($oErr)
+    {
+        Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
+        throw "Check AA account for modules"
+    }
 }
 else
 {
