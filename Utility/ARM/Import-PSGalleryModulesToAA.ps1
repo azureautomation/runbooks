@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     This Azure Automation Runbook imports a module and all of it's dependencies into AA from PowerShell Gallery.
-    This is meant to only run from an Automation account.
+    This is meant to only run from an Automation account. This module can import the Az module into the Automation account.
 
 .DESCRIPTION
     This Azure Automation Runbook imports a module named as parameter input to AA from PowerShell Gallery.
