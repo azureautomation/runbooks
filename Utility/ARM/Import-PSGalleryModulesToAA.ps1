@@ -10,6 +10,9 @@
         Even if module dependencies have reliance on previous versions of a module.
         (lik for Az, where different dependencies modules can depend on different versions of Az.Accounts)
 
+.PARAMETER NewModuleNames
+    The name of a modules in the PowerShell gallery to import into Automation account
+
 .PARAMETER ResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
     If a resource group is not specified, then it will use the current one for the automation account
@@ -19,9 +22,6 @@
     Optional. The name of the Automation account to update all modules for.
     If an automation account is not specified, then it will use the current one for the automation account
     if it is run from the automation service
-
-.PARAMETER NewModuleNames
-    The name of a modules in the PowerShell gallery to import
 
 .PARAMETER Force
     Optional. Forces import of newest version in PS Gallery
@@ -41,14 +41,14 @@
 #>
 
 param(
+    [Parameter(Mandatory = $true)]
+    [Array] $NewModuleNames,
+
     [Parameter(Mandatory = $false)]
     [String] $ResourceGroupName,
 
     [Parameter(Mandatory = $false)]
     [String] $AutomationAccountName,
-
-    [Parameter(Mandatory = $true)]
-    [Array] $NewModuleNames,
 
     [Parameter(Mandatory = $false)]
     [switch] $Force = $false,
@@ -74,13 +74,15 @@ if((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Au
 }
 elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
 {
-    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
-    if($oErr)
+    if( [System.Version](Get-Module -Name AzureRM.Profile).Version -le [System.Version]"5.0" )
+    {
+        Write-Error -Message "Manually update: AzureRM.Profile, AzureRM.Automation, AzureRM.Resources for first time usage through the portal" -ErrorAction Continue
+    }
+    else
     {
         Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
-        throw "Check AA account for modules"
     }
-    Write-Output -InputObject "Using AzureRM modules to execute runbook"
+    throw "Check AA account for modules"
 }
 else
 {
