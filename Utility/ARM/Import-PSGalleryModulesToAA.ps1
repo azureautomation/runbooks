@@ -264,11 +264,11 @@ function doModuleImport
 
             if($ModuleVersion)
             {
-                Write-Output -InputObject "Importing version: $ModuleVersion of module: $ModuleName module to Automation account"
+                Write-Output -InputObject "Importing version: $ModuleVersion of module: $ModuleName to Automation account"
             }
             else
             {
-                Write-Output -InputObject "Importing version: $($SearchResult.Version) of module: $ModuleName module to Automation account"
+                Write-Output -InputObject "Importing version: $($SearchResult.Version) of module: $ModuleName to Automation account"
             }
             if(-not ([string]::IsNullOrEmpty($ActualUrl)))
             {
