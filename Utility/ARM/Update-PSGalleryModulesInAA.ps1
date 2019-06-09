@@ -71,7 +71,14 @@ elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name 
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
     if($oErr)
     {
-        Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
+        if( [System.Version](Get-Module -Name AzureRM.Profile).Version -le [System.Version]"5.0" )
+        {
+            Write-Error -Message "Manually update: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources for first time usage through the portal" -ErrorAction Continue
+        }
+        else
+        {
+            Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
+        }
         throw "Check AA account for modules"
     }
     Write-Output -InputObject "Using AzureRM modules to execute runbook"
