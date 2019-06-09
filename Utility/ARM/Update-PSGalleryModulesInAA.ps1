@@ -71,7 +71,7 @@ elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name 
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
     if($oErr)
     {
-        if( [System.Version](Get-Module -Name AzureRM.Profile).Version -le [System.Version]"5.0" )
+        if( [System.Version](Get-Module -Name AzureRM.Profile).Version -le [System.Version]"5.0.0" )
         {
             Write-Error -Message "Manually update: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources for first time usage through the portal" -ErrorAction Continue
         }
