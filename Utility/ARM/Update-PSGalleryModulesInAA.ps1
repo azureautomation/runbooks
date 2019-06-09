@@ -205,12 +205,11 @@ function doModuleImport
                                 # Register module has been imported
                                 # TODO: If module import fails, do not add and remove the failed imported module from AA account
                                 $script:ModulesImported += $DependencyName
-                                # Track recursion depth
                                 $script:RecursionDepth --
                             }
                             else
                             {
-                                Write-Output -InputObject "$ModuleName has a dependency on: $DependencyName with version: $DependencyVersion, though this is already present in Automation account with version: $($AutomationModule.Version)"
+                                Write-Output -InputObject "$ModuleName has a dependency on: $DependencyName with version: $DependencyVersion, though this is already installed with version: $($AutomationModule.Version)"
                             }
                         }
                         else
@@ -305,7 +304,7 @@ try
     $RunAsConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
     if($RunAsConnection)
     {
-        Write-Output -InputObject ("Logging in to Azure...")
+        Write-Output -InputObject "Logging in to Azure..."
 
         $Null = Add-AzureRmAccount `
             -ServicePrincipal `
@@ -347,6 +346,7 @@ try
                 }
                 Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
             }
+        }
         else
         {
             if(([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
