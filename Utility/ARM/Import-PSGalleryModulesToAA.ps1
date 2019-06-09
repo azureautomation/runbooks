@@ -62,6 +62,14 @@ Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -f
 # Prefer to use Az module if available
 if((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Automation" -ListAvailable) -and (Get-Module -Name "Az.Resources" -ListAvailable))
 {
+    $AccountsModule = Get-Module -Name Az.Accounts -ListAvailable
+    $AutomationModule = Get-Module -Name Az.Automation -ListAvailable
+    $ResourcesModule = Get-Module -Name Az.Resources -ListAvailable
+
+    Write-Output -InputObject "Running Az.Account version: $($AccountsModule.Version)"
+    Write-Output -InputObject "Running Az.Automation version: $($AutomationModule.Version)"
+    Write-Output -InputObject "Running Az.Resources version: $($ResourcesModule.Version)"
+
     Import-Module -Name Az.Accounts, Az.Automation, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     if($oErr)
     {
@@ -74,15 +82,31 @@ if((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Au
 }
 elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
 {
-    if( [System.Version](Get-Module -Name AzureRM.Profile).Version -le [System.Version]"5.0.0" )
+
+    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+
+    $ProfileModule = Get-Module -Name AzureRM.Profile -ListAvailable
+    $AutomationModule = Get-Module -Name AzureRM.Automation -ListAvailable
+    $ResourcesModule = Get-Module -Name AzureRM.Resources -ListAvailable
+
+    Write-Output -InputObject "Running AzureRM.Profile version: $($ProfileModule.Version)"
+    Write-Output -InputObject "Running AzureRM.Automation version: $($AutomationModule.Version)"
+    Write-Output -InputObject "Running AzureRM.Resources version: $($ResourcesModule.Version)"
+
+    if( ([System.Version]$ProfileModule.Version -le [System.Version]"5.0.0") -and ([System.Version]$AutomationModule.Version -le [System.Version]"5.0.0") -and ([System.Version]$ResourcesModule.Version -le [System.Version]"5.0.0") )
     {
         Write-Error -Message "Manually update: AzureRM.Profile, AzureRM.Automation, AzureRM.Resources for first time usage through the portal" -ErrorAction Continue
+        throw "Check AA account for modules"
     }
     else
     {
-        Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
+        Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+        if($oErr)
+        {
+            Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
+            throw "Check AA account for modules"
+        }
     }
-    throw "Check AA account for modules"
 }
 else
 {
