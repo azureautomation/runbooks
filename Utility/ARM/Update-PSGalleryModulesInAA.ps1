@@ -1,12 +1,16 @@
 <#
 .SYNOPSIS
-    This Azure Automation runbook imports the latest version of installed modules in Automation Account from PowerShell Gallery.
-    It can also only update the Azure modules by setting a parameter.
+    This Azure Automation Runbook imports the latest version of installed modules in Automation Account from PowerShell Gallery.
+    It can also only update the Azure modules by setting a parameter. This is meant to only run from an Automation account.
 
 .DESCRIPTION
-    This Azure Automation runbook imports the latest version from PowerShell Gallery of all modules in an
-    Automation account. By connecting the runbook to an Automation schedule, you can ensure all modules in
+    This Azure Automation Runbook imports the latest version from PowerShell Gallery of all modules in an
+    Automation account. By connecting the Runbook to an Automation schedule, you can ensure all modules in
     your Automation account stay up to date. Or only update the Azure modules
+
+    NOTE:
+    This module can not be run locally without the use of Automation ISE-addon
+    URL: https://github.com/azureautomation/azure-automation-ise-addon
 
 .PARAMETER ResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
@@ -20,7 +24,7 @@
 
 .PARAMETER UpdateAzureModulesOnly
     Optional. Set to $false to have logic try to update all modules installed in account.
-    Default is $true, and this will only update Azure modules
+    Default is $true, and this will only update Azure modules. Both AzureRM and Az if present in Automation account
 
 .PARAMETER DebugLocal
     Optional. Set to $true if debugging script locally to switch of logic that tries to discover the Automation account it is running in
@@ -32,9 +36,9 @@
     Update-PSGalleryModulesInAA
 
 .NOTES
-    AUTHOR: Automation Team
-    CONTRIBUTOR: Morten Lerudjordet
-    LASTEDIT:
+    AUTHOR:         Automation Team
+    CONTRIBUTOR:    Morten Lerudjordet
+    LASTEDIT:       09.06.2019
 #>
 
 param(

@@ -1,14 +1,18 @@
 <#
 .SYNOPSIS
-    This Azure Automation runbook imports a module and all of it's dependencies into AA from PowerShell Gallery
+    This Azure Automation Runbook imports a module and all of it's dependencies into AA from PowerShell Gallery.
+    This is meant to only run from an Automation account.
 
 .DESCRIPTION
-    This Azure Automation runbook imports a module named as parameter input to AA from PowerShell Gallery.
+    This Azure Automation Runbook imports a module named as parameter input to AA from PowerShell Gallery.
 
-    Note:
-        AA only supports having one version of the same module imported, therefor this runbook will only keep the latest version active.
+    NOTE:
+        AA only supports having one version of the same module imported, therefor this Runbook will only keep the latest version active.
         Even if module dependencies have reliance on previous versions of a module.
         (lik for Az, where different dependencies modules can depend on different versions of Az.Accounts)
+
+        This module can not be run locally without the use of Automation ISE-addon
+        URL: https://github.com/azureautomation/azure-automation-ise-addon
 
 .PARAMETER NewModuleNames
     The name of a modules in the PowerShell gallery to import into Automation account
@@ -35,9 +39,9 @@
     Import-PSGalleryModulesInAA -NewModuleName "AzureRM"
 
 .NOTES
-    AUTHOR: Automation Team
-    CONTRIBUTOR: Morten Lerudjordet
-    LASTEDIT:
+    AUTHOR:         Automation Team
+    CONTRIBUTOR:    Morten Lerudjordet
+    LASTEDIT:       09.06.2019
 #>
 
 param(
