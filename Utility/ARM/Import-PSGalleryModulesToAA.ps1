@@ -82,9 +82,6 @@ if((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Au
 }
 elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
 {
-
-    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
-
     $ProfileModule = Get-Module -Name AzureRM.Profile -ListAvailable
     $AutomationModule = Get-Module -Name AzureRM.Automation -ListAvailable
     $ResourcesModule = Get-Module -Name AzureRM.Resources -ListAvailable
