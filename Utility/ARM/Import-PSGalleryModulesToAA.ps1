@@ -21,7 +21,7 @@
     if it is run from the automation service
 
 .PARAMETER NewModuleNames
-    The name of a modules in the PowerShell gallery to import after all existing modules are updated
+    The name of a modules in the PowerShell gallery to import
 
 .PARAMETER Force
     Optional. Forces import of newest version in PS Gallery
