@@ -51,7 +51,7 @@ param(
     [String] $AutomationAccountName,
 
     [Parameter(Mandatory = $false)]
-    [switch] $UpdateAzureModulesOnly = $true,
+    [Bool] $UpdateAzureModulesOnly = $true,
 
     [Parameter(Mandatory = $false)]
     [switch] $DebugLocal = $false

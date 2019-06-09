@@ -55,7 +55,7 @@ param(
     [String] $AutomationAccountName,
 
     [Parameter(Mandatory = $false)]
-    [switch] $Force = $false,
+    [Bool] $Force = $false,
 
     [Parameter(Mandatory = $false)]
     [switch] $DebugLocal = $false
