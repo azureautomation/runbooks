@@ -62,6 +62,7 @@ if((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Au
         Write-Error -Message "Failed to load needed modules for Runbook: Az.Accounts, Az.Automation,Az.Resources" -ErrorAction Continue
         throw "Check AA account for modules"
     }
+    Write-Output -InputObject "Using Az modules to execute runbook"
     # This will negate the need to change syntax of AzureRM function names even if using Az modules
     Enable-AzureRmAlias
 }
@@ -73,6 +74,7 @@ elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name 
         Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
         throw "Check AA account for modules"
     }
+    Write-Output -InputObject "Using AzureRM modules to execute runbook"
 }
 else
 {
