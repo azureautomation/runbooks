@@ -79,6 +79,7 @@ if((Get-Module -Name "Az.Accounts" -ListAvailable) -and (Get-Module -Name "Az.Au
     Write-Output -InputObject "Using Az modules to execute runbook"
     # This will negate the need to change syntax of AzureRM function names even if using Az modules
     Enable-AzureRmAlias
+    $script:AzureModuleFlavor = "Az"
 }
 elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name AzureRM.Automation -ListAvailable) -and (Get-Module -Name AzureRM.Resources -ListAvailable))
 {
@@ -105,6 +106,7 @@ elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name 
         }
     }
     Write-Output -InputObject "Using AzureRM modules to execute runbook"
+    $script:AzureModuleFlavor = "AzureRM"
 }
 else
 {
@@ -508,5 +510,9 @@ catch
 finally
 {
     Write-Output -InputObject "Runbook: $RunbookName ended at time: $(get-Date -format r)"
+    if($AzureModuleFlavor -eq "Az")
+    {
+        Disable-AzureRmAlias
+    }
 }
 #endregion Main
