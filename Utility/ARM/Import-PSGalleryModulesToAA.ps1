@@ -15,7 +15,9 @@
         URL: https://github.com/azureautomation/azure-automation-ise-addon
 
 .PARAMETER NewModuleNames
-    The name of a modules in the PowerShell gallery to import into Automation account
+    The name of a modules in the PowerShell gallery to import into Automation account.
+    If entering multiple values through the portal use the following format:
+        ['ModuleNam1','ModuleNam2','ModuleNam3']
 
 .PARAMETER ResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
