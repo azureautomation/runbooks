@@ -116,7 +116,8 @@ try
     # If this is not present in the Automation account, it will be imported automatically from
     # https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Enable-AutomationSolution.ps1
     $DependencyRunbookName = "Enable-AutomationSolution"
-    $LogAnalyticsAgentExtensionName = "OMSExtension"
+    $OldLogAnalyticsAgentExtensionName = "OMSExtension"
+    $NewLogAnalyticsAgentExtensionName = "MMAExtension"
     $SolutionApiVersion = "2017-04-26-preview"
     #endregion
 
@@ -245,7 +246,8 @@ try
                 if ($Null -ne $OnboardedVMSubscriptionContext)
                 {
                     # Find existing VM that is already onboarded to the solution.
-                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
+                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext |
+                        Where-Object {($_.Name -like "*/$NewLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$OldLogAnalyticsAgentExtensionName")}
 
                     # Find VM to use as template
                     if ($Null -ne $VMExtensions)

@@ -124,7 +124,8 @@ try
     {
         Write-Output -InputObject "Will try to discover Log Analytics workspace id"
     }
-    $LogAnalyticsAgentExtensionName = "OMSExtension"
+    $OldLogAnalyticsAgentExtensionName = "OMSExtension"
+    $NewLogAnalyticsAgentExtensionName = "MMAExtension"
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
     $SolutionApiVersion = "2017-04-26-preview"
@@ -234,7 +235,8 @@ try
                 if ($Null -ne $OnboardedVMSubscriptionContext)
                 {
                     # Find existing VM that is already onboarded to the solution.
-                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
+                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext |
+                        Where-Object {($_.Name -like "*/$NewLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$OldLogAnalyticsAgentExtensionName")}
 
                     # Find VM to use as template
                     if ($Null -ne $VMExtensions)
@@ -398,7 +400,7 @@ try
 
     # Check if the VM is already onboarded to the Log Analytics workspace
     $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
-        -Name $LogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        -Name $NewLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
     if ($oErr)
     {
         if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -411,6 +413,25 @@ try
             Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
         }
 
+    }
+    # Check if old extension name is in use
+    if(-not $Onboarded)
+    {
+        $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
+        -Name $OldLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        if ($oErr)
+        {
+            if ($oErr.Exception.Message -match "ResourceNotFound")
+            {
+                # VM does not have OMS extension installed
+                $Onboarded = $Null
+            }
+            else
+            {
+                Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+            }
+
+        }
     }
 
     if ($Null -eq $Onboarded)
