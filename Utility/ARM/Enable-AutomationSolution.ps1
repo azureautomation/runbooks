@@ -418,7 +418,7 @@ try
     if(-not $Onboarded)
     {
         $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
-        -Name $OldLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            -Name $OldLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -826,6 +826,57 @@ try
             }
         }
     ]
+}
+'@
+            #Endregion
+            # Create temporary file to store ARM template in
+            $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to create temporary file for solution ARM template" -ErrorAction Stop
+            }
+            Out-File -InputObject $ArmTemplate -FilePath $TempFile.FullName -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to write ARM template for solution onboarding to temp file" -ErrorAction Stop
+            }
+            # Add all of the parameters
+            $QueryDeploymentParams = @{}
+            $QueryDeploymentParams.Add("location", $WorkspaceLocation)
+            $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
+            $QueryDeploymentParams.Add("resourceName", ($WorkspaceName + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
+            $QueryDeploymentParams.Add("category", $SolutionType)
+            $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
+            $QueryDeploymentParams.Add("query", $NewQuery)
+            $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
+            $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
+            $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
+
+            # Create deployment name
+            $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+
+            $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
+                -Name $DeploymentName `
+                -TemplateParameterObject $QueryDeploymentParams `
+                -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to add VM: $VMName to solution: $SolutionType" -ErrorAction Stop
+            }
+            else
+            {
+                Write-Output -InputObject $ObjectOutPut
+                Write-Output -InputObject "VM: $VMName successfully added to solution: $SolutionType"
+            }
+
+            # Remove temp file with arm template
+            Remove-Item -Path $TempFile.FullName -Force
+        }
+        else
+        {
+            Write-Warning -Message "The VM: $VMName is already onboarded to solution: $SolutionType"
+        }
+    }
 }
 catch
 {
