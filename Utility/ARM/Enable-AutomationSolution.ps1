@@ -126,6 +126,7 @@ try
     }
     $OldLogAnalyticsAgentExtensionName = "OMSExtension"
     $NewLogAnalyticsAgentExtensionName = "MMAExtension"
+    $NewLogAnalyticsVMAgentExtensionName = "MicrosoftMonitoringAgent"
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
     $SolutionApiVersion = "2017-04-26-preview"
@@ -389,7 +390,7 @@ try
             $VMResourceGroupName = $NewVM.ResourceGroupName
             $VMName = $NewVM.Name
             $VMLocation = $NewVM.Location
-            $VMResourceId = $NewVM.Id
+            $VMResourceId = $NewVM.VmId
             $VMIdentityRequired = $false
         }
         else
@@ -399,8 +400,8 @@ try
     }
 
     # Check if the VM is already onboarded to the Log Analytics workspace
-    $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
-        -Name $NewLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+    $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+        -Name $NewLogAnalyticsVMAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
     if ($oErr)
     {
         if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -417,7 +418,7 @@ try
     # Check if old extension name is in use
     if(-not $Onboarded)
     {
-        $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName  -VMName $VMName `
+        $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
             -Name $OldLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
@@ -611,7 +612,7 @@ try
 
     if ($Null -ne $SolutionGroup)
     {
-        if (-not (($SolutionGroup.Properties.Query -match $VMResourceId) -and ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
+        if (-not (($SolutionGroup.Properties.Query -match $VMResourceId) -or ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
         {
             # Original saved search query:
             # $DefaultQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"

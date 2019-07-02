@@ -137,6 +137,11 @@ try
                 $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_}}
                 $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_}}
 
+                # Check if there are duplicate entries
+                $DuplicateVmIDs = $VmIds | Sort-Object -Property VmId -Unique
+                $DuplicateVmIDs = (Compare-Object -ReferenceObject $DuplicateVmIDs -DifferenceObject $VmIds -Property VmId).InputObject
+
+
                 # Get VM Ids that are no longer alive
                 if ($Null -ne $VmIds)
                 {
