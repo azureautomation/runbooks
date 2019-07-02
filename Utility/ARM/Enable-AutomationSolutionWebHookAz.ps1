@@ -437,7 +437,7 @@ try
             $VMResourceGroupName = $NewVM.ResourceGroupName
             $VMName = $NewVM.Name
             $VMLocation = $NewVM.Location
-            $VMResourceId = $NewVM.VmId
+            $VMId = $NewVM.VMId
             $VMIdentityRequired = $false
         }
         else
@@ -520,10 +520,6 @@ try
             "defaultValue": "",
             "type": "String"
         },
-        "vmResourceId": {
-            "defaultValue": "",
-            "type": "String"
-        },
         "vmIdentityRequired": {
             "defaultValue": "false",
             "type": "Bool"
@@ -586,7 +582,6 @@ try
                         "autoUpgradeMinorVersion": "true",
                         "settings": {
                             "workspaceId": "[parameters('workspaceId')]",
-                            "azureResourceId": "[parameters('vmResourceId')]",
                             "stopOnMultipleConnections": "true"
                         },
                         "protectedSettings": {
@@ -618,7 +613,6 @@ try
         $MMADeploymentParams = @{}
         $MMADeploymentParams.Add("vmName", $VMName)
         $MMADeploymentParams.Add("vmLocation", $VMLocation)
-        $MMADeploymentParams.Add("vmResourceId", $VMResourceId)
         $MMADeploymentParams.Add("vmIdentityRequired", $VMIdentityRequired)
         $MMADeploymentParams.Add("workspaceName", $WorkspaceName)
         $MMADeploymentParams.Add("workspaceId", $WorkspaceId)
@@ -660,7 +654,7 @@ try
 
     if ($Null -ne $SolutionGroup)
     {
-        if (-not (($SolutionGroup.Properties.Query -match $VMResourceId) -or ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
+        if (-not (($SolutionGroup.Properties.Query -match $VMId) -or ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
         {
             # Original saved search query:
             # $DefaultQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"

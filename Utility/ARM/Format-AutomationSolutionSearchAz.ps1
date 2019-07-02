@@ -24,14 +24,14 @@
 #Requires -Version 5.0
 try
 {
-    $RunbookName = "Remove-RetiredVMsAutomationSolution"
+    $RunbookName = "Format-AutomationSolutionSearchAz"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     $VerbosePreference = "silentlycontinue"
-    Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
+    Import-Module -Name Az.Accounts, Az.Automation, Az.OperationalInsights, Az.Compute, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)
     {
-        Write-Error -Message "Failed to load needed modules for Runbook, check that AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute and AzureRM.Resources is imported into Azure Automation" -ErrorAction Stop
+        Write-Error -Message "Failed to load needed modules for Runbook, check that Az.Automation, Az.OperationalInsights, Az.Compute and Az.Resources is imported into Azure Automation" -ErrorAction Stop
     }
     $VerbosePreference = "Continue"
 
@@ -65,7 +65,7 @@ try
 
     # Authenticate to Azure
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
-    $Null = Add-AzureRmAccount `
+    $Null = Add-AzAccount `
         -ServicePrincipal `
         -TenantId $ServicePrincipalConnection.TenantId `
         -ApplicationId $ServicePrincipalConnection.ApplicationId `
@@ -76,20 +76,20 @@ try
     }
 
     # Set subscription to work against
-    $SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+    $SubscriptionContext = Set-AzContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
     }
 
     # Get all VMs AA account has read access to
-    $AllAzureVMs = Get-AzureRmSubscription |
-        Foreach-object { $Context = Set-AzureRmContext -SubscriptionId $_.SubscriptionId; Get-AzureRmVM -AzureRmContext $Context} |
+    $AllAzureVMs = Get-AzSubscription |
+        Foreach-object { $Context = Set-AzContext -SubscriptionId $_.SubscriptionId; Get-AzVM -AzContext $Context} |
         Select-Object -Property Name, VmId
 
     if($Null -ne $LogAnalyticsSolutionWorkspaceId)
     {
-        $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr |
+        $WorkspaceInfo = Get-AzOperationalInsightsWorkspace -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr |
             Where-Object {$_.CustomerId -eq $LogAnalyticsSolutionWorkspaceId}
         if ($oErr)
         {
@@ -99,7 +99,7 @@ try
     else
     {
         # Get information about the workspace
-        $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        $WorkspaceInfo = Get-AzOperationalInsightsWorkspace -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve Log Analytic workspace info" -ErrorAction Stop
@@ -114,8 +114,8 @@ try
     # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
     if($Null -ne $WorkspaceInfo)
     {
-        $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
-            -WorkspaceName $WorkspaceInfo.Name -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceInfo.ResourceGroupName `
+            -WorkspaceName $WorkspaceInfo.Name -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve Operational Insight saved groups info" -ErrorAction Stop
@@ -134,32 +134,60 @@ try
             if ($Null -ne $SolutionQuery)
             {
                 # Get all VMs from Computer and VMUUID  in Query
-                $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_}}
-                $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_}}
+                $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_.Trim()}}
+                $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
 
-                # Check if there are duplicate entries
-                $DuplicateVmIDs = $VmIds | Sort-Object -Property VmId -Unique
-                $DuplicateVmIDs = (Compare-Object -ReferenceObject $DuplicateVmIDs -DifferenceObject $VmIds -Property VmId).InputObject
-
-
+                # Clean search of whitespace between elements
+                $UpdatedQuery = $SolutionQuery.Replace('", "','","')
+                # Clean empty elements from search
+                $UpdatedQuery = $UpdatedQuery.Replace(',"",',',')
                 # Get VM Ids that are no longer alive
                 if ($Null -ne $VmIds)
                 {
-                    $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
-                    # Remove deleted VM Ids from saved search query
-                    foreach ($DeletedVmId in $DeletedVmIds)
+                    # Remove duplicate entries
+                    $DuplicateVmIDs = $VmIds | Sort-Object -Property VmId -Unique
+                    $DuplicateVmIDs = Compare-Object -ReferenceObject $DuplicateVmIDs -DifferenceObject $VmIds -Property VmId | Where-Object {$_.SideIndicator -eq "=>"} | Sort-Object -Property VmId -Unique
+                    if($DuplicateVmIDs)
                     {
-                        if ($Null -eq $UpdatedQuery)
+                        foreach($DuplicateVmID in $DuplicateVmIDs)
                         {
-                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
-                            Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                            if ($Null -eq $UpdatedQuery)
+                            {
+                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`",","")
+                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVmID.VmId) from saved search"
+                            }
+                            else
+                            {
+                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`",","")
+                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVmID.VmId) from saved search"
+                            }
                         }
-                        else
+                    }
+                    else
+                    {
+                        Write-Output -InputObject "No duplicate VMs to delete found"
+                    }
+                    $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
+                    if($DeletedVmIds)
+                    {
+                        # Remove deleted VM Ids from saved search query
+                        foreach ($DeletedVmId in $DeletedVmIds)
                         {
-                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
-                            Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                            if ($Null -eq $UpdatedQuery)
+                            {
+                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",","")
+                                Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                            }
+                            else
+                            {
+                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",","")
+                                Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                            }
                         }
-
+                    }
+                    else
+                    {
+                        Write-Output -InputObject "No VMs to delete found"
                     }
                 }
                 else
@@ -170,18 +198,41 @@ try
                 # Get VM Names that are no longer alive
                 if ($Null -ne $VmNames)
                 {
+                    # Remove duplicate entries
+                    $DuplicateVms = $VmNames | Sort-Object -Property Name -Unique
+                    $DuplicateVms = Compare-Object -ReferenceObject $DuplicateVms -DifferenceObject $VmNames -Property Name | Where-Object {$_.SideIndicator -eq "=>"} | Sort-Object -Property Name -Unique
+                    if($DuplicateVms)
+                    {
+                        foreach($DuplicateVm in $DuplicateVms)
+                        {
+                            if ($Null -eq $UpdatedQuery)
+                            {
+                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`",","")
+                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVm.Name) from saved search"
+                            }
+                            else
+                            {
+                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`",","")
+                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVm.Name) from saved search"
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Write-Output -InputObject "No duplicate VM names to delete found"
+                    }
                     $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
                     # Remove deleted VM Names from saved search query
                     foreach ($DeletedVm in $DeletedVms)
                     {
                         if ($Null -eq $UpdatedQuery)
                         {
-                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",","")
                             Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
                         }
                         else
                         {
-                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
+                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",","")
                             Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
                         }
                     }
@@ -288,10 +339,10 @@ try
                     # Create deployment name
                     $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-                    $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
+                    $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
                         -Name $DeploymentName `
                         -TemplateParameterObject $QueryDeploymentParams `
-                        -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                        -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
                     {
                         Write-Error -Message "Failed to update solution type: $SolutionType saved search" -ErrorAction Stop
