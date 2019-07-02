@@ -155,12 +155,12 @@ try
                             if ($Null -eq $UpdatedQuery)
                             {
                                 $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`",","")
-                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVmID.VmId) from saved search"
+                                Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
                             }
                             else
                             {
                                 $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`",","")
-                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVmID.VmId) from saved search"
+                                Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
                             }
                         }
                     }
@@ -210,12 +210,12 @@ try
                             if ($Null -eq $UpdatedQuery)
                             {
                                 $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`",","")
-                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVm.Name) from saved search"
+                                Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
                             }
                             else
                             {
                                 $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`",","")
-                                Write-Output -InputObject "Removing VM with Id: $($DuplicateVm.Name) from saved search"
+                                Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
                             }
                         }
                     }
