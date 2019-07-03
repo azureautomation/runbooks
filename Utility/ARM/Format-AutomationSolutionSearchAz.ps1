@@ -141,7 +141,7 @@ try
                 $UpdatedQuery = $SolutionQuery.Replace('", "','","')
                 # Clean empty elements from search
                 $UpdatedQuery = $UpdatedQuery.Replace(',"",',',')
-                # Get VM Ids that are no longer alive
+
                 if ($Null -ne $VmIds)
                 {
                     # Remove duplicate entries
@@ -167,6 +167,7 @@ try
                     {
                         Write-Output -InputObject "No duplicate VMs to delete found"
                     }
+                   # Get VM Ids that are no longer alive
                     $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
                     if($DeletedVmIds)
                     {
