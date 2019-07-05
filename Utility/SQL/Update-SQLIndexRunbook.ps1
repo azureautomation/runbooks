@@ -155,9 +155,10 @@ workflow Update-SQLIndexRunbook
 "@
         # Return the tables with their corresponding average fragmentation
         $Cmd=new-object system.Data.SqlClient.SqlCommand($SQLCommandString, $Conn)
-        $Cmd.CommandTimeout=120
+        $Cmd.CommandTimeout=600
         
         # Execute the SQL command
+        Write-Verbose ("Fetching Fragmented Table Stats...")
         $FragmentedTable=New-Object system.Data.DataSet
         $Da=New-Object system.Data.SqlClient.SqlDataAdapter($Cmd)
         [void]$Da.fill($FragmentedTable)
@@ -165,7 +166,7 @@ workflow Update-SQLIndexRunbook
  
         # Get the list of tables with their object ids
         $SQLCommandString = @"
-        SELECT  t.name AS TableName, t.OBJECT_ID FROM sys.tables t
+        SELECT  '[' + s.name + '].[' + t.name + ']' AS TableName, t.OBJECT_ID FROM sys.tables t inner join sys.schemas s on t.schema_id = s.schema_id
 "@
 
         $Cmd=new-object system.Data.SqlClient.SqlCommand($SQLCommandString, $Conn)
