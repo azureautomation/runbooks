@@ -14,6 +14,15 @@
     This Runbooks assumes both Azure Automation account and Log Analytics account is in the same subscription
     For best effect schedule this Runbook to run on a recurring schedule to periodically search for retired VMs.
 
+    Example of Log Analytics query for alerting:
+        AzureDiagnostics
+        | where ResourceProvider == "MICROSOFT.AUTOMATION" and Category == "JobStreams" and StreamType_s == "Warning" and RunbookName_s == "Format-AutomationSolutionSearchAz"
+        | sort by TimeGenerated asc
+        | summarize makelist(ResultDescription, 1000) by JobId_g, bin(TimeGenerated, 1d),RunbookName_s, StreamType_s
+        | sort by TimeGenerated desc
+        | limit 1
+        | project RunbookName_s , StreamType_s, list_ResultDescription
+
 .COMPONENT
     To predefine what Log Analytics workspace to use, create the following AA variable assets:
         LASolutionSubscriptionId
@@ -187,7 +196,7 @@ try
                 if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
                 {
                     Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
-                    Write-Output -InputObject "Removing hybrid worker: $($HybridWorkerGroup.Name)"
+                    Write-Output -InputObject "Removing duplicate hybrid worker: $($HybridWorkerGroup.Name)"
                     Remove-AzAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
                     {
@@ -205,7 +214,7 @@ try
             # Check for stale hybrid workers
             if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
             {
-                Write-Warning -Message ""Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Verify it is functioning correctly"
+                Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Verify it is functioning correctly"
             }
             else
             {

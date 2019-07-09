@@ -13,16 +13,33 @@
     This Runbooks assumes both Azure Automation account and Log Analytics account is in the same subscription
     For best effect schedule this Runbook to run on a recurring schedule to periodically search for retired VMs.
 
+    Example of Log Analytics query for alerting:
+    AzureDiagnostics
+    | where ResourceProvider == "MICROSOFT.AUTOMATION" and Category == "JobStreams" and StreamType_s == "Warning" and RunbookName_s == "Format-AutomationSolutionSearchAz"
+    | sort by TimeGenerated asc
+    | summarize makelist(ResultDescription, 1000) by JobId_g, bin(TimeGenerated, 1d),RunbookName_s, StreamType_s
+    | sort by TimeGenerated desc
+    | limit 1
+    | project RunbookName_s , StreamType_s, list_ResultDescription
+
 .COMPONENT
     To predefine what Log Analytics workspace to use, create the following AA variable assets:
         LASolutionSubscriptionId
         LASolutionWorkspaceId
 
+.PARAMETER HybridWorkerStaleNrDays
+    Optional. Threshold for when hybrid workers are reported as stale and in need of maintenance.
+    It is also used by logic that removes duplicate hybrid worker entries
+    Default is 7 days
+
 .NOTES
     AUTHOR: Morten Lerudjordet
-    LASTEDIT: February 13th, 2019
+    LASTEDIT: July 9th, 2019
 #>
 #Requires -Version 5.0
+param(
+    [int]$HybridWorkerStaleNrDays = 7
+)
 try
 {
     $RunbookName = "Format-AutomationSolutionSearch"
@@ -155,7 +172,7 @@ try
     }
     #endregion
 
-    #region hybrid worker maintenance
+     #region hybrid worker maintenance
     $HybridWorkerGroups = Get-AzureRMAutomationHybridWorkerGroup -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
         | Where-Object {$_.GroupType -eq "System"}
     if ($oErr)
@@ -164,34 +181,46 @@ try
     }
 
     # Check for duplicate entries
-    $DuplicateRemovedHybridWorkers = $HybridWorkerGroups.RunbookWorker | Sort-Object -Property Name -Unique
-    $DuplicateHybridWorkers = Compare-Object -ReferenceObject $DuplicateRemovedHybridWorkers  -DifferenceObject $HybridWorkerGroups.RunbookWorker -Property Name | Where-Object {$_.SideIndicator -eq "=>"}
+    $RemovedHybridWorkers = $HybridWorkerGroups.RunbookWorker | Sort-Object -Property Name -Unique
+    $DuplicateHybridWorkers = Compare-Object -ReferenceObject $RemovedHybridWorkers -DifferenceObject $HybridWorkerGroups.RunbookWorker -Property Name | Where-Object {$_.SideIndicator -eq "=>"}
 
     foreach($HybridWorkerGroup in $HybridWorkerGroups)
     {
-        if($DuplicateHybridWorkers.Name -contains $HybridWorkerGroup.RunbookWorker.Name)
+        if($DuplicateHybridWorkers)
         {
-            Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has duplicates"
-            # Check if it has checked in the last week
-            if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
+            if($DuplicateHybridWorkers.Name -contains $HybridWorkerGroup.RunbookWorker.Name)
             {
-                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in the last $HybridWorkerStaleNrDays days"
-                Write-Output -InputObject "Removing hybrid worker: $($HybridWorkerGroup.Name)"
-                Remove-AzureRMAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-                if ($oErr)
+                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has duplicates"
+                # Check if it has checked in the last week
+                if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
                 {
-                    Write-Error -Message "Failed to remove hybrid worker: $($HybridWorkerGroup.Name) identified as a duplicate and stale" -ErrorAction Continue
-                }
-                else
-                {
-                    Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) successfully removed"
+                    Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
+                    Write-Output -InputObject "Removing duplicate hybrid worker: $($HybridWorkerGroup.Name)"
+                    Remove-AzureRMAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                    if ($oErr)
+                    {
+                        Write-Error -Message "Failed to remove hybrid worker: $($HybridWorkerGroup.Name) identified as a duplicate and stale" -ErrorAction Continue
+                    }
+                    else
+                    {
+                        Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) successfully removed"
+                    }
                 }
             }
         }
+        else
+        {
+            # Check for stale hybrid workers
+            if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
+            {
+                Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Verify it is functioning correctly"
+            }
+            else
+            {
+                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
+            }
+        }
     }
-
-    # Check for stale hybrid workers
-
     #endregion
 
     #region Log Analytics query maintenance
