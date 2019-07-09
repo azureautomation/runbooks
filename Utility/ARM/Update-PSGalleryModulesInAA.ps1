@@ -376,7 +376,14 @@ try
                         break;
                     }
                 }
-                Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+                if($AutomationAccountName)
+                {
+                    Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+                }
+                else
+                {
+                    Write-Error -Message "Failed to discover automation account, execution stopped" -ErrorAction Stop
+                }
             }
         }
         else

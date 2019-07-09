@@ -359,7 +359,7 @@ try
         }
         if(-not $DebugLocal)
         {
-            # Find the automation account or resource group is not specified
+            # Find automation account if account name and resource group name not defined as input
             if(([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
             {
                 Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
@@ -380,7 +380,14 @@ try
                         break;
                     }
                 }
-                Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+                if($AutomationAccountName)
+                {
+                    Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+                }
+                else
+                {
+                    Write-Error -Message "Failed to discover automation account, execution stopped" -ErrorAction Stop
+                }
             }
         }
         else
