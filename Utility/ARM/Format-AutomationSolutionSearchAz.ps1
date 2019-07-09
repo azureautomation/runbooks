@@ -2,6 +2,8 @@
 .SYNOPSIS
     Maintanance Runbook to update and remove retired VMs from solution saved searched in Log Analytics.
     Solutions supported are Update Management and Change Tracking.
+    It will also check for duplicate hybrid worker entires and remove these.
+    In addition it til check for stale workers and log this as a warning. If automation account is integrated with log analytics one can create alert to trigger when warning is logged.
 
     To set what Log Analytics workspace to use for Update and Change Tracking management (bypassing the logic that search for an existing onboarded VM),
     create the following AA variable assets:
@@ -17,11 +19,19 @@
         LASolutionSubscriptionId
         LASolutionWorkspaceId
 
+.PARAMETER HybridWorkerStaleNrDays
+    Optional. Threshold for when hybrid workers are reported as stale and in need of maintenance.
+    It is also used by logic that removes duplicate hybrid worker entries
+    Default is 7 days
+
 .NOTES
     AUTHOR: Morten Lerudjordet
-    LASTEDIT: February 13th, 2019
+    LASTEDIT: July 9th, 2019
 #>
 #Requires -Version 5.0
+param(
+    [int]$HybridWorkerStaleNrDays = 7
+)
 try
 {
     $RunbookName = "Format-AutomationSolutionSearchAz"
@@ -81,6 +91,37 @@ try
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
     }
+    #region Collect data
+    # Find automation account if account name and resource group name not defined as input
+    if(([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+    {
+        Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
+        if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid) )
+        {
+            Write-Error -Message "This is not running from the automation service. Please specify ResourceGroupName and AutomationAccountName as parameters" -ErrorAction Stop
+        }
+
+        $AutomationResource = Get-AzResource -ResourceType Microsoft.Automation/AutomationAccounts -ErrorAction Stop
+
+        foreach ($Automation in $AutomationResource)
+        {
+            $Job = Get-AzAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+            if (!([string]::IsNullOrEmpty($Job)))
+            {
+                $AutomationResourceGroupName = $Job.ResourceGroupName
+                $AutomationAccountName = $Job.AutomationAccountName
+                break;
+            }
+        }
+        if($AutomationAccountName)
+        {
+            Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+        }
+        else
+        {
+            Write-Error -Message "Failed to discover automation account, execution stopped" -ErrorAction Stop
+        }
+    }
 
     # Get all VMs AA account has read access to
     $AllAzureVMs = Get-AzSubscription |
@@ -121,7 +162,60 @@ try
             Write-Error -Message "Failed to retrieve Operational Insight saved groups info" -ErrorAction Stop
         }
     }
+    #endregion
 
+    #region hybrid worker maintenance
+    $HybridWorkerGroups = Get-AzAutomationHybridWorkerGroup -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
+        | Where-Object {$_.GroupType -eq "System"}
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to retrieve hybrid worker groups, no maintenance will be done on hybrid workers" -ErrorAction Continue
+    }
+
+    # Check for duplicate entries
+    $RemovedHybridWorkers = $HybridWorkerGroups.RunbookWorker | Sort-Object -Property Name -Unique
+    $DuplicateHybridWorkers = Compare-Object -ReferenceObject $RemovedHybridWorkers -DifferenceObject $HybridWorkerGroups.RunbookWorker -Property Name | Where-Object {$_.SideIndicator -eq "=>"}
+
+    foreach($HybridWorkerGroup in $HybridWorkerGroups)
+    {
+        if($DuplicateHybridWorkers)
+        {
+            if($DuplicateHybridWorkers.Name -contains $HybridWorkerGroup.RunbookWorker.Name)
+            {
+                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has duplicates"
+                # Check if it has checked in the last week
+                if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
+                {
+                    Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
+                    Write-Output -InputObject "Removing hybrid worker: $($HybridWorkerGroup.Name)"
+                    Remove-AzAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                    if ($oErr)
+                    {
+                        Write-Error -Message "Failed to remove hybrid worker: $($HybridWorkerGroup.Name) identified as a duplicate and stale" -ErrorAction Continue
+                    }
+                    else
+                    {
+                        Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) successfully removed"
+                    }
+                }
+            }
+        }
+        else
+        {
+            # Check for stale hybrid workers
+            if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
+            {
+                Write-Warning -Message ""Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Verify it is functioning correctly"
+            }
+            else
+            {
+                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
+            }
+        }
+    }
+    #endregion
+
+    #region Log Analytics query maintenance
     foreach ($SolutionType in $SolutionTypes)
     {
         Write-Output -InputObject "Processing solution type: $SolutionType"
@@ -244,7 +338,7 @@ try
 
                 if ($Null -ne $UpdatedQuery)
                 {
-                    #Region Solution Onboarding ARM Template
+                    #region Solution Onboarding ARM Template
                     # ARM template to deploy log analytics agent extension for both Linux and Windows
                     # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
                     $ArmTemplate = @'
@@ -312,7 +406,7 @@ try
     ]
 }
 '@
-                    #Endregion
+                    #endregion
                     # Create temporary file to store ARM template in
                     $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
@@ -371,6 +465,7 @@ try
             Write-Output -InputObject "Solution: $SolutionType is not deployed"
         }
     }
+    #endregion
 }
 catch
 {
