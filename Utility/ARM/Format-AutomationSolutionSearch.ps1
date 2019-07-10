@@ -15,7 +15,7 @@
 
     Example of Log Analytics query for alerting:
     AzureDiagnostics
-    | where ResourceProvider == "MICROSOFT.AUTOMATION" and Category == "JobStreams" and StreamType_s == "Warning" and RunbookName_s == "Format-AutomationSolutionSearchAz"
+    | where ResourceProvider == "MICROSOFT.AUTOMATION" and Category == "JobStreams" and StreamType_s == "Warning" and RunbookName_s == "Format-AutomationSolutionSearch"
     | sort by TimeGenerated asc
     | summarize makelist(ResultDescription, 1000) by JobId_g, bin(TimeGenerated, 1d),RunbookName_s, StreamType_s
     | sort by TimeGenerated desc
@@ -123,7 +123,7 @@ try
         }
         if($AutomationAccountName)
         {
-            Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+            Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $AutomationResourceGroupName"
         }
         else
         {
@@ -173,7 +173,7 @@ try
     #endregion
 
      #region hybrid worker maintenance
-    $HybridWorkerGroups = Get-AzureRMAutomationHybridWorkerGroup -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
+    $HybridWorkerGroups = Get-AzureRMAutomationHybridWorkerGroup -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
         | Where-Object {$_.GroupType -eq "System"}
     if ($oErr)
     {
@@ -190,13 +190,13 @@ try
         {
             if($DuplicateHybridWorkers.Name -contains $HybridWorkerGroup.RunbookWorker.Name)
             {
-                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has duplicates"
+                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.RunbookWorker.Name) has duplicates"
                 # Check if it has checked in the last week
                 if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
                 {
                     Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
                     Write-Output -InputObject "Removing duplicate hybrid worker: $($HybridWorkerGroup.Name)"
-                    Remove-AzureRMAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                    Remove-AzureRMAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
                     {
                         Write-Error -Message "Failed to remove hybrid worker: $($HybridWorkerGroup.Name) identified as a duplicate and stale" -ErrorAction Continue
@@ -208,17 +208,14 @@ try
                 }
             }
         }
+        # Check for stale hybrid workers
+        if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
+        {
+            Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Verify it is functioning correctly"
+        }
         else
         {
-            # Check for stale hybrid workers
-            if($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
-            {
-                Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Verify it is functioning correctly"
-            }
-            else
-            {
-                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
-            }
+            Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
         }
     }
     #endregion
@@ -239,10 +236,16 @@ try
                 $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_.Trim()}}
                 $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
 
-                # Clean search of whitespace between elements
-                $UpdatedQuery = $SolutionQuery.Replace('", "','","')
-                # Clean empty elements from search
-                $UpdatedQuery = $UpdatedQuery.Replace(',"",',',')
+                # Remove empty elements
+                if(($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""'))
+                {
+                    # Clean search of whitespace between elements
+                    $UpdatedQuery = $SolutionQuery.Replace('", "','","')
+                    # Clean empty elements from search
+                    $UpdatedQuery = $UpdatedQuery.Replace(',"",',',')
+                    # Clean empty end element from search
+                    $UpdatedQuery = $UpdatedQuery.Replace(',""','')
+                }
 
                 if ($Null -ne $VmIds)
                 {
@@ -267,7 +270,7 @@ try
                     }
                     else
                     {
-                        Write-Output -InputObject "No duplicate VMs to delete found"
+                        Write-Output -InputObject "No duplicate VM Ids to delete found"
                     }
                     # Get VM Ids that are no longer alive
                     $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
@@ -290,7 +293,7 @@ try
                     }
                     else
                     {
-                        Write-Output -InputObject "No VMs to delete found"
+                        Write-Output -InputObject "No VM Ids to delete found"
                     }
                 }
                 else
@@ -325,19 +328,26 @@ try
                         Write-Output -InputObject "No duplicate VM names to delete found"
                     }
                     $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
-                    # Remove deleted VM Names from saved search query
-                    foreach ($DeletedVm in $DeletedVms)
+                    if($DeletedVms)
                     {
-                        if ($Null -eq $UpdatedQuery)
+                        # Remove deleted VM Names from saved search query
+                        foreach ($DeletedVm in $DeletedVms)
                         {
-                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",","")
-                            Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
+                            if ($Null -eq $UpdatedQuery)
+                            {
+                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",","")
+                                Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
+                            }
+                            else
+                            {
+                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",","")
+                                Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
+                            }
                         }
-                        else
-                        {
-                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",","")
-                            Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
-                        }
+                    }
+                    else
+                    {
+                        Write-Output -InputObject "No VM to delete found"
                     }
                 }
                 else
