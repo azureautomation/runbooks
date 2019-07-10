@@ -3,7 +3,7 @@
     Maintanance Runbook to update and remove retired VMs from solution saved searched in Log Analytics.
     Solutions supported are Update Management and Change Tracking.
     It will also check for duplicate hybrid worker entires and remove these.
-    In addition it til check for stale workers and log this as a warning. If automation account is integrated with log analytics one can create alert to trigger when warning is logged.
+    In addition it will check for stale workers and log this as a warning. If automation account is integrated with log analytics one can create alert to trigger when warning is logged.
 
     To set what Log Analytics workspace to use for Update and Change Tracking management (bypassing the logic that search for an existing onboarded VM),
     create the following AA variable assets:
