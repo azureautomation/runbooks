@@ -19,7 +19,7 @@
     If entering multiple values through the portal use the following format:
         ['ModuleNam1','ModuleNam2','ModuleNam3']
 
-.PARAMETER ResourceGroupName
+.PARAMETER AutomationResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
     If a resource group is not specified, then it will use the current one for the automation account
     if it is run from the automation service
@@ -37,7 +37,7 @@
     Default is $false
 
 .EXAMPLE
-    Import-PSGalleryModulesInAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -NewModuleName "AzureRM"
+    Import-PSGalleryModulesInAA -AutomationResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount" -NewModuleName "AzureRM"
     Import-PSGalleryModulesInAA -NewModuleName "AzureRM"
 
 .NOTES
@@ -222,7 +222,7 @@ function doModuleImport
                             # check if Automation account already contains this dependency module of the right version
                             $AutomationModule = $null
                             $AutomationModule = Get-AzureRMAutomationModule `
-                                -AutomationResourceGroupName $AutomationResourceGroupName `
+                                -ResourceGroupName $AutomationResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
                                 -Name $DependencyName `
                                 -ErrorAction SilentlyContinue
@@ -448,7 +448,7 @@ try
                 Write-Output -InputObject "Importing latest version of '$NewModuleName' into your automation account"
 
                 doModuleImport `
-                    -ResourceGroupName $AutomationResourceGroupName `
+                    -AutomationResourceGroupName $AutomationResourceGroupName `
                     -AutomationAccountName $AutomationAccountName `
                     -ModuleName $NewModuleName -ErrorAction Continue
             }

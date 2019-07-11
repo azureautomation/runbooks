@@ -14,7 +14,7 @@
     This module can not be run locally without the use of Automation ISE-addon
     URL: https://github.com/azureautomation/azure-automation-ise-addon
 
-.PARAMETER ResourceGroupName
+.PARAMETER AutomationResourceGroupName
     Optional. The name of the Azure Resource Group containing the Automation account to update all modules for.
     If a resource group is not specified, then it will use the current one for the automation account
     if it is run from the automation service
@@ -33,7 +33,7 @@
     Default is $false
 
 .EXAMPLE
-    Update-PSGalleryModulesInAA -ResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount"
+    Update-PSGalleryModulesInAA -AutomationResourceGroupName "MyResourceGroup" -AutomationAccountName "MyAutomationAccount"
     Update-PSGalleryModulesInAA -UpdateAzureModulesOnly $false
     Update-PSGalleryModulesInAA
 
@@ -218,7 +218,7 @@ function doModuleImport
                             # check if Automation account already contains this dependency module of the right version
                             $AutomationModule = $null
                             $AutomationModule = Get-AzureRMAutomationModule `
-                                -AutomationResourceGroupName $AutomationResourceGroupName `
+                                -ResourceGroupName $AutomationResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
                                 -Name $DependencyName `
                                 -ErrorAction SilentlyContinue
