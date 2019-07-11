@@ -222,7 +222,7 @@ function doModuleImport
                             # check if Automation account already contains this dependency module of the right version
                             $AutomationModule = $null
                             $AutomationModule = Get-AzureRMAutomationModule `
-                                -ResourceGroupName $AutomationResourceGroupName `
+                                -AutomationResourceGroupName $AutomationResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
                                 -Name $DependencyName `
                                 -ErrorAction SilentlyContinue
@@ -234,7 +234,7 @@ function doModuleImport
 
                                 # this dependency module has not been imported, import it first
                                 doModuleImport `
-                                    -ResourceGroupName $AutomationResourceGroupName `
+                                    -AutomationResourceGroupName $AutomationResourceGroupName `
                                     -AutomationAccountName $AutomationAccountName `
                                     -ModuleName $DependencyName `
                                     -ModuleVersion $DependencyVersion -ErrorAction Continue
