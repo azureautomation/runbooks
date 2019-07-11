@@ -45,7 +45,7 @@
 
 param(
     [Parameter(Mandatory = $false)]
-    [String] $ResourceGroupName,
+    [String] $AutomationResourceGroupName,
 
     [Parameter(Mandatory = $false)]
     [String] $AutomationAccountName,
@@ -132,7 +132,7 @@ function doModuleImport
 {
     param(
         [Parameter(Mandatory = $true)]
-        [String] $ResourceGroupName,
+        [String] $AutomationResourceGroupName,
 
         [Parameter(Mandatory = $true)]
         [String] $AutomationAccountName,
@@ -218,7 +218,7 @@ function doModuleImport
                             # check if Automation account already contains this dependency module of the right version
                             $AutomationModule = $null
                             $AutomationModule = Get-AzureRMAutomationModule `
-                                -ResourceGroupName $ResourceGroupName `
+                                -ResourceGroupName $AutomationResourceGroupName `
                                 -AutomationAccountName $AutomationAccountName `
                                 -Name $DependencyName `
                                 -ErrorAction SilentlyContinue
@@ -230,7 +230,7 @@ function doModuleImport
 
                                 # this dependency module has not been imported, import it first
                                 doModuleImport `
-                                    -ResourceGroupName $ResourceGroupName `
+                                    -ResourceGroupName $AutomationResourceGroupName `
                                     -AutomationAccountName $AutomationAccountName `
                                     -ModuleName $DependencyName `
                                     -ModuleVersion $DependencyVersion -ErrorAction Continue
@@ -273,7 +273,7 @@ function doModuleImport
             if(-not ([string]::IsNullOrEmpty($ActualUrl)))
             {
                 $AutomationModule = New-AzureRMAutomationModule `
-                    -ResourceGroupName $ResourceGroupName `
+                    -ResourceGroupName $AutomationResourceGroupName `
                     -AutomationAccountName $AutomationAccountName `
                     -Name $ModuleName `
                     -ContentLink $ActualUrl -ErrorAction continue
@@ -356,7 +356,7 @@ try
         if(-not $DebugLocal)
         {
             # Find the automation account or resource group is not specified
-            if  (([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+            if  (([string]::IsNullOrEmpty($AutomationResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
             {
                 Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
                 if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid))
@@ -371,14 +371,14 @@ try
                     $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
                     if (!([string]::IsNullOrEmpty($Job)))
                     {
-                        $ResourceGroupName = $Job.ResourceGroupName
+                        $AutomationResourceGroupName = $Job.ResourceGroupName
                         $AutomationAccountName = $Job.AutomationAccountName
                         break;
                     }
                 }
                 if($AutomationAccountName)
                 {
-                    Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $ResourceGroupName"
+                    Write-Output -InputObject "Using AA account: $AutomationAccountName in resource group: $AutomationResourceGroupName"
                 }
                 else
                 {
@@ -388,7 +388,7 @@ try
         }
         else
         {
-            if(([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+            if(([string]::IsNullOrEmpty($AutomationResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
             {
                 Write-Error -Message "When debugging locally ResourceGroupName and AutomationAccountName parameters must be set" -ErrorAction Stop
             }
@@ -400,7 +400,7 @@ try
     }
 
     $Modules = Get-AzureRmAutomationModule `
-        -ResourceGroupName $ResourceGroupName `
+        -ResourceGroupName $AutomationResourceGroupName `
         -AutomationAccountName $AutomationAccountName -ErrorAction continue -ErrorVariable oErr
     if($oErr)
     {
@@ -411,7 +411,7 @@ try
         foreach($Module in $Modules)
         {
             $Module = Get-AzureRmAutomationModule `
-                -ResourceGroupName $ResourceGroupName `
+                -ResourceGroupName $AutomationResourceGroupName `
                 -AutomationAccountName $AutomationAccountName `
                 -Name $Module.Name -ErrorAction continue -ErrorVariable oErr
             if($oErr)
@@ -479,7 +479,7 @@ try
                                 Write-Output -InputObject "Importing latest version of '$ModuleName' into your automation account"
 
                                 doModuleImport `
-                                    -ResourceGroupName $ResourceGroupName `
+                                    -ResourceGroupName $AutomationResourceGroupName `
                                     -AutomationAccountName $AutomationAccountName `
                                     -ModuleName $ModuleName
                             }

@@ -103,7 +103,7 @@ try
     }
     #region Collect data
     # Find automation account if account name and resource group name not defined as input
-    if (([string]::IsNullOrEmpty($ResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
+    if (([string]::IsNullOrEmpty($AutomationResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
     {
         Write-Verbose -Message ("Finding the ResourceGroup and AutomationAccount that this job is running in ...")
         if ([string]::IsNullOrEmpty($PSPrivateMetadata.JobId.Guid) )
