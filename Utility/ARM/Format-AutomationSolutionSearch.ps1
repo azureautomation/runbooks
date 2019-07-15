@@ -181,44 +181,50 @@ try
     {
         Write-Error -Message "Failed to retrieve hybrid worker groups, no maintenance will be done on hybrid workers" -ErrorAction Continue
     }
-
-    # Check for duplicate entries
-    $RemovedHybridWorkers = $HybridWorkerGroups.RunbookWorker | Sort-Object -Property Name -Unique
-    $DuplicateHybridWorkers = Compare-Object -ReferenceObject $RemovedHybridWorkers -DifferenceObject $HybridWorkerGroups.RunbookWorker -Property Name | Where-Object {$_.SideIndicator -eq "=>"}
-
-    foreach ($HybridWorkerGroup in $HybridWorkerGroups)
+    if($HybridWorkerGroups)
     {
-        if ($DuplicateHybridWorkers)
+        # Check for duplicate entries
+        $RemovedHybridWorkers = $HybridWorkerGroups.RunbookWorker | Sort-Object -Property Name -Unique
+        $DuplicateHybridWorkers = Compare-Object -ReferenceObject $RemovedHybridWorkers -DifferenceObject $HybridWorkerGroups.RunbookWorker -Property Name | Where-Object {$_.SideIndicator -eq "=>"}
+
+        foreach ($HybridWorkerGroup in $HybridWorkerGroups)
         {
-            if ($DuplicateHybridWorkers.Name -contains $HybridWorkerGroup.RunbookWorker.Name)
+            if ($DuplicateHybridWorkers)
             {
-                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.RunbookWorker.Name) has duplicates"
-                # Check if it has checked in the last week
-                if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
+                if ($DuplicateHybridWorkers.Name -contains $HybridWorkerGroup.RunbookWorker.Name)
                 {
-                    Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
-                    Write-Output -InputObject "Removing duplicate hybrid worker: $($HybridWorkerGroup.Name)"
-                    Remove-AzureRMAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-                    if ($oErr)
+                    Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.RunbookWorker.Name) has duplicates"
+                    # Check if it has checked in the last week
+                    if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays($HybridWorkerStaleNrDays))
                     {
-                        Write-Error -Message "Failed to remove hybrid worker: $($HybridWorkerGroup.Name) identified as a duplicate and stale" -ErrorAction Continue
-                    }
-                    else
-                    {
-                        Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) successfully removed"
+                        Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
+                        Write-Output -InputObject "Removing duplicate hybrid worker: $($HybridWorkerGroup.Name)"
+                        Remove-AzureRMAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                        if ($oErr)
+                        {
+                            Write-Error -Message "Failed to remove hybrid worker: $($HybridWorkerGroup.Name) identified as a duplicate and stale" -ErrorAction Continue
+                        }
+                        else
+                        {
+                            Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) successfully removed"
+                        }
                     }
                 }
             }
+            # Check for stale hybrid workers
+            if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays(-$HybridWorkerStaleNrDays))
+            {
+                Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Hours since last seen: $([math]::Round(([DateTimeOffset]::Now - ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime)).TotalHours))"
+            }
+            else
+            {
+                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
+            }
         }
-        # Check for stale hybrid workers
-        if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays(-$HybridWorkerStaleNrDays))
-        {
-            Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Hours since last seen: $([math]::Round(([DateTimeOffset]::Now - ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime)).TotalHours))"
-        }
-        else
-        {
-            Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
-        }
+    }
+    else
+    {
+        Write-Output -InputObject "No system hybrid workers found"
     }
     #endregion
 
