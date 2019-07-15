@@ -231,6 +231,7 @@ try
     #region Log Analytics query maintenance
     foreach ($SolutionType in $SolutionTypes)
     {
+        $UpdatedQuery = $null
         Write-Output -InputObject "Processing solution type: $SolutionType"
         $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
         # Check that solution is deployed
@@ -245,7 +246,7 @@ try
                 $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
 
                 # Remove empty elements
-                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""'))
+                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') )
                 {
                     # Clean search of whitespace between elements
                     $UpdatedQuery = $SolutionQuery.Replace('", "', '","')
@@ -268,11 +269,20 @@ try
                             {
                                 $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`",", "")
                                 Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
+                                # check if is an end element, need to remove differently
+                                if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                }
                             }
                             else
                             {
                                 $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`",", "")
                                 Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
+                                if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                }
                             }
                         }
                     }
@@ -291,11 +301,19 @@ try
                             {
                                 $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                                 Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                }
                             }
                             else
                             {
                                 $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                                 Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                }
                             }
                         }
                     }
@@ -323,11 +341,19 @@ try
                             {
                                 $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`",", "")
                                 Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
+                                if($UpdatedQuery -match $DuplicateVm.Name)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                }
                             }
                             else
                             {
                                 $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`",", "")
                                 Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
+                                if($UpdatedQuery -match $DuplicateVm.Name)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                }
                             }
                         }
                     }
@@ -345,11 +371,19 @@ try
                             {
                                 $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVm.Name)`",", "")
                                 Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
+                                if($UpdatedQuery -match $DeletedVmId.Name)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                }
                             }
                             else
                             {
                                 $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVm.Name)`",", "")
                                 Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
+                                if($UpdatedQuery -match $DeletedVmId.Name)
+                                {
+                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                }
                             }
                         }
                     }
