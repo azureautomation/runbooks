@@ -212,7 +212,7 @@ try
                 }
             }
             # Check for stale hybrid workers
-            if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays(-$HybridWorkerStaleNrDays))
+            if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le [DateTimeOffset]::Now.AddDays(-$HybridWorkerStaleNrDays))
             {
                 Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Hours since last seen: $([math]::Round(([DateTimeOffset]::Now - ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime)).TotalHours))"
             }
