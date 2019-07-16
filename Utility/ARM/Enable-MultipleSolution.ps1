@@ -78,7 +78,7 @@ try
 {
     $RunbookName = "Enable-MultipleAutomationSolution"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
-
+    Write-Error -Message "This Runbook is no longer supported" -ErrorAction Stop
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)

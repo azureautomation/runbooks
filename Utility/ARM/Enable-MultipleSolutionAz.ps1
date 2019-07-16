@@ -78,6 +78,8 @@ try
     $RunbookName = "Enable-MultipleAutomationSolutionAz"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
+    Write-Error -Message "This Runbook is no longer supported" -ErrorAction Stop
+
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name Az.Accounts, Az.Automation, Az.OperationalInsights, Az.Compute, Az.Resources -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)
