@@ -455,7 +455,6 @@ try
             Remove-Item -Path $TempScript.FullName -Force
             if ($oErr)
             {
-                Remove-Item -Path $TempScript.FullName -Force
                 Write-Error -Message "Failed to run script command to retrieve VMUUID from Linux VM" -ErrorAction Stop
             }
             else
@@ -466,6 +465,19 @@ try
                     if($VMId)
                     {
                         Write-Output -InputObject "Linux VMUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
+                        Write-Output -InputObject "Adding VMUUID value as tag on VM: $VMName"
+                        $VMTags = $NewVM.Tags
+                        $VMTags += @{VMUUID=$VMId}
+                        Set-AzResource -ResourceType "Microsoft.Compute/VirtualMachines" -Tag $VMTags -ResourceGroupName $VMResourceGroupName -Name $VMName -Force `
+                            -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                        if ($oErr)
+                        {
+                            Write-Error -Message "Failed to update tags for: $VMName. Aborting onboarding to solution" -ErrorAction Stop
+                        }
+                        else
+                        {
+                            Write-Output -InputObject "Successfully updated tags for VM: $VMName"
+                        }
                     }
                     else
                     {

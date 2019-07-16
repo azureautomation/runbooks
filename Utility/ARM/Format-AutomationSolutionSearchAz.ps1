@@ -136,16 +136,27 @@ try
     # Get all VMs AA account has read access to
     $AllAzureVMs = Get-AzSubscription |
         Foreach-object { $Context = Set-AzContext -SubscriptionId $_.SubscriptionId; Get-AzVM -AzContext $Context} |
-        Select-Object -Property Name, VmId, StorageProfile
+        Select-Object -Property Name, VmId, StorageProfile, Tags
 
-    # Check OS types
-    if($AllAzureVMs.StorageProfile.OsDisk.OsType -contains "Linux")
+    $SkipVMUUIDCleanup = $false
+    foreach($AzureVM in $AllAzureVMs)
     {
-        $LinuxPresent = $true
-    }
-    else
-    {
-        $LinuxPresent = $false
+        # Check OS types
+        if($AzureVM.StorageProfile.OsDisk.OsType -eq "Linux")
+        {
+            # Get VMUUID from tags
+            if($AzureVM.Tags.VMUUID)
+            {
+                # Hijack VMid for VMUUID usage
+                $AzureVM.VmId = $AzureVM.Tags.VMUUID
+                Write-Output -InputObject "Updated VMid with VMUUID for Linux VM: $($AzureVM.Name). UUID value from tag is: $($AzureVM.Tags.VMUUID)"
+            }
+            else
+            {
+                Write-Warning -Message "Linux VM: $($AzureVM.Name) was not onboarded with automation solution and is missing VMUUID tag. Manually add it to VM and run job again. Linux UUID must be attained from inside OS using dmidecode command"
+                $SkipVMUUIDCleanup = $true
+            }
+        }
     }
 
     if ($Null -ne $LogAnalyticsSolutionWorkspaceId)
@@ -300,7 +311,7 @@ try
                     {
                         Write-Output -InputObject "No duplicate VM Ids to delete found"
                     }
-                    if(-not $LinuxPresent)
+                    if(-not $SkipVMUUIDCleanup)
                     {
                         # Get VM Ids that are no longer alive
                         $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
@@ -336,7 +347,7 @@ try
                     }
                     else
                     {
-                        Write-Warning -Message "Found Linux VMs, skipping VMUUID cleanup as Linux VMid and VMUUID is different"
+                        Write-Warning -Message "Found Linux VMs, skipping VMUUID cleanup as not all Linux VMs have the VMUUID tag set"
                     }
                 }
                 else
