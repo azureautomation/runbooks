@@ -136,7 +136,17 @@ try
     # Get all VMs AA account has read access to
     $AllAzureVMs = Get-AzureRmSubscription |
         Foreach-object { $Context = Set-AzureRmContext -SubscriptionId $_.SubscriptionId; Get-AzureRmVM -AzureRmContext $Context} |
-        Select-Object -Property Name, VmId
+        Select-Object -Property Name, VmId, StorageProfile
+
+        # Check OS types
+        if($AllAzureVMs.StorageProfile.OsDisk.OsType -contains "Linux")
+        {
+            $LinuxPresent = $true
+        }
+        else
+        {
+            $LinuxPresent = $false
+        }
 
     if ($Null -ne $LogAnalyticsSolutionWorkspaceId)
     {
@@ -289,36 +299,43 @@ try
                     {
                         Write-Output -InputObject "No duplicate VM Ids to delete found"
                     }
-                    # Get VM Ids that are no longer alive
-                    $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
-                    if ($DeletedVmIds)
+                    if(-not $LinuxPresent)
                     {
-                        # Remove deleted VM Ids from saved search query
-                        foreach ($DeletedVmId in $DeletedVmIds)
+                        # Get VM Ids that are no longer alive
+                        $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
+                        if ($DeletedVmIds)
                         {
-                            if ($Null -eq $UpdatedQuery)
+                            # Remove deleted VM Ids from saved search query
+                            foreach ($DeletedVmId in $DeletedVmIds)
                             {
-                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
-                                Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
-                                if($UpdatedQuery -match $DeletedVmId.VmId)
+                                if ($Null -eq $UpdatedQuery)
                                 {
-                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.VmId)`"", "")
+                                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                                    Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                    if($UpdatedQuery -match $DeletedVmId.VmId)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.VmId)`"", "")
+                                    }
+                                }
+                                else
+                                {
+                                    $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
+                                    Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                    if($UpdatedQuery -match $DeletedVmId.VmId)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.VmId)`"", "")
+                                    }
                                 }
                             }
-                            else
-                            {
-                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
-                                Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
-                                if($UpdatedQuery -match $DeletedVmId.VmId)
-                                {
-                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.VmId)`"", "")
-                                }
-                            }
+                        }
+                        else
+                        {
+                            Write-Output -InputObject "No VM Ids to delete found"
                         }
                     }
                     else
                     {
-                        Write-Output -InputObject "No VM Ids to delete found"
+                        Write-Warning -Message "Found Linux VMs, skipping VUUID cleanup as Linux VMid and VUUID is different"
                     }
                 }
                 else

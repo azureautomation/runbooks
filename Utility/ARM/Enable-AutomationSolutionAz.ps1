@@ -444,6 +444,39 @@ try
             $MMAOStype = "OmsAgentForLinux"
             $MMATypeHandlerVersion = "1.7"
             Write-Output -InputObject "Deploying MMA agent to Linux VM"
+
+            $RunCommand = "sudo dmidecode | grep UUID"
+            $TempScript = New-TemporaryFile
+            $RunCommand | Out-File -FilePath $TempScript.FullName
+
+            # Fetch UUID from VM
+            Write-Output -InputObject "Retrieving internal UUID from Linux VM to use for onboarding to solution"
+            $ResultCommand = Invoke-AzVMRunCommand -VM $NewVM -CommandId "RunShellScript" -ScriptPath $TempScript.FullName -ErrorAction Continue -ErrorVariable oErr
+            Remove-Item -Path $TempScript.FullName -Force
+            if ($oErr)
+            {
+                Remove-Item -Path $TempScript.FullName -Force
+                Write-Error -Message "Failed to run script command to retrieve VUUID from Linux VM" -ErrorAction Stop
+            }
+            else
+            {
+                if($ResultCommand.Status -eq "Succeeded")
+                {
+                    $VMId =(Select-String -InputObject $ResultCommand.value.message -Pattern '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}').Matches.Groups.Value
+                    if($VMId)
+                    {
+                        Write-Output -InputObject "Linux VUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
+                    }
+                    else
+                    {
+                        Write-Error -Message "VUUID for Linux VM was not extracted successfully" -ErrorAction Stop
+                    }
+                }
+                else
+                {
+                    Write-Error -Message "Failed to retrieve Linux VM VUUID from script command" -ErrorAction Stop
+                }
+            }
         }
         elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
         {
@@ -615,7 +648,7 @@ try
             if ($SolutionGroup.Properties.Query -match 'VMUUID')
             {
                 # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
-                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$($NewVM.VmId)`",")
+                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$VMId`",")
             }
             #Region Solution Onboarding ARM Template
             # ARM template to deploy log analytics agent extension for both Linux and Windows
