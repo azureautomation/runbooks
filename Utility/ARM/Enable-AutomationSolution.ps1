@@ -456,7 +456,7 @@ try
             if ($oErr)
             {
                 Remove-Item -Path $TempScript.FullName -Force
-                Write-Error -Message "Failed to run script command to retrieve VUUID from Linux VM" -ErrorAction Stop
+                Write-Error -Message "Failed to run script command to retrieve VMUUID from Linux VM" -ErrorAction Stop
             }
             else
             {
@@ -465,16 +465,16 @@ try
                     $VMId =(Select-String -InputObject $ResultCommand.value.message -Pattern '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}').Matches.Groups.Value
                     if($VMId)
                     {
-                        Write-Output -InputObject "Linux VUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
+                        Write-Output -InputObject "Linux VMUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
                     }
                     else
                     {
-                        Write-Error -Message "VUUID for Linux VM was not extracted successfully" -ErrorAction Stop
+                        Write-Error -Message "VMUUID for Linux VM was not extracted successfully" -ErrorAction Stop
                     }
                 }
                 else
                 {
-                    Write-Error -Message "Failed to retrieve Linux VM VUUID from script command" -ErrorAction Stop
+                    Write-Error -Message "Failed to retrieve Linux VM VMUUID from script command" -ErrorAction Stop
                 }
             }
         }

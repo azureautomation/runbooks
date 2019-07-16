@@ -336,7 +336,7 @@ try
                     }
                     else
                     {
-                        Write-Warning -Message "Found Linux VMs, skipping VUUID cleanup as Linux VMid and VUUID is different"
+                        Write-Warning -Message "Found Linux VMs, skipping VMUUID cleanup as Linux VMid and VMUUID is different"
                     }
                 }
                 else
