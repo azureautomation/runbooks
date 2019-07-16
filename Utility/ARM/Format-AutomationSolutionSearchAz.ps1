@@ -40,7 +40,11 @@
 #Requires -Version 5.0
 param(
     [ValidateRange(0, [double]::MaxValue)]
-    [double]$HybridWorkerStaleNrDays = 7
+    [double]$HybridWorkerStaleNrDays = 7,
+
+    [Parameter(Mandatory = $False)]
+    [Boolean]
+    $IgnoreLinux = $False
 )
 try
 {
@@ -313,7 +317,7 @@ try
                     }
                     if($AllAzureVMs)
                     {
-                        if(-not $SkipVMUUIDCleanup)
+                        if(-not $SkipVMUUIDCleanup -and $IgnoreLinux)
                         {
                             # Get VM Ids that are no longer alive
                             $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
