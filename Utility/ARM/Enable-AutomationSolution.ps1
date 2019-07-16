@@ -469,7 +469,7 @@ try
                         $VMTags = $NewVM.Tags
                         $VMTags += @{VMUUID=$VMId}
                         Set-AzureRMResource -ResourceType "Microsoft.Compute/VirtualMachines" -Tag $VMTags -ResourceGroupName $VMResourceGroupName -Name $VMName -Force `
-                            -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                            -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
                         if ($oErr)
                         {
                             Write-Error -Message "Failed to update tags for: $VMName. Aborting onboarding to solution" -ErrorAction Stop
