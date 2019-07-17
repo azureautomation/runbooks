@@ -323,7 +323,7 @@ try
                     }
                     if($AllAzureVMs)
                     {
-                        if(-not $SkipVMUUIDCleanup -and $IgnoreLinuxMissingTag)
+                        if(-not $SkipVMUUIDCleanup -or $IgnoreLinuxMissingTag)
                         {
                             # Get VM Ids that are no longer alive
                             $DeletedVmIds = Compare-Object -ReferenceObject $VmIds -DifferenceObject $AllAzureVMs -Property VmId | Where-Object {$_.SideIndicator -eq "<="}
