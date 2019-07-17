@@ -160,7 +160,6 @@ try
     {
         Write-Output -InputObject "Will try to discover Log Analytics workspace id"
     }
-
     $OldLogAnalyticsAgentExtensionName = "OMSExtension"
     $NewLogAnalyticsAgentExtensionName = "MMAExtension"
     $NewLogAnalyticsVMAgentExtensionName = "MicrosoftMonitoringAgent"
@@ -192,7 +191,7 @@ try
         Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
     }
     # set subscription of VM onboarded, else assume its in the same as the AA account
-    if ($Null -eq $VMSubscriptionId)
+    if ($Null -eq $VMSubscriptionId -or "" -eq $VMSubscriptionId)
     {
         # Use the same subscription as the Automation account if not passed in
         $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -226,17 +225,7 @@ try
     }
 
     # set subscription of Log Analytic workspace used for Update Management and Change Tracking, else assume its in the same as the AA account
-    if ($Null -eq $LogAnalyticsSolutionSubscriptionId)
-    {
-        # Use the same subscription as the Automation account if not passed in
-        $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
-        if ($oErr)
-        {
-            Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
-        }
-        Write-Verbose -Message "Creating azure VM context using subscription: $($LASubscriptionContext.Subscription.Name)"
-    }
-    else
+    if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
     {
         # VM is in a different subscription so set the context to this subscription
         $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -466,7 +455,7 @@ try
     if(-not $Onboarded)
     {
         $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $OldLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            -Name $OldLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -484,7 +473,6 @@ try
 
     if ($Null -eq $Onboarded)
     {
-
         # Set up MMA agent information to onboard VM to the workspace
         if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
         {
@@ -492,6 +480,51 @@ try
             $MMAOStype = "OmsAgentForLinux"
             $MMATypeHandlerVersion = "1.7"
             Write-Output -InputObject "Deploying MMA agent to Linux VM"
+
+            $RunCommand = "sudo dmidecode | grep UUID"
+            $TempScript = New-TemporaryFile
+            $RunCommand | Out-File -FilePath $TempScript.FullName
+
+            # Fetch UUID from VM
+            Write-Output -InputObject "Retrieving internal UUID from Linux VM to use for onboarding to solution"
+            $ResultCommand = Invoke-AzureRMVMRunCommand -VM $NewVM -CommandId "RunShellScript" -ScriptPath $TempScript.FullName -ErrorAction Continue -ErrorVariable oErr
+            Remove-Item -Path $TempScript.FullName -Force
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to run script command to retrieve VMUUID from Linux VM" -ErrorAction Stop
+            }
+            else
+            {
+                if($ResultCommand.Status -eq "Succeeded")
+                {
+                    $VMId =(Select-String -InputObject $ResultCommand.value.message -Pattern '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}').Matches.Groups.Value
+                    if($VMId)
+                    {
+                        Write-Output -InputObject "Linux VMUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
+                        Write-Output -InputObject "Adding VMUUID value as tag on VM: $VMName"
+                        $VMTags = $NewVM.Tags
+                        $VMTags += @{VMUUID=$VMId}
+                        Set-AzureRMResource -ResourceType "Microsoft.Compute/VirtualMachines" -Tag $VMTags -ResourceGroupName $VMResourceGroupName -Name $VMName -Force `
+                            -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                        if ($oErr)
+                        {
+                            Write-Error -Message "Failed to update tags for: $VMName. Aborting onboarding to solution" -ErrorAction Stop
+                        }
+                        else
+                        {
+                            Write-Output -InputObject "Successfully updated tags for VM: $VMName"
+                        }
+                    }
+                    else
+                    {
+                        Write-Error -Message "VMUUID for Linux VM was not extracted successfully" -ErrorAction Stop
+                    }
+                }
+                else
+                {
+                    Write-Error -Message "Failed to retrieve Linux VM VMUUID from script command" -ErrorAction Stop
+                }
+            }
         }
         elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
         {
@@ -663,7 +696,7 @@ try
             if ($SolutionGroup.Properties.Query -match 'VMUUID')
             {
                 # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
-                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$($NewVM.VmId)`",")
+                $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$VMId`",")
             }
             #Region Solution Onboarding ARM Template
             # ARM template to deploy log analytics agent extension for both Linux and Windows
@@ -781,6 +814,10 @@ try
         {
             Write-Warning -Message "The VM: $VMName is already onboarded to solution: $SolutionType"
         }
+    }
+    else
+    {
+        Write-Warning -Message "The VM: $VMName already has the Log Analytics MMA agent installed."
     }
 }
 catch
