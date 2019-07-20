@@ -304,6 +304,11 @@ try
                                 if($UpdatedQuery -match $DuplicateVmID.VmId)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                    # Check if last element in search
+                                    if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                    }
                                 }
                             }
                             else
@@ -313,6 +318,11 @@ try
                                 if($UpdatedQuery -match $DuplicateVmID.VmId)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                    # Check if last element in search
+                                    if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                    }
                                 }
                             }
                         }
@@ -336,18 +346,35 @@ try
                                     {
                                         $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                                         Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                        # check if end element in search
                                         if($UpdatedQuery -match $DeletedVmIds.VmId)
                                         {
                                             $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                            # Check if last element in search
+                                            if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                            {
+                                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"",'""')
+                                            }
                                         }
                                     }
                                     else
                                     {
                                         $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                                         Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                        # check if end element in search
                                         if($UpdatedQuery -match $DeletedVmIds.VmId)
                                         {
                                             $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                                                                        # Check if last element in search
+                                            if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                            {
+                                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", "")
+                                                # Check if last element in search
+                                                if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                                {
+                                                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", '""')
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -389,6 +416,10 @@ try
                                 if($UpdatedQuery -match $DuplicateVm.Name)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    if($UpdatedQuery -match $DuplicateVm.Name)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                    }
                                 }
                             }
                             else
@@ -398,6 +429,10 @@ try
                                 if($UpdatedQuery -match $DuplicateVm.Name)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    if($UpdatedQuery -match $DuplicateVm.Name)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                    }
                                 }
                             }
                         }
@@ -421,6 +456,10 @@ try
                                     if($UpdatedQuery -match $DeletedVmId.Name)
                                     {
                                         $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                        if($UpdatedQuery -match $DeletedVmId.Name)
+                                        {
+                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
+                                        }
                                     }
                                 }
                                 else
@@ -430,6 +469,10 @@ try
                                     if($UpdatedQuery -match $DeletedVmId.Name)
                                     {
                                         $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                        if($UpdatedQuery -match $DeletedVmId.Name)
+                                        {
+                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
+                                        }
                                     }
                                 }
                             }

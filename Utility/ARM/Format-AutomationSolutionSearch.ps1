@@ -277,7 +277,7 @@ try
                 $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
 
                 # Remove empty elements
-                if ( ($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') )
+                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') )
                 {
                     # Clean search of whitespace between elements
                     $UpdatedQuery = $SolutionQuery.Replace('", "', '","')
@@ -300,9 +300,15 @@ try
                             {
                                 $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`",", "")
                                 Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
+                                # check if is an end element, need to remove differently
                                 if($UpdatedQuery -match $DuplicateVmID.VmId)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                    # Check if last element in search
+                                    if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                    }
                                 }
                             }
                             else
@@ -312,6 +318,11 @@ try
                                 if($UpdatedQuery -match $DuplicateVmID.VmId)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                    # Check if last element in search
+                                    if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                    }
                                 }
                             }
                         }
@@ -335,18 +346,35 @@ try
                                     {
                                         $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                                         Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                        # check if end element in search
                                         if($UpdatedQuery -match $DeletedVmIds.VmId)
                                         {
                                             $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                            # Check if last element in search
+                                            if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                            {
+                                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"",'""')
+                                            }
                                         }
                                     }
                                     else
                                     {
                                         $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                                         Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
+                                        # check if end element in search
                                         if($UpdatedQuery -match $DeletedVmIds.VmId)
                                         {
                                             $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                                                                        # Check if last element in search
+                                            if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                            {
+                                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", "")
+                                                # Check if last element in search
+                                                if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                                {
+                                                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", '""')
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -388,6 +416,10 @@ try
                                 if($UpdatedQuery -match $DuplicateVm.Name)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    if($UpdatedQuery -match $DuplicateVm.Name)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                    }
                                 }
                             }
                             else
@@ -397,6 +429,10 @@ try
                                 if($UpdatedQuery -match $DuplicateVm.Name)
                                 {
                                     $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    if($UpdatedQuery -match $DuplicateVm.Name)
+                                    {
+                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                    }
                                 }
                             }
                         }
@@ -420,6 +456,10 @@ try
                                     if($UpdatedQuery -match $DeletedVmId.Name)
                                     {
                                         $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                        if($UpdatedQuery -match $DeletedVmId.Name)
+                                        {
+                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
+                                        }
                                     }
                                 }
                                 else
@@ -429,6 +469,10 @@ try
                                     if($UpdatedQuery -match $DeletedVmId.Name)
                                     {
                                         $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                        if($UpdatedQuery -match $DeletedVmId.Name)
+                                        {
+                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
+                                        }
                                     }
                                 }
                             }
@@ -450,7 +494,7 @@ try
 
                 if ($Null -ne $UpdatedQuery)
                 {
-                    #Region Solution Onboarding ARM Template
+                    #region Solution Onboarding ARM Template
                     # ARM template to deploy log analytics agent extension for both Linux and Windows
                     # URL to template: https://wcusonboardingtemplate.blob.core.windows.net/onboardingtemplate/ArmTemplate/createKQLScopeQueryV2.json
                     $ArmTemplate = @'
@@ -518,7 +562,7 @@ try
     ]
 }
 '@
-                    #Endregion
+                    #endregion
                     # Create temporary file to store ARM template in
                     $TempFile = New-TemporaryFile -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
@@ -545,10 +589,10 @@ try
                     # Create deployment name
                     $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-                    $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
+                    $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
                         -Name $DeploymentName `
                         -TemplateParameterObject $QueryDeploymentParams `
-                        -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                        -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
                     {
                         Write-Error -Message "Failed to update solution type: $SolutionType saved search" -ErrorAction Stop
