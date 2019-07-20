@@ -143,25 +143,27 @@ try
     $LogAnalyticsSolutionSubscriptionId = Get-AutomationVariable -Name "LASolutionSubscriptionId" -ErrorAction SilentlyContinue
     if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
     {
-        Write-Output -InputObject "Using AA asset variable for Log Analytics subscription id"
+        Write-Verbose -Message "Using AA asset variable for Log Analytics subscription id"
     }
     else
     {
-        Write-Output -InputObject "Will try to discover Log Analytics subscription id"
+        Write-Verbose -Message "Will try to discover Log Analytics subscription id"
     }
 
     # Check if AA asset variable is set  for Log Analytics workspace ID to use
     $LogAnalyticsSolutionWorkspaceId = Get-AutomationVariable -Name "LASolutionWorkspaceId" -ErrorAction SilentlyContinue
     if ($Null -ne $LogAnalyticsSolutionWorkspaceId)
     {
-        Write-Output -InputObject "Using AA asset variable for Log Analytics workspace id"
+        Write-Verbose -Message "Using AA asset variable for Log Analytics workspace id"
     }
     else
     {
-        Write-Output -InputObject "Will try to discover Log Analytics workspace id"
+        Write-Verbose -Message "Will try to discover Log Analytics workspace id"
     }
     $OldLogAnalyticsAgentExtensionName = "OMSExtension"
     $NewLogAnalyticsAgentExtensionName = "MMAExtension"
+    $LogAnalyticsLinuxAgentExtensionName = "OmsAgentForLinux"
+
     $NewLogAnalyticsVMAgentExtensionName = "MicrosoftMonitoringAgent"
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
@@ -273,7 +275,7 @@ try
                 {
                     # Find existing VM that is already onboarded to the solution.
                     $VMExtensions = Get-AzResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzContext $OnboardedVMSubscriptionContext |
-                        Where-Object {($_.Name -like "*/$NewLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$OldLogAnalyticsAgentExtensionName")}
+                        Where-Object {($_.Name -like "*/$NewLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$OldLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$LogAnalyticsLinuxAgentExtensionName")}
 
                     # Find VM to use as template
                     if ($Null -ne $VMExtensions)
@@ -434,43 +436,84 @@ try
             Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
         }
     }
-
-    # Check if the VM is already onboarded to the Log Analytics workspace
-    $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $NewLogAnalyticsVMAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
-    if ($oErr)
+    if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
     {
-        if ($oErr.Exception.Message -match "ResourceNotFound")
-        {
-            # VM does not have OMS extension installed
-            $Onboarded = $Null
-        }
-        else
-        {
-            Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
-        }
-
-    }
-    # Check if old extension name is in use
-    if(-not $Onboarded)
-    {
+        # Check if Linux MMA extension is installed
+        Write-Verbose -Message "Checking if Linux MMA extension is already installed"
         $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        -Name $LogAnalyticsLinuxAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
             {
                 # VM does not have OMS extension installed
                 $Onboarded = $Null
+                Write-Verbose -Message "Linux MMA extension is not installed"
             }
             else
             {
                 Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
             }
-
+        }
+        # If installed fetch VMUUID tag
+        else
+        {
+            Write-Verbose -Message "Linux MMA extension is already installed"
+            if(-not $NewVM.Tags.VMUUID)
+            {
+                Write-Output -InputObject "No VMUUID tag found for VM: $VMName. Can therefore not check if VM is already added to Log Analytics solution search"
+                $VMId = $null
+            }
+            else
+            {
+                $VMId = $NewVM.Tags.VMUUID
+                Write-Verbose -Message "Linux VM: $VMName has VMUUID tag set to: $VMId"
+            }
         }
     }
+    else
+    {
+        # Check if the Windows VM is already onboarded to the Log Analytics workspace
+        Write-Verbose -Message "Checking if Windows MMA extension is already installed"
+        $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $NewLogAnalyticsVMAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        if ($oErr)
+        {
+            if ($oErr.Exception.Message -match "ResourceNotFound")
+            {
+                # VM does not have OMS extension installed
+                $Onboarded = $Null
+                Write-Verbose -Message "Windows MMA extension is not installed"
+            }
+            else
+            {
+                Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+            }
+        }
+        else
+        {
+            Write-Verbose -Message "Windows MMA extension is already installed"
+        }
+        # Check if old extension name is in use
+        if(-not $Onboarded)
+        {
+            $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            if ($oErr)
+            {
+                if ($oErr.Exception.Message -match "ResourceNotFound")
+                {
+                    # VM does not have OMS extension installed
+                    $Onboarded = $Null
+                }
+                else
+                {
+                    Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+                }
 
+            }
+        }
+    }
     if ($Null -eq $Onboarded)
     {
         # Set up MMA agent information to onboard VM to the workspace
@@ -481,49 +524,58 @@ try
             $MMATypeHandlerVersion = "1.7"
             Write-Output -InputObject "Deploying MMA agent to Linux VM"
 
-            $RunCommand = "sudo dmidecode | grep UUID"
-            $TempScript = New-TemporaryFile
-            $RunCommand | Out-File -FilePath $TempScript.FullName
+            # Check if Linux VM is already onboarded
+            if(-not $NewVM.Tags.VMUUID)
+            {
+                $RunCommand = "sudo dmidecode | grep UUID"
+                $TempScript = New-TemporaryFile
+                $RunCommand | Out-File -FilePath $TempScript.FullName
 
-            # Fetch UUID from VM
-            Write-Output -InputObject "Retrieving internal UUID from Linux VM to use for onboarding to solution"
-            $ResultCommand = Invoke-AzVMRunCommand -VM $NewVM -CommandId "RunShellScript" -ScriptPath $TempScript.FullName -ErrorAction Continue -ErrorVariable oErr
-            Remove-Item -Path $TempScript.FullName -Force
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to run script command to retrieve VMUUID from Linux VM" -ErrorAction Stop
-            }
-            else
-            {
-                if($ResultCommand.Status -eq "Succeeded")
+                # Fetch UUID from VM
+                Write-Output -InputObject "Retrieving internal UUID from Linux VM to use for onboarding to solution"
+                $ResultCommand = Invoke-AzVMRunCommand -VM $NewVM -CommandId "RunShellScript" -ScriptPath $TempScript.FullName -ErrorAction Continue -ErrorVariable oErr
+                Remove-Item -Path $TempScript.FullName -Force
+                if ($oErr)
                 {
-                    $VMId =(Select-String -InputObject $ResultCommand.value.message -Pattern '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}').Matches.Groups.Value
-                    if($VMId)
+                    Write-Error -Message "Failed to run script command to retrieve VMUUID from Linux VM" -ErrorAction Stop
+                }
+                else
+                {
+                    if($ResultCommand.Status -eq "Succeeded")
                     {
-                        Write-Output -InputObject "Linux VMUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
-                        Write-Output -InputObject "Adding VMUUID value as tag on VM: $VMName"
-                        $VMTags = $NewVM.Tags
-                        $VMTags += @{VMUUID=$VMId}
-                        Set-AzResource -ResourceType "Microsoft.Compute/VirtualMachines" -Tag $VMTags -ResourceGroupName $VMResourceGroupName -Name $VMName -Force `
-                            -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-                        if ($oErr)
+                        $VMId =(Select-String -InputObject $ResultCommand.value.message -Pattern '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}').Matches.Groups.Value
+                        if($VMId)
                         {
-                            Write-Error -Message "Failed to update tags for: $VMName. Aborting onboarding to solution" -ErrorAction Stop
+                            Write-Output -InputObject "Linux VMUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
+                            Write-Output -InputObject "Adding VMUUID value as tag on VM: $VMName"
+                            $VMTags = $NewVM.Tags
+                            $VMTags += @{VMUUID=$VMId}
+                            Set-AzResource -ResourceType "Microsoft.Compute/VirtualMachines" -Tag $VMTags -ResourceGroupName $VMResourceGroupName -Name $VMName -Force `
+                                -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                            if ($oErr)
+                            {
+                                Write-Error -Message "Failed to update tags for: $VMName. Aborting onboarding to solution" -ErrorAction Stop
+                            }
+                            else
+                            {
+                                Write-Output -InputObject "Successfully updated tags for VM: $VMName"
+                            }
                         }
                         else
                         {
-                            Write-Output -InputObject "Successfully updated tags for VM: $VMName"
+                            Write-Error -Message "VMUUID for Linux VM was not extracted successfully" -ErrorAction Stop
                         }
                     }
                     else
                     {
-                        Write-Error -Message "VMUUID for Linux VM was not extracted successfully" -ErrorAction Stop
+                        Write-Error -Message "Failed to retrieve Linux VM VMUUID from script command" -ErrorAction Stop
                     }
                 }
-                else
-                {
-                    Write-Error -Message "Failed to retrieve Linux VM VMUUID from script command" -ErrorAction Stop
-                }
+            }
+            else
+            {
+                $VMId = $NewVM.Tags.VMUUID
+                Write-Verbose -Message "Linux VM: $VMName has VMUUID tag set to: $VMId"
             }
         }
         elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
@@ -679,7 +731,7 @@ try
     }
     else
     {
-        Write-Warning -Message "The VM: $VMName already has the Log Analytics MMA agent installed."
+        Write-Output -InputObject "The VM: $VMName already has the Log Analytics MMA agent installed."
     }
 
     # Update scope query if necessary
@@ -687,8 +739,9 @@ try
 
     if ($Null -ne $SolutionGroup)
     {
-        if (-not (($SolutionGroup.Properties.Query -match $VMId) -or ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
+        if (-not (($SolutionGroup.Properties.Query -match $VMId) -or ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery -and ($null -ne $VMId) )
         {
+            Write-Verbose -Message "Adding VM: $VMName to solution type: $SolutionType with VMUUID: $VMId"
             # Original saved search query:
             # $DefaultQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"
 
@@ -812,7 +865,14 @@ try
         }
         else
         {
-            Write-Warning -Message "The VM: $VMName is already onboarded to solution: $SolutionType"
+            if($null -eq $VMId)
+            {
+                Write-Output -InputObject "The Linux VM: $VMName could not be checked if already onboarded as it is missing the VMUUID tag"
+            }
+            else
+            {
+                Write-Output -InputObject "The VM: $VMName is already onboarded to solution: $SolutionType with VMUUID: $VMId"
+            }
         }
     }
 }

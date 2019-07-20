@@ -143,25 +143,27 @@ try
     $LogAnalyticsSolutionSubscriptionId = Get-AutomationVariable -Name "LASolutionSubscriptionId" -ErrorAction SilentlyContinue
     if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
     {
-        Write-Output -InputObject "Using AA asset variable for Log Analytics subscription id"
+        Write-Verbose -Message "Using AA asset variable for Log Analytics subscription id"
     }
     else
     {
-        Write-Output -InputObject "Will try to discover Log Analytics subscription id"
+        Write-Verbose -Message "Will try to discover Log Analytics subscription id"
     }
 
     # Check if AA asset variable is set  for Log Analytics workspace ID to use
     $LogAnalyticsSolutionWorkspaceId = Get-AutomationVariable -Name "LASolutionWorkspaceId" -ErrorAction SilentlyContinue
     if ($Null -ne $LogAnalyticsSolutionWorkspaceId)
     {
-        Write-Output -InputObject "Using AA asset variable for Log Analytics workspace id"
+        Write-Verbose -Message "Using AA asset variable for Log Analytics workspace id"
     }
     else
     {
-        Write-Output -InputObject "Will try to discover Log Analytics workspace id"
+        Write-Verbose -Message "Will try to discover Log Analytics workspace id"
     }
     $OldLogAnalyticsAgentExtensionName = "OMSExtension"
     $NewLogAnalyticsAgentExtensionName = "MMAExtension"
+    $LogAnalyticsLinuxAgentExtensionName = "OmsAgentForLinux"
+
     $NewLogAnalyticsVMAgentExtensionName = "MicrosoftMonitoringAgent"
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
@@ -170,7 +172,7 @@ try
 
     # Fetch AA RunAs account detail from connection object asset
     $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection" -ErrorAction Stop
-    $Null = Add-AzureRmAccount `
+    $Null = Add-AzureRMAccount `
         -ServicePrincipal `
         -TenantId $ServicePrincipalConnection.TenantId `
         -ApplicationId $ServicePrincipalConnection.ApplicationId `
@@ -181,7 +183,7 @@ try
     }
 
     # Set subscription of AA account
-    $SubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+    $SubscriptionContext = Set-AzureRMContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
     if ($oErr)
     {
         Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
@@ -194,7 +196,7 @@ try
     if ([string]::IsNullOrEmpty($VMSubscriptionId))
     {
         # Use the same subscription as the Automation account if not passed in
-        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
@@ -205,7 +207,7 @@ try
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $NewVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop
@@ -213,10 +215,10 @@ try
         Write-Verbose -Message "Creating azure VM context using subscription: $($NewVMSubscriptionContext.Subscription.Name)"
         # Register Automation provider if it is not registered on the subscription
         $AutomationProvider = Get-AzureRMResourceProvider -ProviderNamespace Microsoft.Automation `
-            -AzureRmContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
+            -AzureRMContext $NewVMSubscriptionContext |  Where-Object {$_.RegistrationState -eq "Registered"}
         if ($Null -eq $AutomationProvider)
         {
-            $ObjectOutPut = Register-AzureRmResourceProvider -ProviderNamespace Microsoft.Automation -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            $ObjectOutPut = Register-AzureRMResourceProvider -ProviderNamespace Microsoft.Automation -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
                 Write-Error -Message "Failed to register Microsoft.Automation provider in: $($NewVMSubscriptionContext.Subscription.Name)" -ErrorAction Stop
@@ -228,7 +230,7 @@ try
     if ($Null -ne $LogAnalyticsSolutionSubscriptionId)
     {
         # VM is in a different subscription so set the context to this subscription
-        $LASubscriptionContext = Set-AzureRmContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $LASubscriptionContext = Set-AzureRMContext -SubscriptionId $LogAnalyticsSolutionSubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where Log Analytics workspace is" -ErrorAction Stop
@@ -242,7 +244,7 @@ try
         # Set order to sort subscriptions by
         $SortOrder = @($NewVMSubscriptionContext.Subscription.Name, $SubscriptionContext.Subscription.Name)
         # Get all subscriptions the AA account has access to
-        $AzureRmSubscriptions = Get-AzureRmSubscription |
+        $AzSubscriptions = Get-AzureRMSubscription |
             # Sort array so VM subscription will be search first for exiting onboarded VMs, then it will try AA subscription before moving on to others it has access to
         Sort-Object -Property {
             $SortRank = $SortOrder.IndexOf($($_.Name.ToLower()))
@@ -256,24 +258,24 @@ try
             }
         }
 
-        if ($Null -ne $AzureRmSubscriptions)
+        if ($Null -ne $AzSubscriptions)
         {
             # Run through each until a VM with Microsoft Monitoring Agent is found
             $SubscriptionCounter = 0
-            foreach ($AzureRMsubscription in $AzureRMsubscriptions)
+            foreach ($Azsubscription in $Azsubscriptions)
             {
                 # Set subscription context
-                $OnboardedVMSubscriptionContext = Set-AzureRmContext -SubscriptionId $AzureRmSubscription.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+                $OnboardedVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $AzSubscription.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
                 if ($oErr)
                 {
-                    Write-Error -Message "Failed to set azure context to subscription: $($AzureRmSubscription.Name)" -ErrorAction Continue
+                    Write-Error -Message "Failed to set azure context to subscription: $($AzSubscription.Name)" -ErrorAction Continue
                     $oErr = $Null
                 }
                 if ($Null -ne $OnboardedVMSubscriptionContext)
                 {
                     # Find existing VM that is already onboarded to the solution.
-                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext |
-                        Where-Object {($_.Name -like "*/$NewLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$OldLogAnalyticsAgentExtensionName")}
+                    $VMExtensions = Get-AzureRMResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRMContext $OnboardedVMSubscriptionContext |
+                        Where-Object {($_.Name -like "*/$NewLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$OldLogAnalyticsAgentExtensionName") -or ($_.Name -like "*/$LogAnalyticsLinuxAgentExtensionName")}
 
                     # Find VM to use as template
                     if ($Null -ne $VMExtensions)
@@ -284,7 +286,7 @@ try
                     }
                 }
                 $SubscriptionCounter++
-                if ($SubscriptionCounter -eq $AzureRmSubscriptions.Count)
+                if ($SubscriptionCounter -eq $AzSubscriptions.Count)
                 {
                     Write-Error -Message "Did not find any VM with Microsoft Monitoring Agent already installed. Install at least one in a subscription the AA RunAs account has access to" -ErrorAction Stop
                 }
@@ -294,8 +296,8 @@ try
             {
                 if ($Null -ne $VMExtension.Name -and $Null -ne $VMExtension.ResourceGroupName)
                 {
-                    $ExistingVMExtension = Get-AzureRmVMExtension -ResourceGroup $VMExtension.ResourceGroupName -VMName ($VMExtension.Name).Split('/')[0] `
-                        -AzureRmContext $OnboardedVMSubscriptionContext -Name ($VMExtension.Name).Split('/')[-1]
+                    $ExistingVMExtension = Get-AzureRMVMExtension -ResourceGroup $VMExtension.ResourceGroupName -VMName ($VMExtension.Name).Split('/')[0] `
+                        -AzureRMContext $OnboardedVMSubscriptionContext -Name ($VMExtension.Name).Split('/')[-1]
                 }
                 if ($Null -ne $ExistingVMExtension)
                 {
@@ -332,7 +334,7 @@ try
             Write-Error -Message "Public settings for VM extension is empty" -ErrorAction Stop
         }
         # Get information about the workspace
-        $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
+        $WorkspaceInfo = Get-AzureRMOperationalInsightsWorkspace -AzureRMContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
             | Where-Object {$_.CustomerId -eq $PublicSettings.workspaceId}
         if ($oErr)
         {
@@ -352,8 +354,8 @@ try
             Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
         }
         # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-        $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-            -WorkspaceName $WorkspaceName -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        $SavedGroups = Get-AzureRMOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+            -WorkspaceName $WorkspaceName -AzureRMContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
@@ -365,7 +367,7 @@ try
         if ($Null -ne $LASubscriptionContext)
         {
             # Get information about the workspace
-            $WorkspaceInfo = Get-AzureRmOperationalInsightsWorkspace -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
+            $WorkspaceInfo = Get-AzureRMOperationalInsightsWorkspace -AzureRMContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr `
                 | Where-Object {$_.CustomerId -eq $LogAnalyticsSolutionWorkspaceId}
             if ($oErr)
             {
@@ -385,8 +387,8 @@ try
                 Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
             }
             # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-            $SavedGroups = Get-AzureRmOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-                -WorkspaceName $WorkspaceName -AzureRmContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            $SavedGroups = Get-AzureRMOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+                -WorkspaceName $WorkspaceName -AzureRMContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
                 Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
@@ -401,7 +403,7 @@ try
     Write-Verbose -Message "Retrieving VM with following details: RG: $VMResourceGroupName, Name: $VMName, SubName: $($NewVMSubscriptionContext.Subscription.Name)"
     # Get details of the new VM to onboard.
     $NewVM = Get-AzureRMVM -ResourceGroupName $VMResourceGroupName -Name $VMName -Status `
-        -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr | Where-Object {$_.Statuses.code -match "running"}
+        -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr | Where-Object {$_.Statuses.code -match "running"}
     if ($oErr)
     {
         Write-Error -Message "Failed to retrieve VM status data for: $VMName" -ErrorAction Stop
@@ -415,7 +417,7 @@ try
     else
     {
         $NewVM = Get-AzureRMVM -ResourceGroupName $VMResourceGroupName -Name $VMName `
-            -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
@@ -434,40 +436,82 @@ try
             Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
         }
     }
-
-    # Check if the VM is already onboarded to the Log Analytics workspace
-    $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $NewLogAnalyticsVMAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
-    if ($oErr)
+    if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
     {
-        if ($oErr.Exception.Message -match "ResourceNotFound")
-        {
-            # VM does not have OMS extension installed
-            $Onboarded = $Null
-        }
-        else
-        {
-            Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
-        }
-
-    }
-    # Check if old extension name is in use
-    if(-not $Onboarded)
-    {
-        $Onboarded = Get-AzureRmVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-            -Name $OldLogAnalyticsAgentExtensionName -AzureRmContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        # Check if Linux MMA extension is installed
+        Write-Verbose -Message "Checking if Linux MMA extension is already installed"
+        $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+        -Name $LogAnalyticsLinuxAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
             {
                 # VM does not have OMS extension installed
                 $Onboarded = $Null
+                Write-Verbose -Message "Linux MMA extension is not installed"
             }
             else
             {
                 Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
             }
+        }
+        # If installed fetch VMUUID tag
+        else
+        {
+            Write-Verbose -Message "Linux MMA extension is already installed"
+            if(-not $NewVM.Tags.VMUUID)
+            {
+                Write-Output -InputObject "No VMUUID tag found for VM: $VMName. Can therefore not check if VM is already added to Log Analytics solution search"
+                $VMId = $null
+            }
+            else
+            {
+                $VMId = $NewVM.Tags.VMUUID
+                Write-Verbose -Message "Linux VM: $VMName has VMUUID tag set to: $VMId"
+            }
+        }
+    }
+    else
+    {
+        # Check if the Windows VM is already onboarded to the Log Analytics workspace
+        Write-Verbose -Message "Checking if Windows MMA extension is already installed"
+        $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $NewLogAnalyticsVMAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        if ($oErr)
+        {
+            if ($oErr.Exception.Message -match "ResourceNotFound")
+            {
+                # VM does not have OMS extension installed
+                $Onboarded = $Null
+                Write-Verbose -Message "Windows MMA extension is not installed"
+            }
+            else
+            {
+                Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+            }
+        }
+        else
+        {
+            Write-Verbose -Message "Windows MMA extension is already installed"
+        }
+        # Check if old extension name is in use
+        if(-not $Onboarded)
+        {
+            $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $OldLogAnalyticsAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            if ($oErr)
+            {
+                if ($oErr.Exception.Message -match "ResourceNotFound")
+                {
+                    # VM does not have OMS extension installed
+                    $Onboarded = $Null
+                }
+                else
+                {
+                    Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+                }
 
+            }
         }
     }
 
@@ -481,49 +525,58 @@ try
             $MMATypeHandlerVersion = "1.7"
             Write-Output -InputObject "Deploying MMA agent to Linux VM"
 
-            $RunCommand = "sudo dmidecode | grep UUID"
-            $TempScript = New-TemporaryFile
-            $RunCommand | Out-File -FilePath $TempScript.FullName
+            # Check if Linux VM is already onboarded
+            if(-not $NewVM.Tags.VMUUID)
+            {
+                $RunCommand = "sudo dmidecode | grep UUID"
+                $TempScript = New-TemporaryFile
+                $RunCommand | Out-File -FilePath $TempScript.FullName
 
-            # Fetch UUID from VM
-            Write-Output -InputObject "Retrieving internal UUID from Linux VM to use for onboarding to solution"
-            $ResultCommand = Invoke-AzureRMVMRunCommand -VM $NewVM -CommandId "RunShellScript" -ScriptPath $TempScript.FullName -ErrorAction Continue -ErrorVariable oErr
-            Remove-Item -Path $TempScript.FullName -Force
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to run script command to retrieve VMUUID from Linux VM" -ErrorAction Stop
-            }
-            else
-            {
-                if($ResultCommand.Status -eq "Succeeded")
+                # Fetch UUID from VM
+                Write-Output -InputObject "Retrieving internal UUID from Linux VM to use for onboarding to solution"
+                $ResultCommand = Invoke-AzureRMVMRunCommand -VM $NewVM -CommandId "RunShellScript" -ScriptPath $TempScript.FullName -ErrorAction Continue -ErrorVariable oErr
+                Remove-Item -Path $TempScript.FullName -Force
+                if ($oErr)
                 {
-                    $VMId =(Select-String -InputObject $ResultCommand.value.message -Pattern '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}').Matches.Groups.Value
-                    if($VMId)
+                    Write-Error -Message "Failed to run script command to retrieve VMUUID from Linux VM" -ErrorAction Stop
+                }
+                else
+                {
+                    if($ResultCommand.Status -eq "Succeeded")
                     {
-                        Write-Output -InputObject "Linux VMUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
-                        Write-Output -InputObject "Adding VMUUID value as tag on VM: $VMName"
-                        $VMTags = $NewVM.Tags
-                        $VMTags += @{VMUUID=$VMId}
-                        Set-AzureRMResource -ResourceType "Microsoft.Compute/VirtualMachines" -Tag $VMTags -ResourceGroupName $VMResourceGroupName -Name $VMName -Force `
-                            -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-                        if ($oErr)
+                        $VMId =(Select-String -InputObject $ResultCommand.value.message -Pattern '\w{8}-\w{4}-\w{4}-\w{4}-\w{12}').Matches.Groups.Value
+                        if($VMId)
                         {
-                            Write-Error -Message "Failed to update tags for: $VMName. Aborting onboarding to solution" -ErrorAction Stop
+                            Write-Output -InputObject "Linux VMUUID is: $VMId. This is not the same as VMid as is the case for Windows VMs"
+                            Write-Output -InputObject "Adding VMUUID value as tag on VM: $VMName"
+                            $VMTags = $NewVM.Tags
+                            $VMTags += @{VMUUID=$VMId}
+                            Set-AzureRMResource -ResourceType "Microsoft.Compute/VirtualMachines" -Tag $VMTags -ResourceGroupName $VMResourceGroupName -Name $VMName -Force `
+                                -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                            if ($oErr)
+                            {
+                                Write-Error -Message "Failed to update tags for: $VMName. Aborting onboarding to solution" -ErrorAction Stop
+                            }
+                            else
+                            {
+                                Write-Output -InputObject "Successfully updated tags for VM: $VMName"
+                            }
                         }
                         else
                         {
-                            Write-Output -InputObject "Successfully updated tags for VM: $VMName"
+                            Write-Error -Message "VMUUID for Linux VM was not extracted successfully" -ErrorAction Stop
                         }
                     }
                     else
                     {
-                        Write-Error -Message "VMUUID for Linux VM was not extracted successfully" -ErrorAction Stop
+                        Write-Error -Message "Failed to retrieve Linux VM VMUUID from script command" -ErrorAction Stop
                     }
                 }
-                else
-                {
-                    Write-Error -Message "Failed to retrieve Linux VM VMUUID from script command" -ErrorAction Stop
-                }
+            }
+            else
+            {
+                $VMId = $NewVM.Tags.VMUUID
+                Write-Verbose -Message "Linux VM: $VMName has VMUUID tag set to: $VMId"
             }
         }
         elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
@@ -660,10 +713,10 @@ try
         $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
-        $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
+        $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
             -Name $DeploymentName `
             -TemplateParameterObject $MMADeploymentParams `
-            -AzureRmContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Deployment of Log Analytics agent failed" -ErrorAction Stop
@@ -679,7 +732,7 @@ try
     }
     else
     {
-        Write-Warning -Message "The VM: $VMName already has the Log Analytics MMA agent installed."
+        Write-Output -InputObject "The VM: $VMName already has the Log Analytics MMA agent installed."
     }
 
     # Update scope query if necessary
@@ -687,8 +740,9 @@ try
 
     if ($Null -ne $SolutionGroup)
     {
-        if (-not (($SolutionGroup.Properties.Query -match $VMId) -or ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery)
+        if (-not (($SolutionGroup.Properties.Query -match $VMId) -or ($SolutionGroup.Properties.Query -match $VMName)) -and $UpdateScopeQuery -and ($null -ne $VMId) )
         {
+            Write-Verbose -Message "Adding VM: $VMName to solution type: $SolutionType with VMUUID: $VMId"
             # Original saved search query:
             # $DefaultQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"
 
@@ -793,10 +847,10 @@ try
             # Create deployment name
             $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-            $ObjectOutPut = New-AzureRmResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
+            $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `
                 -TemplateParameterObject $QueryDeploymentParams `
-                -AzureRmContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                -AzureRMContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
             if ($oErr)
             {
                 Write-Error -Message "Failed to add VM: $VMName to solution: $SolutionType" -ErrorAction Stop
@@ -812,12 +866,15 @@ try
         }
         else
         {
-            Write-Warning -Message "The VM: $VMName is already onboarded to solution: $SolutionType"
+            if($null -eq $VMId)
+            {
+                Write-Output -InputObject "The Linux VM: $VMName could not be checked if already onboarded as it is missing the VMUUID tag"
+            }
+            else
+            {
+                Write-Output -InputObject "The VM: $VMName is already onboarded to solution: $SolutionType with VMUUID: $VMId"
+            }
         }
-    }
-    else
-    {
-        Write-Warning -Message "The VM: $VMName already has the Log Analytics MMA agent installed."
     }
 }
 catch
