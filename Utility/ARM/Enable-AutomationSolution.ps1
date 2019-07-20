@@ -400,50 +400,9 @@ try
             Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
         }
     }
-
-    # Check if the Windows VM is already onboarded to the Log Analytics workspace
-    Write-Verbose -Message "Checking if Windows MMA extension is already installed"
-    $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $NewLogAnalyticsVMAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
-    if ($oErr)
+    if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
     {
-        if ($oErr.Exception.Message -match "ResourceNotFound")
-        {
-            # VM does not have OMS extension installed
-            $Onboarded = $Null
-            Write-Verbose -Message "Windows MMA extension is not installed"
-        }
-        else
-        {
-            Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
-        }
-    }
-    else
-    {
-        Write-Verbose -Message "Windows MMA extension is already installed"
-    }
-    # Check if old extension name is in use
-    if(-not $Onboarded)
-    {
-        $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $OldLogAnalyticsAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
-        if ($oErr)
-        {
-            if ($oErr.Exception.Message -match "ResourceNotFound")
-            {
-                # VM does not have OMS extension installed
-                $Onboarded = $Null
-            }
-            else
-            {
-                Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
-            }
-
-        }
-    }
-    # Check if Linux MMA extension is installed
-    if(-not $Onboarded)
-    {
+        # Check if Linux MMA extension is installed
         Write-Verbose -Message "Checking if Linux MMA extension is already installed"
         $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
         -Name $LogAnalyticsLinuxAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
@@ -473,6 +432,49 @@ try
             {
                 $VMId = $NewVM.Tags.VMUUID
                 Write-Verbose -Message "Linux VM: $VMName has VMUUID tag set to: $VMId"
+            }
+        }
+    }
+    else
+    {
+        # Check if the Windows VM is already onboarded to the Log Analytics workspace
+        Write-Verbose -Message "Checking if Windows MMA extension is already installed"
+        $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $NewLogAnalyticsVMAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        if ($oErr)
+        {
+            if ($oErr.Exception.Message -match "ResourceNotFound")
+            {
+                # VM does not have OMS extension installed
+                $Onboarded = $Null
+                Write-Verbose -Message "Windows MMA extension is not installed"
+            }
+            else
+            {
+                Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+            }
+        }
+        else
+        {
+            Write-Verbose -Message "Windows MMA extension is already installed"
+        }
+        # Check if old extension name is in use
+        if(-not $Onboarded)
+        {
+            $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $OldLogAnalyticsAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            if ($oErr)
+            {
+                if ($oErr.Exception.Message -match "ResourceNotFound")
+                {
+                    # VM does not have OMS extension installed
+                    $Onboarded = $Null
+                }
+                else
+                {
+                    Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+                }
+
             }
         }
     }

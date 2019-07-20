@@ -400,50 +400,9 @@ try
             Write-Error -Message "Failed to retrieve VM data for: $VMName" -ErrorAction Stop
         }
     }
-
-    # Check if the Windows VM is already onboarded to the Log Analytics workspace
-    Write-Verbose -Message "Checking if Windows MMA extension is already installed"
-    $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $NewLogAnalyticsVMAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
-    if ($oErr)
+    if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
     {
-        if ($oErr.Exception.Message -match "ResourceNotFound")
-        {
-            # VM does not have OMS extension installed
-            $Onboarded = $Null
-            Write-Verbose -Message "Windows MMA extension is not installed"
-        }
-        else
-        {
-            Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
-        }
-    }
-    else
-    {
-        Write-Verbose -Message "Windows MMA extension is already installed"
-    }
-    # Check if old extension name is in use
-    if(-not $Onboarded)
-    {
-        $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
-        if ($oErr)
-        {
-            if ($oErr.Exception.Message -match "ResourceNotFound")
-            {
-                # VM does not have OMS extension installed
-                $Onboarded = $Null
-            }
-            else
-            {
-                Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
-            }
-
-        }
-    }
-    # Check if Linux MMA extension is installed
-    if(-not $Onboarded)
-    {
+        # Check if Linux MMA extension is installed
         Write-Verbose -Message "Checking if Linux MMA extension is already installed"
         $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
         -Name $LogAnalyticsLinuxAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
@@ -476,7 +435,49 @@ try
             }
         }
     }
+    else
+    {
+        # Check if the Windows VM is already onboarded to the Log Analytics workspace
+        Write-Verbose -Message "Checking if Windows MMA extension is already installed"
+        $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $NewLogAnalyticsVMAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+        if ($oErr)
+        {
+            if ($oErr.Exception.Message -match "ResourceNotFound")
+            {
+                # VM does not have OMS extension installed
+                $Onboarded = $Null
+                Write-Verbose -Message "Windows MMA extension is not installed"
+            }
+            else
+            {
+                Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+            }
+        }
+        else
+        {
+            Write-Verbose -Message "Windows MMA extension is already installed"
+        }
+        # Check if old extension name is in use
+        if(-not $Onboarded)
+        {
+            $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
+            -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            if ($oErr)
+            {
+                if ($oErr.Exception.Message -match "ResourceNotFound")
+                {
+                    # VM does not have OMS extension installed
+                    $Onboarded = $Null
+                }
+                else
+                {
+                    Write-Error -Message "Failed to retrieve extension data from VM: $VMName" -ErrorAction Stop
+                }
 
+            }
+        }
+    }
     if ($Null -eq $Onboarded)
     {
         # Set up MMA agent information to onboard VM to the workspace
