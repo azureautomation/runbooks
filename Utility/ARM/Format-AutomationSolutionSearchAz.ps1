@@ -163,7 +163,7 @@ try
             }
             else
             {
-                Write-Warning -Message "Linux VM: $($AzureVM.Name) was not onboarded with automation solution and is missing VMUUID tag. Manually add it to VM and run job again. Linux UUID must be attained from inside OS using dmidecode command"
+                Write-Output -InputObject "Linux VM: $($AzureVM.Name) was not onboarded with automation solution and is missing VMUUID tag. Manually add it to VM and run job again. Linux UUID must be attained from inside OS using dmidecode command"
                 $SkipVMUUIDCleanup = $true
             }
         }
