@@ -467,7 +467,7 @@ try
                     {
                         if(!$SearchResult)
                         {
-                            Write-Warning "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module imported from a different location"
+                            Write-Output -InputObject "Could not find module '$ModuleName' on PowerShell Gallery. This may be a module imported from a different location"
                         }
                         else
                         {
@@ -492,7 +492,7 @@ try
                 }
                 else
                 {
-                    Write-Warning -Message "No result from querying PS Gallery for module: $ModuleName"
+                    Write-Output -InputObject "No result from querying PS Gallery for module: $ModuleName"
                 }
             }
         }
