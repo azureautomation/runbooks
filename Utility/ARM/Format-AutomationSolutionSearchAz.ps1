@@ -228,7 +228,7 @@ try
                     # Check if it has checked in the last week
                     if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le (Get-Date).AddDays(-$HybridWorkerStaleNrDays))
                     {
-                        Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
+                        Write-Output -InputObject "System hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days"
                         Write-Output -InputObject "Removing duplicate hybrid worker: $($HybridWorkerGroup.Name)"
                         Remove-AzAutomationHybridWorkerGroup -Name $HybridWorkerGroup.Name -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
                         if ($oErr)
@@ -245,11 +245,11 @@ try
             # Check for stale hybrid workers
             if ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime -le [DateTimeOffset]::Now.AddDays(-$HybridWorkerStaleNrDays))
             {
-                Write-Warning -Message "Hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Hours since last seen: $([math]::Round(([DateTimeOffset]::Now - ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime)).TotalHours))"
+                Write-Warning -Message "System hybrid worker: $($HybridWorkerGroup.Name) has not reported in for the last $HybridWorkerStaleNrDays days. Hours since last seen: $([math]::Round(([DateTimeOffset]::Now - ($HybridWorkerGroup.RunbookWorker.LastSeenDateTime)).TotalHours))"
             }
             else
             {
-                Write-Output -InputObject "Hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
+                Write-Output -InputObject "System hybrid worker: $($HybridWorkerGroup.Name) has reported inn the last: $HybridWorkerStaleNrDays days"
             }
         }
     }
