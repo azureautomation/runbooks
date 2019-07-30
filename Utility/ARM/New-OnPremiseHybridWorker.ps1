@@ -30,6 +30,7 @@
  -- MODIFIED BY Peppe Kerstens
  -- #54 Fixed source assumption.
  -- removed aliases, proper PS commands
+ -- #49 added Az check as implemented by rcarboneras to overcome merge conflicts
 
 1.6 - 11/15/2018
  -- MODIFIED BY Alexander Zabielski
@@ -220,6 +221,15 @@ foreach ($Module in $Modules) {
         $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion @splatRepository -Force
         Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
 
+    } else {
+        if (($ModuleName -eq "AzureRm") -and (Get-InstalledModule -Name Az)) {
+            Write-Output "$ModuleName was not found but Az module is installed instead. Enabling ARM Aliases.."
+            Enable-AzureRmAlias
+        } else {
+
+            $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force
+            Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
+        }
     } else {
         Write-Output "     Required version $ModuleVersion of $ModuleName is installed..."
     }
