@@ -29,6 +29,7 @@
 1.7 - 7/30/2019
  -- MODIFIED BY Peppe Kerstens
  -- #54 Fixed source assumption.
+ -- removed aliases, proper PS commands
 
 1.6 - 11/15/2018
  -- MODIFIED BY Alexander Zabielski
@@ -349,7 +350,7 @@ try {
     $null = Unblock-File $Destination
 
     # Change directory to location of the downloaded MMA
-    cd $env:temp
+    Set-Location -Path  $env:temp
 
     # Install the MMA
     $Command = "/C:setup.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID=$WorkspaceID" + " OPINSIGHTS_WORKSPACE_KEY=$WorkspaceKey " + " AcceptEndUserLicenseAgreement=1"
@@ -368,9 +369,9 @@ do {
     # Check for the MMA folders
     try {
         # Change the directory to the location of the hybrid registration module
-        cd "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AzureAutomation"
-        $version = (ls | Sort-Object LastWriteTime -Descending | Select -First 1).Name
-        cd "$version\HybridRegistration"
+        Set-Location -Path "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AzureAutomation"
+        $version = (Get-ChildItem | Sort-Object LastWriteTime -Descending | Select-Item -First 1).Name
+        Set-Location -Path "$version\HybridRegistration"
 
         # Import the module
         Import-Module (Resolve-Path('HybridRegistration.psd1'))
