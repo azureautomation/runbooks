@@ -672,6 +672,27 @@ try
         $MMADeploymentParams.Add("OStype", $MMAOStype)
         $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
+        $Busy = $false
+        while(-not $Busy)
+        {
+            # check that no other deployment is in progress
+            $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+            if ($oErr)
+            {
+                Write-Error -Message "Failed to get status of other solution deployments to resource group: $VMResourceGroupName" -ErrorAction Stop
+            }
+            if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationControl-PS-*" -and $_.ProvisioningState -eq "Running"})
+            {
+
+                Start-Sleep -Seconds 2
+                $Busy = $true
+            }
+            else
+            {
+                $Busy = $false
+            }
+        }
+
         # Create deployment name
         $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
