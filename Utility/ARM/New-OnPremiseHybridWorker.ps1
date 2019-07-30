@@ -253,7 +253,7 @@ $Account = Add-AzureRmAccount @paramsplat
 # Set the active subscription
 $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
 
-# Check that the resource groups are valid
+# Check that the resource groups are valid 
 $null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
 if ($OMSResourceGroupName) {
     $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
