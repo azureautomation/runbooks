@@ -672,29 +672,8 @@ try
         $MMADeploymentParams.Add("OStype", $MMAOStype)
         $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
-        $Busy = $false
-        while(-not $Busy)
-        {
-            # check that no other deployment is in progress
-            $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to get status of other solution deployments to resource group: $VMResourceGroupName" -ErrorAction Stop
-            }
-            if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationControl-PS-*" -and $_.ProvisioningState -eq "Running"})
-            {
-
-                Start-Sleep -Seconds 2
-                $Busy = $true
-            }
-            else
-            {
-                $Busy = $false
-            }
-        }
-
         # Create deployment name
-        $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+        $DeploymentName = "AutomationAgentDeploy-PS-" + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
         $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
@@ -829,7 +808,28 @@ try
             $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
             # Create deployment name
-            $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+            $DeploymentName = "AutomationSolutionUpdate-PS-" + (Get-Date).ToFileTimeUtc()
+
+            $Busy = $false
+            while(-not $Busy)
+            {
+                # check that no other deployment is in progress
+                $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                if ($oErr)
+                {
+                    Write-Error -Message "Failed to get status of other solution deployments to resource group: $VMResourceGroupName" -ErrorAction Stop
+                }
+                if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
+                {
+
+                    Start-Sleep -Seconds 2
+                    $Busy = $true
+                }
+                else
+                {
+                    $Busy = $false
+                }
+            }
 
             $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `

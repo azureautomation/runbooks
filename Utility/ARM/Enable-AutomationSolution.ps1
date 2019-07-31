@@ -674,7 +674,7 @@ try
         $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
         # Create deployment name
-        $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+        $DeploymentName = "AutomationAgentDeploy-PS-" + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
         $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
@@ -808,6 +808,10 @@ try
             $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
             $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
+
+            # Create deployment name
+            $DeploymentName = "AutomationSolutionUpdate-PS-" + (Get-Date).ToFileTimeUtc()
+
             $Busy = $false
             while(-not $Busy)
             {
@@ -817,7 +821,7 @@ try
                 {
                     Write-Error -Message "Failed to get status of other solution deployments to resource group: $VMResourceGroupName" -ErrorAction Stop
                 }
-                if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationControl-PS-*" -and $_.ProvisioningState -eq "Running"})
+                if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
                 {
 
                     Start-Sleep -Seconds 2
@@ -828,9 +832,6 @@ try
                     $Busy = $false
                 }
             }
-
-            # Create deployment name
-            $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
             $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `
