@@ -812,8 +812,8 @@ try
             # Create deployment name
             $DeploymentName = "AutomationSolutionUpdate-PS-" + (Get-Date).ToFileTimeUtc()
 
-            $Busy = $false
-            while(-not $Busy)
+            $Busy = $true
+            while($Busy)
             {
                 # check that no other deployment is in progress
                 $CurrentDeployments = Get-AzureRMResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
