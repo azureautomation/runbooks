@@ -277,14 +277,17 @@ try
                 $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
 
                 # Remove empty elements
-                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') )
+                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') -or ($SolutionQuery -match '",[)]') )
                 {
+                    Write-Verbose -Message "Removing edge elements from search"
                     # Clean search of whitespace between elements
                     $UpdatedQuery = $SolutionQuery.Replace('", "', '","')
                     # Clean empty elements from search
                     $UpdatedQuery = $UpdatedQuery.Replace(',"",', ',')
                     # Clean empty end element from search
                     $UpdatedQuery = $UpdatedQuery.Replace(',""', '')
+                    # Clean orphan comma
+                    $UpdatedQuery = $UpdatedQuery.Replace('",)', '")')
                 }
 
                 if ($Null -ne $VmIds)

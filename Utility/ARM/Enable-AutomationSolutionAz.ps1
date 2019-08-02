@@ -350,13 +350,6 @@ try
             {
                 Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
             }
-            # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-            $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-                -WorkspaceName $WorkspaceName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
-            }
         }
         else
         {
@@ -698,6 +691,36 @@ try
         Write-Output -InputObject "The VM: $VMName already has the Log Analytics MMA agent installed."
     }
 
+    # Check if query update is in progress in another Runbook instance
+    $Busy = $true
+    while($Busy)
+    {
+        # check that no other deployment is in progress
+        $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
+        }
+        if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
+        {
+
+            Start-Sleep -Seconds 2
+            $Busy = $true
+            Write-Verbose -Message "Detected in progress solution query update, waiting"
+        }
+        else
+        {
+            $Busy = $false
+            Write-Verbose -Message "No update in progress to solution query"
+        }
+    }
+    # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
+    $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+        -WorkspaceName $WorkspaceName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to retrieve Log Analytics saved searches info" -ErrorAction Stop
+    }
     # Update scope query if necessary
     $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
 
@@ -809,27 +832,6 @@ try
 
             # Create deployment name
             $DeploymentName = "AutomationSolutionUpdate-PS-" + (Get-Date).ToFileTimeUtc()
-
-            $Busy = $true
-            while($Busy)
-            {
-                # check that no other deployment is in progress
-                $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -AzContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-                if ($oErr)
-                {
-                    Write-Error -Message "Failed to get status of other solution deployments to resource group: $VMResourceGroupName" -ErrorAction Stop
-                }
-                if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
-                {
-
-                    Start-Sleep -Seconds 2
-                    $Busy = $true
-                }
-                else
-                {
-                    $Busy = $false
-                }
-            }
 
             $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `
