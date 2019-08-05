@@ -398,7 +398,7 @@ try
         # Check if Linux MMA extension is installed
         Write-Verbose -Message "Checking if Linux MMA extension is already installed"
         $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $LogAnalyticsLinuxAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+                        -Name $LogAnalyticsLinuxAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -455,7 +455,7 @@ try
         if(-not $Onboarded)
         {
             $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-            -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+                    -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
             if ($oErr)
             {
                 if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -682,7 +682,6 @@ try
             Write-Output -InputObject $ObjectOutPut
             Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics MMA agent"
         }
-
         # Remove temp file with arm template
         Remove-Item -Path $TempFile.FullName -Force
     }
@@ -704,7 +703,7 @@ try
         if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
         {
 
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
             $Busy = $true
             Write-Verbose -Message "Detected in progress solution query update, waiting"
         }

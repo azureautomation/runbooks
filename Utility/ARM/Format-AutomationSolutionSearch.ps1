@@ -431,10 +431,10 @@ try
                                 Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
                                 if($UpdatedQuery -match $DuplicateVm.Name)
                                 {
-                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
                                     if($UpdatedQuery -match $DuplicateVm.Name)
                                     {
-                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
                                     }
                                 }
                             }
@@ -471,10 +471,10 @@ try
                                     Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
                                     if($UpdatedQuery -match $DeletedVmId.Name)
                                     {
-                                        $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                        $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
                                         if($UpdatedQuery -match $DeletedVmId.Name)
                                         {
-                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
+                                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
                                         }
                                     }
                                 }

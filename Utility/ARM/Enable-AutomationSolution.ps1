@@ -398,7 +398,7 @@ try
         # Check if Linux MMA extension is installed
         Write-Verbose -Message "Checking if Linux MMA extension is already installed"
         $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $LogAnalyticsLinuxAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            -Name $LogAnalyticsLinuxAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -455,7 +455,7 @@ try
         if(-not $Onboarded)
         {
             $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-            -Name $OldLogAnalyticsAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+                -Name $OldLogAnalyticsAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
             if ($oErr)
             {
                 if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -696,15 +696,15 @@ try
     while($Busy)
     {
         # check that no other deployment is in progress
-        $CurrentDeployments = Get-AzureRMResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -AzureRMContext $NewVMSubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        $CurrentDeployments = Get-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzureRMContext $LASubscriptionContext  -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
-            Write-Error -Message "Failed to get status of other solution deployments to resource group: $VMResourceGroupName" -ErrorAction Stop
+            Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
         }
         if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
         {
 
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
             $Busy = $true
             Write-Verbose -Message "Detected in progress solution query update, waiting"
         }

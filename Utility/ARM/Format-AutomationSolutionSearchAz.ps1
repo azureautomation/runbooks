@@ -367,15 +367,15 @@ try
                                         # check if end element in search
                                         if($UpdatedQuery -match $DeletedVmIds.VmId)
                                         {
-                                            $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                            $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
                                                                                         # Check if last element in search
                                             if($UpdatedQuery -match $DeletedVmIds.VmId)
                                             {
-                                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", "")
+                                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmIds.VmId)`"", "")
                                                 # Check if last element in search
                                                 if($UpdatedQuery -match $DeletedVmIds.VmId)
                                                 {
-                                                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", '""')
+                                                    $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmIds.VmId)`"", '""')
                                                 }
                                             }
                                         }
@@ -431,10 +431,10 @@ try
                                 Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
                                 if($UpdatedQuery -match $DuplicateVm.Name)
                                 {
-                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
                                     if($UpdatedQuery -match $DuplicateVm.Name)
                                     {
-                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
                                     }
                                 }
                             }
