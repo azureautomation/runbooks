@@ -694,13 +694,15 @@ try
     $Busy = $true
     while($Busy)
     {
+        # random wait to offset parallel executing onboarding runbooks
+        Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
         # check that no other deployment is in progress
         $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
         }
-        if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
+        if($CurrentDeployments | Where-Object { ($_.DeploymentName -like "AutomationSolutionUpdate-PS-*") -and ($_.ProvisioningState -eq "Running") })
         {
 
             Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
@@ -735,7 +737,9 @@ try
             if ($SolutionGroup.Properties.Query -match 'VMUUID')
             {
                 # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
+                Write-Verbose -Message "Before Update: $($SolutionGroup.Properties.Query)"
                 $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$VMId`",")
+                Write-Verbose -Message "After Update: $NewQuery"
             }
             #Region Solution Onboarding ARM Template
             # ARM template to deploy log analytics agent extension for both Linux and Windows

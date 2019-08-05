@@ -275,7 +275,12 @@ try
                 # Get all VMs from Computer and VMUUID  in Query
                 $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_.Trim()}}
                 $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
-
+                # Check for broken search
+                if(($SolutionQuery -match 'VMUUID in~ [()]') -or ($SolutionQuery -match 'Computer in~ [()]'))
+                {
+                    $UpdatedQuery = $SolutionQuery.Replace('VMUUID in~ ()', 'VMUUID in~ ("")')
+                    $UpdatedQuery = $SolutionQuery.Replace('Computer in~ ()', 'Computer in~ ("")')
+                }
                 # Remove empty elements
                 if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') -or ($SolutionQuery -match '",[)]') )
                 {
@@ -367,16 +372,11 @@ try
                                         # check if end element in search
                                         if($UpdatedQuery -match $DeletedVmIds.VmId)
                                         {
-                                            $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
-                                                                                        # Check if last element in search
+                                            $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                            # Check if last element in search
                                             if($UpdatedQuery -match $DeletedVmIds.VmId)
                                             {
-                                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", "")
-                                                # Check if last element in search
-                                                if($UpdatedQuery -match $DeletedVmIds.VmId)
-                                                {
-                                                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmIds.VmId)`"", '""')
-                                                }
+                                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmIds.VmId)`"", '""')
                                             }
                                         }
                                     }
@@ -474,7 +474,7 @@ try
                                         $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
                                         if($UpdatedQuery -match $DeletedVmId.Name)
                                         {
-                                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
+                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
                                         }
                                     }
                                 }
