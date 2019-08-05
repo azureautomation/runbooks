@@ -275,18 +275,15 @@ try
                 # Get all VMs from Computer and VMUUID  in Query
                 $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_.Trim()}}
                 $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
-                # Check for broken search
-                if(($SolutionQuery -match 'VMUUID in~ [()]') -or ($SolutionQuery -match 'Computer in~ [()]'))
+                # Remove empty elements or fix missing quotes
+                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') -or ($SolutionQuery -match '",[)]') -or ($SolutionQuery -match 'VMUUID in~ [()]') -or ($SolutionQuery -match 'Computer in~ [()]') )
                 {
+                    Write-Verbose -Message "Fixing unwanted elements in saved query"
+                    # Fix removed quotes
                     $UpdatedQuery = $SolutionQuery.Replace('VMUUID in~ ()', 'VMUUID in~ ("")')
-                    $UpdatedQuery = $SolutionQuery.Replace('Computer in~ ()', 'Computer in~ ("")')
-                }
-                # Remove empty elements
-                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') -or ($SolutionQuery -match '",[)]') )
-                {
-                    Write-Verbose -Message "Removing edge elements from search"
+                    $UpdatedQuery = $UpdatedQuery.Replace('Computer in~ ()', 'Computer in~ ("")')
                     # Clean search of whitespace between elements
-                    $UpdatedQuery = $SolutionQuery.Replace('", "', '","')
+                    $UpdatedQuery = $UpdatedQuery.Replace('", "', '","')
                     # Clean empty elements from search
                     $UpdatedQuery = $UpdatedQuery.Replace(',"",', ',')
                     # Clean empty end element from search
