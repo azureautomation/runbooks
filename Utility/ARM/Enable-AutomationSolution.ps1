@@ -696,7 +696,7 @@ try
     while($Busy)
     {
         # check that no other deployment is in progress
-        $CurrentDeployments = Get-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzureRMContext $LASubscriptionContext  -ErrorAction Continue -ErrorVariable oErr
+        $CurrentDeployments = Get-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzureRMContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
