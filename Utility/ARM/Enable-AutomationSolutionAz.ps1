@@ -473,13 +473,13 @@ try
     }
     if ($Null -eq $Onboarded)
     {
-        # Set up MMA agent information to onboard VM to the workspace
+        # Set up MMA extension information to onboard VM to the workspace
         if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
         {
             $MMAExentsionName = "OmsAgentForLinux"
             $MMAOStype = "OmsAgentForLinux"
             $MMATypeHandlerVersion = "1.7"
-            Write-Output -InputObject "Deploying MMA agent to Linux VM"
+            Write-Output -InputObject "Deploying MMA extension to Linux VM"
 
             # Check if Linux VM is already onboarded
             if(-not $NewVM.Tags.VMUUID)
@@ -540,7 +540,7 @@ try
             $MMAExentsionName = "MicrosoftMonitoringAgent"
             $MMAOStype = "MicrosoftMonitoringAgent"
             $MMATypeHandlerVersion = "1.0"
-            Write-Output -InputObject "Deploying MMA agent to Windows VM"
+            Write-Output -InputObject "Deploying MMA extension to Windows VM"
         }
         else
         {
@@ -680,14 +680,14 @@ try
         else
         {
             Write-Output -InputObject $ObjectOutPut
-            Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics MMA agent"
+            Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics MMA extension"
         }
         # Remove temp file with arm template
         Remove-Item -Path $TempFile.FullName -Force
     }
     else
     {
-        Write-Output -InputObject "The VM: $VMName already has the Log Analytics MMA agent installed."
+        Write-Output -InputObject "The VM: $VMName already has the Log Analytics extension installed."
     }
 
     # Check if query update is in progress in another Runbook instance
