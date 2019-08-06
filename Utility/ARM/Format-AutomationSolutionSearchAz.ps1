@@ -89,6 +89,7 @@ try
     {
         Write-Output -InputObject "Will try to discover Log Analytics workspace id"
     }
+    $SolutionUpdateDeploymentName = "Automation-SolutionQueryUpdate-"
     $SolutionApiVersion = "2017-04-26-preview"
     $SolutionTypes = @("Updates", "ChangeTracking")
     #endregion
@@ -322,11 +323,11 @@ try
                                 Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
                                 if($UpdatedQuery -match $DuplicateVmID.VmId)
                                 {
-                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                    $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
                                     # Check if last element in search
                                     if($UpdatedQuery -match $DuplicateVmID.VmId)
                                     {
-                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
                                     }
                                 }
                             }
@@ -468,10 +469,10 @@ try
                                     Write-Output -InputObject "Removing VM with Name: $($DeletedVmId.Name) from saved search"
                                     if($UpdatedQuery -match $DeletedVmId.Name)
                                     {
-                                        $UpdatedQuery = $SolutionQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
+                                        $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DeletedVmId.Name)`"", "")
                                         if($UpdatedQuery -match $DeletedVmId.Name)
                                         {
-                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
+                                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.Name)`"", '""')
                                         }
                                     }
                                 }
@@ -587,7 +588,7 @@ try
                     $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
                     # Create deployment name
-                    $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+                    $DeploymentName = $SolutionUpdateDeploymentName + (Get-Date).ToFileTimeUtc()
 
                     $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
                         -Name $DeploymentName `

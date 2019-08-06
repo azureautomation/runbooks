@@ -694,24 +694,24 @@ try
         Write-Output -InputObject "The VM: $VMName already has the Log Analytics extension installed."
     }
     # Check if query update is in progress in another Runbook instance
-    $CurrentTime = Get-Date
     $Busy = $true
     while($Busy)
     {
         # random wait to offset parallel executing onboarding runbooks
         # Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
+        $CurrentTime = Get-Date
         # check that no other deployment is in progress
         $CurrentDeployments = Get-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzureRMContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
         }
-        # Check if there is a deployment with timeStamp inside time now +/- 7 sec
-        if( $CurrentDeployments | Where-Object {$_.DeploymentName -like "$SolutionUpdateDeploymentName*" -and ( $_.Timestamp -gt $CurrentTime.AddSeconds(-7) -or $_.Timestamp -lt $CurrentTime.AddSeconds(7) -or $_.ProvisioningState -eq "Running" )})
+        # Check if there is a current deployment with timeStamp time now - 10 sec
+        if( $CurrentDeployments | Where-Object {$_.DeploymentName -like "$SolutionUpdateDeploymentName*" -and ( $_.Timestamp -gt $CurrentTime.AddSeconds(-10) -or $_.ProvisioningState -eq "Running" )})
         {
-            Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
-            $Busy = $true
             Write-Verbose -Message "Detected in progress solution query update, waiting"
+            Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 7)
+            $Busy = $true
         }
         else
         {
