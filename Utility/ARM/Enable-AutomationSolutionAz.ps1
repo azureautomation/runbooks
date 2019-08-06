@@ -475,8 +475,8 @@ try
         # Set up MMA extension information to onboard VM to the workspace
         if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
         {
-            $MMAExentsionName = "OmsAgentForLinux"
-            $MMAOStype = "OmsAgentForLinux"
+            $MMAExentsionName = $LogAnalyticsLinuxAgentExtensionName
+            $MMAOStype = $LogAnalyticsLinuxAgentExtensionName
             $MMATypeHandlerVersion = "1.7"
             Write-Output -InputObject "Deploying MMA extension to Linux VM"
 
@@ -536,8 +536,8 @@ try
         }
         elseif ($NewVM.StorageProfile.OSDisk.OSType -eq "Windows")
         {
-            $MMAExentsionName = "MicrosoftMonitoringAgent"
-            $MMAOStype = "MicrosoftMonitoringAgent"
+            $MMAExentsionName = $NewLogAnalyticsAgentExtensionName
+            $MMAOStype = $NewLogAnalyticsAgentExtensionName
             $MMATypeHandlerVersion = "1.0"
             Write-Output -InputObject "Deploying MMA extension to Windows VM"
         }
