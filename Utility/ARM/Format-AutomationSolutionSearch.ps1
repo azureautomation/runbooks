@@ -273,72 +273,73 @@ try
 
             if ($Null -ne $SolutionQuery)
             {
-                # Get all VMs from Computer and VMUUID  in Query
-                $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_.Trim()}}
-                $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
-                # Remove empty elements or fix missing quotes
-                if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') -or ($SolutionQuery -match '",[)]') -or ($SolutionQuery -match 'VMUUID in~ [()]') -or ($SolutionQuery -match 'Computer in~ [()]') )
+                if($AllAzureVMs)
                 {
-                    Write-Verbose -Message "Fixing unwanted elements in saved query"
-                    # Fix removed quotes
-                    $UpdatedQuery = $SolutionQuery.Replace('VMUUID in~ ()', 'VMUUID in~ ("")')
-                    $UpdatedQuery = $UpdatedQuery.Replace('Computer in~ ()', 'Computer in~ ("")')
-                    # Clean search of whitespace between elements
-                    $UpdatedQuery = $UpdatedQuery.Replace('", "', '","')
-                    # Clean empty elements from search
-                    $UpdatedQuery = $UpdatedQuery.Replace(',"",', ',')
-                    # Clean empty end element from search
-                    $UpdatedQuery = $UpdatedQuery.Replace(',""', '')
-                    # Clean orphan comma
-                    $UpdatedQuery = $UpdatedQuery.Replace('",)', '")')
-                }
-
-                if ($Null -ne $VmIds)
-                {
-                    # Remove duplicate entries
-                    $DuplicateVmIDs = $VmIds | Sort-Object -Property VmId -Unique
-                    $DuplicateVmIDs = Compare-Object -ReferenceObject $DuplicateVmIDs -DifferenceObject $VmIds -Property VmId | Where-Object {$_.SideIndicator -eq "=>"} | Sort-Object -Property VmId -Unique
-                    if ($DuplicateVmIDs)
+                    # Get all VMs from Computer and VMUUID  in Query
+                    $VmIds = (((Select-String -InputObject $SolutionQuery -Pattern "VMUUID in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "") | Where-Object {$_} | Select-Object -Property @{l = "VmId"; e = {$_.Trim()}}
+                    $VmNames = (((Select-String -InputObject $SolutionQuery -Pattern "Computer in~ \((.*?)\)").Matches.Groups[1].Value).Split(",")).Replace("`"", "")  | Where-Object {$_} | Select-Object -Property @{l = "Name"; e = {$_.Trim()}}
+                    # Remove empty elements or fix missing quotes
+                    if (($SolutionQuery -match ',"",') -or ($SolutionQuery -match '", "') -or ($SolutionQuery -match ',""') -or ($SolutionQuery -match '",[)]') -or ($SolutionQuery -match 'VMUUID in~ [()]') -or ($SolutionQuery -match 'Computer in~ [()]') )
                     {
-                        foreach ($DuplicateVmID in $DuplicateVmIDs)
+                        Write-Verbose -Message "Fixing unwanted elements in saved query"
+                        # Fix removed quotes
+                        $UpdatedQuery = $SolutionQuery.Replace('VMUUID in~ ()', 'VMUUID in~ ("")')
+                        $UpdatedQuery = $UpdatedQuery.Replace('Computer in~ ()', 'Computer in~ ("")')
+                        # Clean search of whitespace between elements
+                        $UpdatedQuery = $UpdatedQuery.Replace('", "', '","')
+                        # Clean empty elements from search
+                        $UpdatedQuery = $UpdatedQuery.Replace(',"",', ',')
+                        # Clean empty end element from search
+                        $UpdatedQuery = $UpdatedQuery.Replace(',""', '')
+                        # Clean orphan comma
+                        $UpdatedQuery = $UpdatedQuery.Replace('",)', '")')
+                    }
+
+                    if ($Null -ne $VmIds)
+                    {
+                        # Remove duplicate entries
+                        $DuplicateVmIDs = $VmIds | Sort-Object -Property VmId -Unique
+                        $DuplicateVmIDs = Compare-Object -ReferenceObject $DuplicateVmIDs -DifferenceObject $VmIds -Property VmId | Where-Object {$_.SideIndicator -eq "=>"} | Sort-Object -Property VmId -Unique
+                        if ($DuplicateVmIDs)
                         {
-                            if ($Null -eq $UpdatedQuery)
+                            foreach ($DuplicateVmID in $DuplicateVmIDs)
                             {
-                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`",", "")
-                                Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
-                                # check if is an end element, need to remove differently
-                                if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                if ($Null -eq $UpdatedQuery)
                                 {
-                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
-                                    # Check if last element in search
+                                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`",", "")
+                                    Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
+                                    # check if is an end element, need to remove differently
                                     if($UpdatedQuery -match $DuplicateVmID.VmId)
                                     {
-                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                        $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                        # Check if last element in search
+                                        if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                        {
+                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                        }
                                     }
                                 }
-                            }
-                            else
-                            {
-                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`",", "")
-                                Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
-                                if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                else
                                 {
-                                    $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
-                                    # Check if last element in search
+                                    $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`",", "")
+                                    Write-Output -InputObject "Removing duplicate VM entry with Id: $($DuplicateVmID.VmId) from saved search"
                                     if($UpdatedQuery -match $DuplicateVmID.VmId)
                                     {
-                                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                        $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DuplicateVmID.VmId)`"", "")
+                                        # Check if last element in search
+                                        if($UpdatedQuery -match $DuplicateVmID.VmId)
+                                        {
+                                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVmID.VmId)`"", '""')
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    else
-                    {
-                        Write-Output -InputObject "No duplicate VM Ids to delete found"
-                    }
-                    if($AllAzureVMs)
-                    {
+                        else
+                        {
+                            Write-Output -InputObject "No duplicate VM Ids to delete found"
+                        }
+
                         if(-not $SkipVMUUIDCleanup -or $IgnoreLinuxMissingTag)
                         {
                             # Get VM Ids that are no longer alive
@@ -389,61 +390,55 @@ try
                         {
                             Write-Warning -Message "Found Linux VMs, skipping VMUUID cleanup as not all Linux VMs have the VMUUID tag set"
                         }
+
                     }
                     else
                     {
-                        Write-Output -InputObject "No VMs found in subscriptions"
+                        Write-Output -InputObject "There are no VM Ids in saved search"
                     }
-                }
-                else
-                {
-                    Write-Output -InputObject "There are no VM Ids in saved search"
-                }
 
-                # Get VM Names that are no longer alive
-                if ($Null -ne $VmNames)
-                {
-                    # Remove duplicate entries
-                    $DuplicateVms = $VmNames | Sort-Object -Property Name -Unique
-                    $DuplicateVms = Compare-Object -ReferenceObject $DuplicateVms -DifferenceObject $VmNames -Property Name | Where-Object {$_.SideIndicator -eq "=>"} | Sort-Object -Property Name -Unique
-                    if ($DuplicateVms)
+                    # Get VM Names that are no longer alive
+                    if ($Null -ne $VmNames)
                     {
-                        foreach ($DuplicateVm in $DuplicateVms)
+                        # Remove duplicate entries
+                        $DuplicateVms = $VmNames | Sort-Object -Property Name -Unique
+                        $DuplicateVms = Compare-Object -ReferenceObject $DuplicateVms -DifferenceObject $VmNames -Property Name | Where-Object {$_.SideIndicator -eq "=>"} | Sort-Object -Property Name -Unique
+                        if ($DuplicateVms)
                         {
-                            if ($Null -eq $UpdatedQuery)
+                            foreach ($DuplicateVm in $DuplicateVms)
                             {
-                                $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`",", "")
-                                Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
-                                if($UpdatedQuery -match $DuplicateVm.Name)
+                                if ($Null -eq $UpdatedQuery)
                                 {
-                                    $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`",", "")
+                                    Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
                                     if($UpdatedQuery -match $DuplicateVm.Name)
                                     {
-                                        $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                        $UpdatedQuery = $SolutionQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                        if($UpdatedQuery -match $DuplicateVm.Name)
+                                        {
+                                            $UpdatedQuery = $SolutionQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                        }
                                     }
                                 }
-                            }
-                            else
-                            {
-                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`",", "")
-                                Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
-                                if($UpdatedQuery -match $DuplicateVm.Name)
+                                else
                                 {
-                                    $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                    $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`",", "")
+                                    Write-Output -InputObject "Removing duplicate VM entry with Name: $($DuplicateVm.Name) from saved search"
                                     if($UpdatedQuery -match $DuplicateVm.Name)
                                     {
-                                        $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                        $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DuplicateVm.Name)`"", "")
+                                        if($UpdatedQuery -match $DuplicateVm.Name)
+                                        {
+                                            $UpdatedQuery = $UpdatedQuery.Replace("`"$($DuplicateVm.Name)`"", '""')
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    else
-                    {
-                        Write-Output -InputObject "No duplicate VM names to delete found"
-                    }
-                    if($AllAzureVMs)
-                    {
+                        else
+                        {
+                            Write-Output -InputObject "No duplicate VM names to delete found"
+                        }
                         $DeletedVms = Compare-Object -ReferenceObject $VmNames -DifferenceObject $AllAzureVMs -Property Name | Where-Object {$_.SideIndicator -eq "<="}
                         if ($DeletedVms)
                         {
@@ -485,12 +480,13 @@ try
                     }
                     else
                     {
-                        Write-Output -InputObject "No VMs found in subscriptions"
+                        Write-Output -InputObject "There are no VM Names in saved search"
                     }
                 }
                 else
                 {
-                    Write-Output -InputObject "There are no VM Names in saved search"
+                    Write-Output -InputObject "No VMs found in any subscription AA runAS account has access to. Cleaning Solution for all VMUUIDs"
+                    $UpdatedQuery = "Heartbeat | where Computer in~ (`"`") or VMUUID in~ (`"`") | distinct Computer"
                 }
 
                 if ($Null -ne $UpdatedQuery)
