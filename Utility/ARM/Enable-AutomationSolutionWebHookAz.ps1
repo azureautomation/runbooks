@@ -385,13 +385,6 @@ try
             {
                 Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
             }
-            # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-            $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-                -WorkspaceName $WorkspaceName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-            if ($oErr)
-            {
-                Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
-            }
         }
         else
         {
@@ -440,7 +433,7 @@ try
         # Check if Linux MMA extension is installed
         Write-Verbose -Message "Checking if Linux MMA extension is already installed"
         $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-        -Name $LogAnalyticsLinuxAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+                        -Name $LogAnalyticsLinuxAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -497,7 +490,7 @@ try
         if(-not $Onboarded)
         {
             $Onboarded = Get-AzVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-            -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+                    -Name $OldLogAnalyticsAgentExtensionName -AzContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
             if ($oErr)
             {
                 if ($oErr.Exception.Message -match "ResourceNotFound")
@@ -515,13 +508,13 @@ try
     }
     if ($Null -eq $Onboarded)
     {
-        # Set up MMA agent information to onboard VM to the workspace
+        # Set up MMA extension information to onboard VM to the workspace
         if ($NewVM.StorageProfile.OSDisk.OSType -eq "Linux")
         {
             $MMAExentsionName = $LogAnalyticsLinuxAgentExtensionName
             $MMAOStype = $LogAnalyticsLinuxAgentExtensionName
             $MMATypeHandlerVersion = "1.7"
-            Write-Output -InputObject "Deploying MMA agent to Linux VM"
+            Write-Output -InputObject "Deploying MMA extension to Linux VM"
 
             # Check if Linux VM is already onboarded
             if(-not $NewVM.Tags.VMUUID)
@@ -582,7 +575,7 @@ try
             $MMAExentsionName = $NewLogAnalyticsAgentExtensionName
             $MMAOStype = $NewLogAnalyticsAgentExtensionName
             $MMATypeHandlerVersion = "1.0"
-            Write-Output -InputObject "Deploying MMA agent to Windows VM"
+            Write-Output -InputObject "Deploying MMA extension to Windows VM"
         }
         else
         {
@@ -708,7 +701,7 @@ try
         $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
         # Create deployment name
-        $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+        $DeploymentName = "AutomationAgentDeploy-PS-" + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
         $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
@@ -722,17 +715,48 @@ try
         else
         {
             Write-Output -InputObject $ObjectOutPut
-            Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics MMA agent"
+            Write-Output -InputObject "VM: $VMName successfully onboarded with Log Analytics MMA extension"
         }
-
         # Remove temp file with arm template
         Remove-Item -Path $TempFile.FullName -Force
     }
     else
     {
-        Write-Output -InputObject "The VM: $VMName already has the Log Analytics MMA agent installed."
+        Write-Output -InputObject "The VM: $VMName already has the Log Analytics extension installed."
     }
 
+    # Check if query update is in progress in another Runbook instance
+    $Busy = $true
+    while($Busy)
+    {
+        # random wait to offset parallel executing onboarding runbooks
+        Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
+        # check that no other deployment is in progress
+        $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
+        }
+        if($CurrentDeployments | Where-Object { ($_.DeploymentName -like "AutomationSolutionUpdate-PS-*") -and ($_.ProvisioningState -eq "Running") })
+        {
+
+            Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
+            $Busy = $true
+            Write-Verbose -Message "Detected in progress solution query update, waiting"
+        }
+        else
+        {
+            $Busy = $false
+            Write-Verbose -Message "No update in progress to solution query"
+        }
+    }
+    # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
+    $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+        -WorkspaceName $WorkspaceName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+    if ($oErr)
+    {
+        Write-Error -Message "Failed to retrieve Log Analytics saved searches info" -ErrorAction Stop
+    }
     # Update scope query if necessary
     $SolutionGroup = $SavedGroups.Value | Where-Object {$_.Id -match "MicrosoftDefaultComputerGroup" -and $_.Properties.Category -eq $SolutionType}
 
@@ -748,7 +772,9 @@ try
             if ($SolutionGroup.Properties.Query -match 'VMUUID')
             {
                 # Will leave the "" inside "VMUUID in~ () so can find out what is added by runbook (left of "") and what is added through portal (right of "")
+                Write-Verbose -Message "Before Update: $($SolutionGroup.Properties.Query)"
                 $NewQuery = $SolutionGroup.Properties.Query.Replace('VMUUID in~ (', "VMUUID in~ (`"$VMId`",")
+                Write-Verbose -Message "After Update: $NewQuery"
             }
             #Region Solution Onboarding ARM Template
             # ARM template to deploy log analytics agent extension for both Linux and Windows
@@ -843,7 +869,7 @@ try
             $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
             # Create deployment name
-            $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
+            $DeploymentName = "AutomationSolutionUpdate-PS-" + (Get-Date).ToFileTimeUtc()
 
             $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `
