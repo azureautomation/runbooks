@@ -368,13 +368,13 @@ try
                                         $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`",", "")
                                         Write-Output -InputObject "Removing VM with Id: $($DeletedVmId.VmId) from saved search"
                                         # check if end element in search
-                                        if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                        if($UpdatedQuery -match $DeletedVmId.VmId)
                                         {
-                                            $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DeletedVmIds.VmId)`"", "")
+                                            $UpdatedQuery = $UpdatedQuery.Replace(",`"$($DeletedVmId.VmId)`"", "")
                                             # Check if last element in search
-                                            if($UpdatedQuery -match $DeletedVmIds.VmId)
+                                            if($UpdatedQuery -match $DeletedVmId.VmId)
                                             {
-                                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmIds.VmId)`"", '""')
+                                                $UpdatedQuery = $UpdatedQuery.Replace("`"$($DeletedVmId.VmId)`"", '""')
                                             }
                                         }
                                     }
