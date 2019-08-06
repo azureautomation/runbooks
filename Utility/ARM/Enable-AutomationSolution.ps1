@@ -128,6 +128,9 @@ try
     $NewLogAnalyticsAgentExtensionName = "MicrosoftMonitoringAgent"
     $LogAnalyticsLinuxAgentExtensionName = "OmsAgentForLinux"
 
+    $ExtensionDeploymentName = "Automation-ExtensionDeployment-"
+    $SolutionUpdateDeploymentName = "Automation-SolutionQueryUpdate-"
+
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
     $SolutionApiVersion = "2017-04-26-preview"
@@ -666,7 +669,7 @@ try
         $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
         # Create deployment name
-        $DeploymentName = "AutomationAgentDeploy-PS-" + (Get-Date).ToFileTimeUtc()
+        $DeploymentName = $ExtensionDeploymentName + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
         $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
@@ -702,7 +705,7 @@ try
         {
             Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
         }
-        if($CurrentDeployments | Where-Object {$_.DeploymentName -like "AutomationSolutionUpdate-PS-*" -and $_.ProvisioningState -eq "Running"})
+        if($CurrentDeployments | Where-Object {$_.DeploymentName -like "$SolutionUpdateDeploymentName*" -and $_.ProvisioningState -eq "Running"})
         {
 
             Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
@@ -836,7 +839,7 @@ try
 
 
             # Create deployment name
-            $DeploymentName = "AutomationSolutionUpdate-PS-" + (Get-Date).ToFileTimeUtc()
+            $DeploymentName = $SolutionUpdateDeploymentName + (Get-Date).ToFileTimeUtc()
 
             $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `
