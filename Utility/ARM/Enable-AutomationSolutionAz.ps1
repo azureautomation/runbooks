@@ -693,6 +693,7 @@ try
     }
 
     # Check if query update is in progress in another Runbook instance
+    $CurrentTime = Get-Date
     $Busy = $true
     while($Busy)
     {
@@ -704,9 +705,9 @@ try
         {
             Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
         }
-        if($CurrentDeployments | Where-Object { ($_.DeploymentName -like "$SolutionUpdateDeploymentName*") -and ($_.ProvisioningState -eq "Running") })
+        # Check if there is a deployment with timeStamp inside time now +/- 5 sec
+        if( $CurrentDeployments | Where-Object {$_.DeploymentName -like "$SolutionUpdateDeploymentName*" -and ( $_.Timestamp -gt $CurrentTime.AddSeconds(-7) -or $_.Timestamp -lt $CurrentTime.AddSeconds(7) -or $_.ProvisioningState -eq "Running" )})
         {
-
             Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
             $Busy = $true
             Write-Verbose -Message "Detected in progress solution query update, waiting"
