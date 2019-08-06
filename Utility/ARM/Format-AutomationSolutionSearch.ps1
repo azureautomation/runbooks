@@ -592,7 +592,7 @@ try
                     $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
                         -Name $DeploymentName `
                         -TemplateParameterObject $QueryDeploymentParams `
-                        -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+                        -AzureRMContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
                     if ($oErr)
                     {
                         Write-Error -Message "Failed to update solution type: $SolutionType saved search" -ErrorAction Stop
