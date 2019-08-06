@@ -161,10 +161,9 @@ try
         Write-Verbose -Message "Will try to discover Log Analytics workspace id"
     }
     $OldLogAnalyticsAgentExtensionName = "OMSExtension"
-    $NewLogAnalyticsAgentExtensionName = "MMAExtension"
+    $NewLogAnalyticsAgentExtensionName = "MicrosoftMonitoringAgent"
     $LogAnalyticsLinuxAgentExtensionName = "OmsAgentForLinux"
 
-    $NewLogAnalyticsVMAgentExtensionName = "MicrosoftMonitoringAgent"
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
     $SolutionApiVersion = "2017-04-26-preview"
@@ -476,7 +475,7 @@ try
         # Check if the Windows VM is already onboarded to the Log Analytics workspace
         Write-Verbose -Message "Checking if Windows MMA extension is already installed"
         $Onboarded = Get-AzureRMVMExtension -ResourceGroup $VMResourceGroupName -VMName $VMName `
-            -Name $NewLogAnalyticsVMAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
+            -Name $NewLogAnalyticsAgentExtensionName -AzureRMContext $NewVMSubscriptionContext -ErrorAction SilentlyContinue -ErrorVariable oErr
         if ($oErr)
         {
             if ($oErr.Exception.Message -match "ResourceNotFound")
