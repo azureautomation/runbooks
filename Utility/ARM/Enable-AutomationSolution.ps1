@@ -706,7 +706,7 @@ try
         {
             Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
         }
-        # Check if there is a deployment with timeStamp inside time now +/- 5 sec
+        # Check if there is a deployment with timeStamp inside time now +/- 7 sec
         if( $CurrentDeployments | Where-Object {$_.DeploymentName -like "$SolutionUpdateDeploymentName*" -and ( $_.Timestamp -gt $CurrentTime.AddSeconds(-7) -or $_.Timestamp -lt $CurrentTime.AddSeconds(7) -or $_.ProvisioningState -eq "Running" )})
         {
             Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
