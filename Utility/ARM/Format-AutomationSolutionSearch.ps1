@@ -589,7 +589,7 @@ try
                     # Create deployment name
                     $DeploymentName = "AutomationControl-PS-" + (Get-Date).ToFileTimeUtc()
 
-                    $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
+                    $ObjectOutPut = New-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceInfo.ResourceGroupName -TemplateFile $TempFile.FullName `
                         -Name $DeploymentName `
                         -TemplateParameterObject $QueryDeploymentParams `
                         -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
