@@ -698,7 +698,7 @@ try
     while($Busy)
     {
         # random wait to offset parallel executing onboarding runbooks
-        Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
+        # Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
         # check that no other deployment is in progress
         $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
