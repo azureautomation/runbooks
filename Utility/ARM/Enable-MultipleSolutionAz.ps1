@@ -312,32 +312,32 @@ try
     foreach ($JobsResult in $JobsResults)
     {
         $OutputJob = Get-AzAutomationJobOutput -ResourceGroupName $AutomationResourceGroupName `
-            -AutomationAccountName AutomationAccountName -Id `
+            -AutomationAccountName $AutomationAccountName -Id `
             $JobsResult.JobId -AzContext $SubscriptionContext -Stream Output
         foreach ($Stream in $OutputJob)
         {
             (Get-AzAutomationJobOutputRecord -ResourceGroupName $AutomationResourceGroupName `
-                    -AutomationAccountName AutomationAccountName -JobID $JobsResult.JobId `
+                    -AutomationAccountName $AutomationAccountName -JobID $JobsResult.JobId `
                     -AzContext $SubscriptionContext -Id $Stream.StreamRecordId).Value
         }
 
         $ErrorJob = Get-AzAutomationJobOutput -ResourceGroupName $AutomationResourceGroupName `
-            -AutomationAccountName AutomationAccountName -Id `
+            -AutomationAccountName $AutomationAccountName -Id `
             $JobsResult.JobId -AzContext $SubscriptionContext -Stream Error
         foreach ($Stream in $ErrorJob)
         {
             (Get-AzAutomationJobOutputRecord -ResourceGroupName $AutomationResourceGroupName `
-                    -AutomationAccountName AutomationAccountName -JobID $JobsResult.JobId `
+                    -AutomationAccountName $AutomationAccountName -JobID $JobsResult.JobId `
                     -AzContext $SubscriptionContext -Id $Stream.StreamRecordId).Value
         }
 
         $WarningJob = Get-AzAutomationJobOutput -ResourceGroupName $AutomationResourceGroupName `
-            -AutomationAccountName AutomationAccountName -Id `
+            -AutomationAccountName $AutomationAccountName -Id `
             $JobsResult.JobId -AzContext $SubscriptionContext -Stream Warning
         foreach ($Stream in $WarningJob)
         {
             (Get-AzAutomationJobOutputRecord -ResourceGroupName $AutomationResourceGroupName `
-                    -AutomationAccountName AutomationAccountName -JobID $JobsResult.JobId `
+                    -AutomationAccountName $AutomationAccountName -JobID $JobsResult.JobId `
                     -AzContext $SubscriptionContext -Id $Stream.StreamRecordId).Value
         }
 
