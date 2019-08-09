@@ -319,13 +319,6 @@ try
         {
             Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
         }
-        # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
-        $SavedGroups = Get-AzureRMOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
-            -WorkspaceName $WorkspaceName -AzureRMContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
-        if ($oErr)
-        {
-            Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
-        }
     }
     # Log Analytics workspace to use is set through AA assets
     else
@@ -698,7 +691,7 @@ try
     while($Busy)
     {
         # random wait to offset parallel executing onboarding runbooks
-        # Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
+        Start-Sleep -Milliseconds (Get-Random -Minimum 100 -Maximum 900)
         $CurrentTime = Get-Date
         # check that no other deployment is in progress
         $CurrentDeployments = Get-AzureRMResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzureRMContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
