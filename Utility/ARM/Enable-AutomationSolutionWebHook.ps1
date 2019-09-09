@@ -24,8 +24,8 @@
 
 .PARAMETER WebHookData
     The following parameters will need to be passed as a JSON object for this runbook to function correctly:
-        VMSubscriptionId:
-                The name subscription id where the new VM to onboard is located.
+        VMSubscriptionName:
+                The name subscription where the new VM to onboard is located.
                 This will default to the same one as the azure automation account if not specified. If you
                 give a different subscription id then you need to make sure the RunAs account for
                 this automation account is added as a contributor to this subscription also.
@@ -67,12 +67,12 @@ try
             $ObjectData = ConvertFrom-Json -InputObject $WebhookData.RequestBody
             if ($Null -ne $ObjectData.VMSubscriptionId -and "" -ne $ObjectData.VMSubscriptionId)
             {
-                $VMSubscriptionId = $ObjectData.VMSubscriptionId
+                $VMSubscriptionName = $ObjectData.VMSubscriptionName
             }
             else
             {
                 Write-Warning -Message "Missing VMSubscriptionId in input data, will assume VM to onboard is in same subscription as Azure Automation account"
-                $VMSubscriptionId = $Null
+                $VMSubscriptionName = $Null
             }
             if ($Null -ne $ObjectData.VMResourceGroupName -and "" -ne $ObjectData.VMResourceGroupName)
             {
@@ -192,7 +192,7 @@ try
         Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
     }
     # set subscription of VM onboarded, else assume its in the same as the AA account
-    if ([string]::IsNullOrEmpty($VMSubscriptionId))
+    if ([string]::IsNullOrEmpty($VMSubscriptionName))
     {
         # Use the same subscription as the Automation account if not passed in
         $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -206,7 +206,7 @@ try
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzureRMContext -Subscription $VMSubscriptionName -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop

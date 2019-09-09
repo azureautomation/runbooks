@@ -22,8 +22,8 @@
         LASolutionSubscriptionId
         LASolutionWorkspaceId
 
-.PARAMETER VMSubscriptionId
-    The name subscription id where the new VM to onboard is located.
+.PARAMETER VMSubscriptionName
+    The name of subscription where the new VM to onboard is located.
     This will default to the same one as the Azure Automation account is located in if not specified. If you
     give a different subscription id then you need to make sure the RunAs account for
     this automation account is added as a contributor to this subscription also.
@@ -67,7 +67,7 @@
 Param (
     [Parameter(Mandatory = $False)]
     [String]
-    $VMSubscriptionId,
+    $VMSubscriptionName,
 
     [Parameter(Mandatory = $True)]
     [String]
@@ -159,10 +159,10 @@ try
         Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
     }
     # set subscription of VM onboarded, else assume its in the same as the AA account
-    if ([string]::IsNullOrEmpty($VMSubscriptionId))
+    if ([string]::IsNullOrEmpty($VMSubscriptionName))
     {
         # Use the same subscription as the Automation account if not passed in
-        $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzureRMContext  $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription for AA" -ErrorAction Stop
@@ -173,7 +173,7 @@ try
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzureRMContext -Subscription $VMSubscriptionName -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop
