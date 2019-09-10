@@ -245,7 +245,16 @@ try
         {
             # Start automation runbook to process VMs in parallel
             $RunbookNameParams = @{}
-            $RunbookNameParams.Add("VMSubscriptionId", ($VM.id).Split('/')[2])
+            if([string]::IsNullOrEmpty($VMSubscriptionName))
+            {
+                $VMSubscriptionName = (Get-AzSubscription -SubscriptionId ($VM.id).Split('/')[2]  -ErrorAction Continue -ErrorVariable oErr).Name
+                if ($oErr)
+                {
+                    Write-Error -Message "Failed to retrieve name of subscription where VM resides" -ErrorAction Stop
+                }
+            }
+
+            $RunbookNameParams.Add("VMSubscriptionName", $VMSubscriptionName)
             $RunbookNameParams.Add("VMResourceGroupName", $VM.ResourceGroupName)
             $RunbookNameParams.Add("VMName", $VM.Name)
             $RunbookNameParams.Add("SolutionType", $SolutionType)
