@@ -210,7 +210,7 @@ try
         # Set order to sort subscriptions by
         $SortOrder = @($NewVMSubscriptionContext.Subscription.Name, $SubscriptionContext.Subscription.Name)
         # Get all subscriptions the AA account has access to
-        $AzSubscriptions = Get-AzSubscription |
+        $AzSubscriptions = (Get-AzSubscription).where({$_.State -eq "Enabled"}) |
             # Sort array so VM subscription will be search first for exiting onboarded VMs, then it will try AA subscription before moving on to others it has access to
         Sort-Object -Property {
             $SortRank = $SortOrder.IndexOf($($_.Name.ToLower()))

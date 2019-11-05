@@ -145,7 +145,7 @@ try
     }
 
     # Get all VMs AA account has read access to
-    $AllAzureVMs = Get-AzSubscription |
+    $AllAzureVMs = (Get-AzSubscription).where({$_.State -eq "Enabled"}) |
         Foreach-object { $Context = Set-AzContext -SubscriptionId $_.SubscriptionId; Get-AzVM -AzContext $Context} |
         Select-Object -Property Name, VmId, StorageProfile, Tags
 
