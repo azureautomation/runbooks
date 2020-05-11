@@ -58,28 +58,28 @@ workflow Remove-ResourceGroups
 {
     [OutputType([String])]
 
-	param(
-		[parameter(Mandatory = $false)] 
-		[string] $NameFilter, 
+    param(
+        [parameter(Mandatory = $false)] 
+        [string] $NameFilter, 
 	 	
-		[parameter(Mandatory = $false)] 
-		[bool] $PreviewMode = $true,
+        [parameter(Mandatory = $false)] 
+        [bool] $PreviewMode = $true,
 
         [parameter(Mandatory = $false)]
         [string] $FromEmailAddress,
 
         [parameter(Mandatory = $false)]
         [string] $DestEmailAddress,
-
+    
         [parameter(Mandatory = $false)]
-        [sting] $SendGridToken # To be converted to keyvault
-	)
+        [sting] $SendGridToken  # To be converted to keyvault
+    )
 
-	$VerbosePreference = 'Continue'
+    $VerbosePreference = 'Continue'
 	
-	inlineScript {
-		$NameFilter = $using:NameFilter
-		$PreviewMode = $using:PreviewMode
+    inlineScript {
+        $NameFilter = $using:NameFilter
+        $PreviewMode = $using:PreviewMode
         $PSPrivateMetadata = $using:PSPrivateMetadata
 
         $FromEmailAddress = $using:FromEmailAddress
