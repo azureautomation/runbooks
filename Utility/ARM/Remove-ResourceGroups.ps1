@@ -116,8 +116,6 @@ else {
     }
 }
 
-Get-Module -Name AzureRM*
-
 # Process the resource groups
 try {
     # Find RGs to remove based on passed in name filter
