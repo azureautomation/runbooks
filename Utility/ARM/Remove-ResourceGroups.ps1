@@ -53,6 +53,21 @@
   Optional with default of $true. 
   Execute the runbook to see which resource groups would be deleted but take no action.  
 
+.PARAMETER FromEmailAddress
+  Optional
+  Specify the sender address for the email notification
+  Requires DestEmailAddress and KeyvaultName to be set
+
+.PARAMETER DestEmailAddress
+  Optional
+  Specify the recipient address for the email notification
+  Requires FromEmailAddress and KeyvaultName to be set
+
+.PARAMETER KeyvaultName
+  Optional
+  Specify the name of a KeyVault that contains the "SendGridAPIKey" secret
+  The Run As Automation Account must have read access to the secrets in the KeyVault
+  Requires FromEmailAddress and DestEmailAddress to be set
 #> 
 
 
@@ -70,7 +85,7 @@ param(
     [string] $DestEmailAddress,
     
     [parameter(Mandatory = $false)]
-    [string] $KeyvaultName  # Keyvault that contains "SendGridAPIKey" secret
+    [string] $KeyvaultName
 )
 
 Import-Module AzureRM.KeyVault
@@ -179,7 +194,7 @@ try {
                 Write-Output "`t$($group.ResourceGroupName)"
             } 
             Write-Output "Preview Mode: The following resources would be removed:"
-            $resources | % { "`t$($_.ResourceGroupName)/$($_.Name)" }
+            $resourcesToRemove | % { "`t$($_.ResourceGroupName)/$($_.Name)" }
         } 
         # Remove the resource groups
         else {
@@ -190,7 +205,7 @@ try {
                 Write-Output $($group.ResourceGroupName) 
             } 
             Write-Output "The following resources will be removed:"
-            $resources | % { "`t$($_.ResourceGroupName)/$($_.Name)" }
+            $resourcesToRemove | % { "`t$($_.ResourceGroupName)/$($_.Name)" }
             # Here is where the remove actions happen
             foreach ($resourceGroup in $groupsToRemove) { 
                 Write-Output "Starting to remove resource group: $($resourceGroup.ResourceGroupName) ..."
