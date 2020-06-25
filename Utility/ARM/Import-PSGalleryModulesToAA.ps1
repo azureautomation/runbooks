@@ -357,7 +357,7 @@ try
         }
         else
         {
-            Write-Output -InputObject "Running in subscription: `n"
+            Write-Output -InputObject "Running in subscription:"
             $Subscription | fl
         }
         if(-not $DebugLocal)
