@@ -99,16 +99,16 @@ elseif((Get-Module -Name AzureRM.Profile -ListAvailable) -and (Get-Module -Name 
 
     if( ([System.Version]$ProfileModule.Version -le [System.Version]"5.0.0") -and ([System.Version]$AutomationModule.Version -le [System.Version]"5.0.0") -and ([System.Version]$ResourcesModule.Version -le [System.Version]"5.0.0") )
     {
-        Write-Error -Message "Manually update: AzureRM.Profile, AzureRM.Automation, AzureRM.Resources for first time usage through the portal" -ErrorAction Continue
-        throw "Check AA account for modules"
+        Write-Warning -Message "Need to update AzureRM base module first before anything else"
+        $UpdateAzureRMFirst = $true
     }
     else
     {
         Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
         if($oErr)
         {
-            Write-Error -Message "Failed to load needed modules for Runbook: AzureRM.Profile, AzureRM.Automation,AzureRM.Resources" -ErrorAction Continue
-            throw "Check AA account for modules"
+            Write-Warning -Message "Need to update AzureRM base module first before anything else"
+            $UpdateAzureRMFirst = $true
         }
     }
     Write-Output -InputObject "Using AzureRM modules to execute runbook"
@@ -341,7 +341,6 @@ try
     if($RunAsConnection)
     {
         Write-Output -InputObject ("Logging in to Azure...")
-
         $Null = Add-AzureRMAccount `
             -ServicePrincipal `
             -TenantId $RunAsConnection.TenantId `
@@ -352,10 +351,14 @@ try
             Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
         }
         $Subscription = Select-AzureRMSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
-        Write-Output -InputObject "Running in subscription: $($Subscription.Name)"
         if($oErr)
         {
             Write-Error -Message "Failed to select Azure subscription" -ErrorAction Stop
+        }
+        else
+        {
+            Write-Output -InputObject "Running in subscription: `n"
+            $Subscription | fl
         }
         if(-not $DebugLocal)
         {
@@ -402,13 +405,23 @@ try
     {
         Write-Error -Message "Check that AzureRunAsConnection is configured for AA account: $AutomationAccountName" -ErrorAction Stop
     }
-    $Modules = Get-AzureRMAutomationModule `
+    if($UpdateAzureRMFirst)
+    {
+        Write-Warning -Message "Forcing update of AzureRM base modules first, run again to import desired modules"
+        $NewModuleNames = $null
+        $NewModuleNames = @("AzureRM.Profile", "AzureRM.Automation", "AzureRM.Resources")
+    }
+    else
+    {
+        $Modules = Get-AzureRMAutomationModule `
         -ResourceGroupName $AutomationResourceGroupName `
         -AutomationAccountName $AutomationAccountName -ErrorAction continue -ErrorVariable oErr
-    if($oErr)
-    {
-        Write-Error -Message "Failed to retrieve modules in AA account $AutomationAccountName" -ErrorAction Stop
+        if($oErr)
+        {
+            Write-Error -Message "Failed to retrieve modules in AA account $AutomationAccountName" -ErrorAction Stop
+        }
     }
+
     # Import module if specified
     if (!([string]::IsNullOrEmpty($NewModuleNames)))
     {
