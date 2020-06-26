@@ -3,6 +3,9 @@
     This Azure Automation Runbook imports a module and all of it's dependencies into AA from PowerShell Gallery.
     This is meant to only run from an Automation account. This module can import the Az module into the Automation account.
 
+    NOTE:
+        Running this on a new AA account one must input both AutomationResourceGroupName and AutomationAccountName
+
 .DESCRIPTION
     This Azure Automation Runbook imports a module named as parameter input to AA from PowerShell Gallery.
 
@@ -350,6 +353,7 @@ try
         {
             Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
         }
+        Write-Verbose -Message "Selecting subscription to use"
         $Subscription = Select-AzureRMSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
         if($oErr)
         {
@@ -360,8 +364,9 @@ try
             Write-Output -InputObject "Running in subscription:"
             $Subscription | fl
         }
-        if(-not $DebugLocal)
+        if( (-not $DebugLocal) -and (-not $UpdateAzureRMFirst) )
         {
+            Write-Verbose -Message "Attempting to discover AA account"
             # Find automation account if account name and resource group name not defined as input
             if(([string]::IsNullOrEmpty($AutomationResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
             {
@@ -395,9 +400,10 @@ try
         }
         else
         {
+            Write-Verbose -Message "Either first time run, or debugging has been activated"
             if(([string]::IsNullOrEmpty($AutomationResourceGroupName)) -or ([string]::IsNullOrEmpty($AutomationAccountName)))
             {
-                Write-Error -Message "When debugging locally ResourceGroupName and AutomationAccountName parameters must be set" -ErrorAction Stop
+                Write-Error -Message "When debugging locally or first run on new AA account, ResourceGroupName and AutomationAccountName parameters must be provided in input" -ErrorAction Stop
             }
         }
     }
