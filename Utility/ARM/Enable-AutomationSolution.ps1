@@ -235,7 +235,8 @@ try
                 if ($Null -ne $OnboardedVMSubscriptionContext)
                 {
                     # Find existing VM that is already onboarded to the solution.
-                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
+                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext `
+                        | Where-Object {$_.Name -like "*MicrosoftMonitoringAgent" -or $_.Name -like "*OmsAgentForLinux"}
 
                     # Find VM to use as template
                     if ($Null -ne $VMExtensions)
