@@ -76,7 +76,7 @@ Param (
 )
 try
 {
-    $RunbookName = "Enable-MultipleAutomationSolution"
+    $RunbookName = "Enable-MultipleSolution"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     $VerbosePreference = "silentlycontinue"
@@ -245,7 +245,8 @@ try
                 if ($Null -ne $OnboardedVMSubscriptionContext)
                 {
                     # Find existing VM that is already onboarded to the solution.
-                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext | Where-Object {$_.Name -like "*/$LogAnalyticsAgentExtensionName"}
+                    $VMExtensions = Get-AzureRmResource -ResourceType "Microsoft.Compute/virtualMachines/extensions" -AzureRmContext $OnboardedVMSubscriptionContext `
+                        | Where-Object {$_.Name -like "*MicrosoftMonitoringAgent" -or $_.Name -like "*OmsAgentForLinux"}
 
                     # Find VM to use as template
                     if ($Null -ne $VMExtensions)
@@ -405,7 +406,7 @@ try
         {
             # Start automation runbook to process VMs in parallel
             $RunbookNameParams = @{}
-            $RunbookNameParams.Add("VMSubscriptionId", ($VM.id).Split('/')[2])
+            $RunbookNameParams.Add("VMSubscriptionId", $VMSubscriptionId)
             $RunbookNameParams.Add("VMResourceGroupName", $VM.ResourceGroupName)
             $RunbookNameParams.Add("VMName", $VM.Name)
             $RunbookNameParams.Add("SolutionType", $SolutionType)
@@ -417,11 +418,11 @@ try
                 try
                 {
                     $Job = Start-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroup -AutomationAccountName $AutomationAccount `
-                        -Name $RunbookName -Parameters $RunbookNameParams `
+                        -Name $DependencyRunbookName -Parameters $RunbookNameParams `
                         -AzureRmContext $SubscriptionContext -ErrorAction Stop
-                    $Jobs.Add($VM.VMId, $Job)
+                    $Jobs.Add($VM.Name, $Job)
                     # Submitted job successfully, exiting while loop
-                    Write-Verbose -Message "Added VM id: $($VM.VMId) to AA job"
+                    Write-Verbose -Message "Added VM name: $($VM.Name) to AA job"
                     break
                 }
                 catch
@@ -444,7 +445,6 @@ try
     {
         Write-Error -Message "No VMs to onboard found." -ErrorAction
     }
-
 
     # Wait for jobs to complete, stop, fail, or suspend (final states allowed for a runbook)
     $JobsResults = @()
