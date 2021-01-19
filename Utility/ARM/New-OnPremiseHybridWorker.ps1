@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo 
 
-.VERSION 1.6
+.VERSION 1.8
 
 .GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
 
@@ -25,6 +25,11 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES 
+
+1.8 - 1/21/2021
+ -- MODIFIED BY AspenForester
+ -- Added parameter to support having the Log Analyitcs Workspace in a subscription
+    different than the Automation Account.
 
 1.6 - 11/15/2018
  -- MODIFIED BY Alexander Zabielski
@@ -84,6 +89,12 @@
     Optional. The name of the resource group to be referenced for the OMS workspace. If not specified,
     
     the AAResourceGroupName is useed.
+
+.PARAMETER OMSSubscription
+
+    Optional. The name of the subscription to be referenced for the OMS Workspace. If not specified,
+
+    the SubscriptionID is used.
 
 
 .PARAMETER SubscriptionID
@@ -153,6 +164,9 @@ Param (
 [Parameter(Mandatory=$false)]
 [String] $OMSResourceGroupName,
 
+[Parameter(Mandatory=$false)]
+[String]$OMSSubscription,
+
 [Parameter(Mandatory=$true)]
 [String] $SubscriptionID,
 
@@ -184,8 +198,8 @@ $ErrorActionPreference = "Stop"
 Write-Output "Importing necessary modules..."
 
 # Create a list of the modules necessary to register a hybrid worker
-$AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
-$Modules = @($AzureRmModule)
+$AzModule = @{"Name" = "Az"; "Version" = ""}
+$Modules = @($AzModule)
 
 # Import modules
 foreach ($Module in $Modules) {
@@ -234,27 +248,35 @@ if($TenantID) {
 Write-Output "Connecting with the Following Parameters"
 Write-Output $paramsplat
 
-$Account = Add-AzureRmAccount @paramsplat 
+$Account = Connect-AzAccount @paramsplat 
 
 # Get a reference to the current subscription
-#$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+#$Subscription = Get-AzSubscription -SubscriptionId $SubscriptionID
 # Get the tenant id for this subscription
 #$TenantID = $Subscription.TenantId
 
 
 # Set the active subscription
-$null = Set-AzureRmContext -SubscriptionID $SubscriptionID
+$null = Set-AzContext -SubscriptionID $SubscriptionID
+
+# JBL - check for separate OMS subscription
+if ( $null -eq $OMSSubscription )
+{
+    $OMSSubscription = $SubscriptionID
+}
 
 # Check that the resource groups are valid
-$null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
+$null = Get-AzResourceGroup -Name $AAResourceGroupName
 if ($OMSResourceGroupName) {
-    $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
+    Set-AzContext -Subscription $OMSSubscription
+    $null = Get-AzResourceGroup -Name $OMSResourceGroupName 
+    Set-AzContext -Subscription $SubscriptionID
 } else {
     $OMSResourceGroupName = $AAResourceGroupName
 }
 
 # Check that the automation account is valid
-$AutomationAccount = Get-AzureRmAutomationAccount -ResourceGroupName $AAResourceGroupName -Name $AutomationAccountName
+$AutomationAccount = Get-AzAutomationAccount -ResourceGroupName $AAResourceGroupName -Name $AutomationAccountName
 
 # Find the automation account region
 $AALocation = $AutomationAccount.Location
@@ -263,14 +285,14 @@ $AALocation = $AutomationAccount.Location
 Write-Output("Accessing Azure Automation Account named $AutomationAccountName in region $AALocation...")
 
 # Get Azure Automation Primary Key and Endpoint
-$AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $AAResourceGroupName -AutomationAccountName $AutomationAccountName
+$AutomationInfo = Get-AzAutomationRegistrationInfo -ResourceGroupName $AAResourceGroupName -AutomationAccountName $AutomationAccountName
 $AutomationPrimaryKey = $AutomationInfo.PrimaryKey
 $AutomationEndpoint = $AutomationInfo.Endpoint
 
 # Create a new OMS workspace if needed
 try {
-
-    $Workspace = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $OMSResourceGroupName  -ErrorAction Stop
+    Set-AzContext -Subscription $OMSSubscription
+    $Workspace = Get-AzOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $OMSResourceGroupName  -ErrorAction Stop
     $OmsLocation = $Workspace.Location
     Write-Output "Referencing existing OMS Workspace named $WorkspaceName in region $OmsLocation..."
 
@@ -297,7 +319,7 @@ try {
 
     Write-Output "Creating new OMS Workspace named $WorkspaceName in region $OmsLocation..."
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku PerNode -ResourceGroupName $OMSResourceGroupName
+    $Workspace = New-AzOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku PerNode -ResourceGroupName $OMSResourceGroupName
 
 }
 
@@ -310,11 +332,13 @@ if (!($AALocation -match $OmsLocation) -and !($OmsLocation -match "eastus" -and 
 $WorkspaceId = $Workspace.CustomerId
 
 # Get the primary key for the OMS workspace
-$WorkspaceSharedKeys = Get-AzureRmOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $OMSResourceGroupName -Name $WorkspaceName
+$WorkspaceSharedKeys = Get-AzOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $OMSResourceGroupName -Name $WorkspaceName
 $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 
 # Activate the Azure Automation solution in the workspace
-$null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
+$null = Set-AzOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
+
+Set-AzContext -Subscription $SubscriptionID
 
 # Check for the MMA on the machine
 try {
