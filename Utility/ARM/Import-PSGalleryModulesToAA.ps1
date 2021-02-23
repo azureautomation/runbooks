@@ -361,8 +361,7 @@ try
         }
         else
         {
-            Write-Output -InputObject "Running in subscription:"
-            $Subscription | fl
+            Write-Output -InputObject "Running in subscription: $($Subscription.Subscription.Name)"
         }
         if( (-not $DebugLocal) -and (-not $UpdateAzureRMFirst) )
         {
