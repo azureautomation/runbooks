@@ -348,7 +348,7 @@ try
             Write-Error -Message "Failed to connect to Azure" -ErrorAction Stop
         }
         $Subscription = Select-AzureRmSubscription -SubscriptionId $RunAsConnection.SubscriptionID -ErrorAction Continue -ErrorVariable oErr
-        Write-Output -InputObject "Running in subscription: $($Subscription.Name)"
+        Write-Output -InputObject "Running in subscription: $($Subscription.Subscription.Name)"
         if($oErr)
         {
             Write-Error -Message "Failed to select Azure subscription" -ErrorAction Stop
