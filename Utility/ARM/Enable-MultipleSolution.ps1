@@ -84,7 +84,7 @@ Param (
 )
 try
 {
-    $RunbookName = "Enable-MultipleAutomationSolution"
+    $RunbookName = "Enable-MultipleSolution"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
@@ -269,7 +269,7 @@ try
                     $Job = Start-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName `
                         -Name $DependencyRunbookName -Parameters $RunbookNameParams `
                         -AzureRmContext $SubscriptionContext -ErrorAction Stop
-                    $Jobs.Add($VM.VMId, $Job)
+                    $Jobs.Add($VM.Name, $Job)
                     # Submitted job successfully, exiting while loop
                     Write-Verbose -Message "Added VM id: $($VM.VMId) to AA job"
                     Write-Output -InputObject "Triggered onbording for solution: $SolutionType for VM: $($VM.Name)"
