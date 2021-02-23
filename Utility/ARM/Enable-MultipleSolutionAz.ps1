@@ -83,7 +83,7 @@ Param (
 )
 try
 {
-    $RunbookName = "Enable-MultipleAutomationSolutionAz"
+    $RunbookName = "Enable-MultipleSolutionAz"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     $VerbosePreference = "silentlycontinue"

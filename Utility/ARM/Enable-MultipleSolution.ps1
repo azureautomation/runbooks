@@ -84,7 +84,7 @@ Param (
 )
 try
 {
-    $RunbookName = "Enable-MultipleAutomationSolution"
+    $RunbookName = "Enable-MultipleSolution"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
