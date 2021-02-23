@@ -27,8 +27,8 @@
         LASolutionSubscriptionId
         LASolutionWorkspaceId
 
-.PARAMETER VMSubscriptionName
-    Optional. The name subscription where the new VM to onboard is located.
+.PARAMETER VMSubscriptionId
+    Optional. The name subscription id where the new VM to onboard is located.
     This will default to the same one as the workspace if not specified. If you
     give a different subscription id then you need to make sure the RunAs account for
     this automation account is added as a contributor to this subscription also.
@@ -59,7 +59,7 @@
 Param (
     [Parameter(Mandatory = $False)]
     [String]
-    $VMSubscriptionName,
+    $VMSubscriptionId,
 
     [Parameter(Mandatory = $True)]
     [String]
@@ -84,7 +84,7 @@ Param (
 )
 try
 {
-    $RunbookName = "Enable-MultipleSolution"
+    $RunbookName = "Enable-MultipleAutomationSolution"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name AzureRM.Profile, AzureRM.Automation, AzureRM.OperationalInsights, AzureRM.Compute, AzureRM.Resources -ErrorAction Continue -ErrorVariable oErr
@@ -124,7 +124,7 @@ try
         Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
     }
     # set subscription of VM onboarded, else assume its in the same as the AA account
-    if ([string]::IsNullOrEmpty($VMSubscriptionName))
+    if ([string]::IsNullOrEmpty($VMSubscriptionId))
     {
         # Use the same subscription as the Automation account if not passed in
         $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -138,7 +138,7 @@ try
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $NewVMSubscriptionContext = Set-AzureRMContext -Subscription $VMSubscriptionName -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzureRMContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop
@@ -247,15 +247,7 @@ try
         {
             # Start automation runbook to process VMs in parallel
             $RunbookNameParams = @{}
-            if([string]::IsNullOrEmpty($VMSubscriptionName))
-            {
-                $VMSubscriptionName = (Get-AzureRMSubscription -SubscriptionId ($VM.id).Split('/')[2]  -ErrorAction Continue -ErrorVariable oErr).Name
-                if ($oErr)
-                {
-                    Write-Error -Message "Failed to retrieve name of subscription where VM resides" -ErrorAction Stop
-                }
-            }
-            $RunbookNameParams.Add("VMSubscriptionName", $VMSubscriptionName)
+            $RunbookNameParams.Add("VMSubscriptionId", ($VM.id).Split('/')[2])
             $RunbookNameParams.Add("VMResourceGroupName", $VM.ResourceGroupName)
             $RunbookNameParams.Add("VMName", $VM.Name)
             $RunbookNameParams.Add("SolutionType", $SolutionType)
@@ -269,7 +261,7 @@ try
                     $Job = Start-AzureRmAutomationRunbook -ResourceGroupName $AutomationResourceGroupName -AutomationAccountName $AutomationAccountName `
                         -Name $DependencyRunbookName -Parameters $RunbookNameParams `
                         -AzureRmContext $SubscriptionContext -ErrorAction Stop
-                    $Jobs.Add($VM.Name, $Job)
+                    $Jobs.Add($VM.VMId, $Job)
                     # Submitted job successfully, exiting while loop
                     Write-Verbose -Message "Added VM id: $($VM.VMId) to AA job"
                     Write-Output -InputObject "Triggered onbording for solution: $SolutionType for VM: $($VM.Name)"
