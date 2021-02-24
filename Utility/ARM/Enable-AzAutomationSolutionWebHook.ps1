@@ -22,42 +22,28 @@
         LASolutionSubscriptionId
         LASolutionWorkspaceId
 
-.PARAMETER VMSubscriptionName
-    The name of subscription where the new VM to onboard is located.
-    This will default to the same one as the Azure Automation account is located in if not specified. If you
-    give a different subscription id then you need to make sure the RunAs account for
-    this automation account is added as a contributor to this subscription also.
-
-.PARAMETER VMResourceGroupName
-    Required. The name of the resource group that the VM is a member of.
-
-.PARAMETER VMName
-    Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
-
-.PARAMETER SolutionType
-    Required. The name of the solution to onboard to this Automation account.
-    It must be either "Updates" or "ChangeTracking". ChangeTracking also includes the inventory solution.
-
-.PARAMETER UpdateScopeQuery
-    Optional. Default is true. Indicates whether to add this VM to the list of computers to enable for this solution.
-    Solutions enable an optional scope configuration to be set on them that contains a query of computers
-    to target the solution to. If you are calling this Runbook from a parent runbook that is onboarding
-    multiple VMs concurrently, then you will want to set this to false and then do a final update of the
-    search query with the list of onboarded computers to avoid any possible conflicts that this Runbook
-    might do when reading, adding this VM, and updating the query since multiple versions of this Runbook
-    might try and do this at the same time if run concurrently.
-
-.Example
-    .\Enable-AutomationSolutionAz -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" -VMName finance1 -VMResourceGroupName finance `
-              -SolutionType Updates
-
-.Example
-    .\Enable-AutomationSolutionAz -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" -VMName finance1 -VMResourceGroupName finance `
-             -SolutionType ChangeTracking -UpdateScopeQuery $false
-
-.Example
-    .\Enable-AutomationSolutionAz -VMName finance1 -VMResourceGroupName finance -VMSubscriptionId "1111-4fa371-22-46e4-a6ec-0bc48954" `
-             -SolutionType Updates
+.PARAMETER WebHookData
+    The following parameters will need to be passed as a JSON object for this runbook to function correctly:
+        VMSubscriptionId:
+                The name subscription id where the new VM to onboard is located.
+                This will default to the same one as the azure automation account if not specified. If you
+                give a different subscription id then you need to make sure the RunAs account for
+                this automation account is added as a contributor to this subscription also.
+        VMResourceGroupName:
+                Required. The name of the resource group that the VM is a member of.
+        VMName:
+                Required. The name of a specific VM that you want onboarded to the Updates or ChangeTracking solution
+        SolutionType:
+                Defaults to "Updates" if not set. The name of the solution to onboard to this Automation account.
+                It must be either "Updates" or "ChangeTracking". ChangeTracking also includes the inventory solution.
+        UpdateScopeQuery:
+                Optional. Default is true. Indicates whether to add this VM to the list of computers to enable for this solution.
+                Solutions enable an optional scope configuration to be set on them that contains a query of computers
+                to target the solution to. If you are calling this Runbook from a parent runbook that is onboarding
+                multiple VMs concurrently, then you will want to set this to false and then do a final update of the
+                search query with the list of onboarded computers to avoid any possible conflicts that this Runbook
+                might do when reading, adding this VM, and updating the query since multiple versions of this Runbook
+                might try and do this at the same time if run concurrently.
 
 .NOTES
     AUTHOR: Automation Team
@@ -65,31 +51,81 @@
 #>
 #Requires -Version 5.0
 Param (
-    [Parameter(Mandatory = $false)]
-    [String]
-    $VMSubscriptionName,
-
     [Parameter(Mandatory = $true)]
-    [String]
-    $VMResourceGroupName,
-
-    [Parameter(Mandatory = $true)]
-    [String]
-    $VMName,
-
-    [Parameter(Mandatory = $true)]
-    [ValidateSet("Updates", "ChangeTracking", IgnoreCase = $false)]
-    [String]
-    $SolutionType,
-
-    [Parameter(Mandatory = $false)]
-    [Boolean]
-    $UpdateScopeQuery = $true
+    [Object]$WebHookData
 )
 try
 {
-    $RunbookName = "Enable-AutomationSolutionAz"
+    $RunbookName = "Enable-AzAutomationSolutionWebHook"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
+
+    # Parse input
+    if ($Null -ne $WebHookData)
+    {
+        if ($Null -ne $WebhookData.RequestBody)
+        {
+            $ObjectData = ConvertFrom-Json -InputObject $WebhookData.RequestBody
+            if ($Null -ne $ObjectData.VMSubscriptionId -and "" -ne $ObjectData.VMSubscriptionId)
+            {
+                $VMSubscriptionId = $ObjectData.VMSubscriptionId
+            }
+            else
+            {
+                Write-Warning -Message "Missing VMSubscriptionId in input data, will assume VM to onboard is in same subscription as Azure Automation account"
+                $VMSubscriptionId = $Null
+            }
+            if ($Null -ne $ObjectData.VMResourceGroupName -and "" -ne $ObjectData.VMResourceGroupName)
+            {
+                $VMResourceGroupName = $ObjectData.VMResourceGroupName
+            }
+            else
+            {
+                Write-Error -Message "Missing VMResourceGroupName in input data" -ErrorAction Stop
+            }
+            if ($Null -ne $ObjectData.VMName -and "" -ne $ObjectData.VMName)
+            {
+                $VMName = $ObjectData.VMName
+            }
+            else
+            {
+                Write-Error -Message "Missing VMName in input data" -ErrorAction Stop
+            }
+            if ($Null -ne $ObjectData.SolutionType -and "" -ne $ObjectData.SolutionType)
+            {
+                if ($ObjectData.SolutionType -cne "Updates" -and $ObjectData.SolutionType -cne "ChangeTracking")
+                {
+                    $SolutionType = $ObjectData.SolutionType
+                }
+                else
+                {
+                    Write-Error -Message "Only a solution type of Updates or ChangeTracking is currently supported. These are case sensitive." -ErrorAction Stop
+                }
+            }
+            else
+            {
+                Write-Warning -Message "Missing SolutionType in input data, using default set to Updates"
+                $SolutionType = "Updates"
+            }
+            if ($Null -ne $ObjectData.UpdateScopeQuery -and "" -ne $ObjectData.UpdateScopeQuery)
+            {
+                $UpdateScopeQuery = $ObjectData.UpdateScopeQuery
+            }
+            else
+            {
+                Write-Verbose -Message "Missing UpdateScopeQuery in input data, using default set to True"
+                $UpdateScopeQuery = $true
+            }
+        }
+        else
+        {
+            Write-Error -Message "Input data in request body is empty " -ErrorAction Stop
+        }
+
+    }
+    else
+    {
+        Write-Error -Message "Input data from webhook is empty" -ErrorAction Stop
+    }
 
     $VerbosePreference = "silentlycontinue"
     Import-Module -Name Az.Accounts, Az.Automation, Az.OperationalInsights, Az.Compute, Az.Resources -ErrorAction Continue -ErrorVariable oErr
@@ -128,9 +164,6 @@ try
     $NewLogAnalyticsAgentExtensionName = "MicrosoftMonitoringAgent"
     $LogAnalyticsLinuxAgentExtensionName = "OmsAgentForLinux"
 
-    $ExtensionDeploymentName = "Automation-ExtensionDeployment-"
-    $SolutionUpdateDeploymentName = "Automation-SolutionQueryUpdate-"
-
     $MMAApiVersion = "2018-10-01"
     $WorkspacesApiVersion = "2017-04-26-preview"
     $SolutionApiVersion = "2017-04-26-preview"
@@ -159,7 +192,7 @@ try
         Write-Verbose -Message "Set subscription for AA to: $($SubscriptionContext.Subscription.Name)"
     }
     # set subscription of VM onboarded, else assume its in the same as the AA account
-    if ([string]::IsNullOrEmpty($VMSubscriptionName))
+    if ([string]::IsNullOrEmpty($VMSubscriptionId))
     {
         # Use the same subscription as the Automation account if not passed in
         $NewVMSubscriptionContext = Set-AzContext -SubscriptionId $ServicePrincipalConnection.SubscriptionId -ErrorAction Continue -ErrorVariable oErr
@@ -173,7 +206,7 @@ try
     else
     {
         # VM is in a different subscription so set the context to this subscription
-        $NewVMSubscriptionContext = Set-AzContext -Subscription $VMSubscriptionName -ErrorAction Continue -ErrorVariable oErr
+        $NewVMSubscriptionContext = Set-AzContext -SubscriptionId $VMSubscriptionId -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to set azure context to subscription where VM is. Make sure AA RunAs account has contributor rights" -ErrorAction Stop
@@ -318,6 +351,13 @@ try
         else
         {
             Write-Error -Message "Failed to retrieve Log Analytics workspace information" -ErrorAction Stop
+        }
+        # Get the saved group that is used for solution targeting so we can update this with the new VM during onboarding..
+        $SavedGroups = Get-AzOperationalInsightsSavedSearch -ResourceGroupName $WorkspaceResourceGroupName `
+            -WorkspaceName $WorkspaceName -AzContext $SubscriptionContext -ErrorAction Continue -ErrorVariable oErr
+        if ($oErr)
+        {
+            Write-Error -Message "Failed to retrieve Log Analytics saved groups info" -ErrorAction Stop
         }
     }
     # Log Analytics workspace to use is set through AA assets
@@ -661,7 +701,7 @@ try
         $MMADeploymentParams.Add("typeHandlerVersion", $MMATypeHandlerVersion)
 
         # Create deployment name
-        $DeploymentName = $ExtensionDeploymentName + (Get-Date).ToFileTimeUtc()
+        $DeploymentName = "AutomationAgentDeploy-PS-" + (Get-Date).ToFileTimeUtc()
 
         # Deploy solution to new VM
         $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $VMResourceGroupName -TemplateFile $TempFile.FullName `
@@ -690,20 +730,19 @@ try
     while($Busy)
     {
         # random wait to offset parallel executing onboarding runbooks
-        Start-Sleep -Milliseconds (Get-Random -Minimum 100 -Maximum 900)
-        $CurrentTime = Get-Date
+        Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
         # check that no other deployment is in progress
         $CurrentDeployments = Get-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -AzContext $LASubscriptionContext -ErrorAction Continue -ErrorVariable oErr
         if ($oErr)
         {
             Write-Error -Message "Failed to get status of other solution deployments to resource group: $WorkspaceResourceGroupName" -ErrorAction Stop
         }
-        # Check if there is a current deployment with timeStamp time now - 10 sec
-        if( $CurrentDeployments | Where-Object {$_.DeploymentName -like "$SolutionUpdateDeploymentName*" -and ( $_.Timestamp -gt $CurrentTime.AddSeconds(-10) -or $_.ProvisioningState -eq "Running" )})
+        if($CurrentDeployments | Where-Object { ($_.DeploymentName -like "AutomationSolutionUpdate-PS-*") -and ($_.ProvisioningState -eq "Running") })
         {
-            Write-Verbose -Message "Detected in progress solution query update, waiting"
-            Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 7)
+
+            Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
             $Busy = $true
+            Write-Verbose -Message "Detected in progress solution query update, waiting"
         }
         else
         {
@@ -830,7 +869,7 @@ try
             $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
             # Create deployment name
-            $DeploymentName = $SolutionUpdateDeploymentName + (Get-Date).ToFileTimeUtc()
+            $DeploymentName = "AutomationSolutionUpdate-PS-" + (Get-Date).ToFileTimeUtc()
 
             $ObjectOutPut = New-AzResourceGroupDeployment -ResourceGroupName $WorkspaceResourceGroupName -TemplateFile $TempFile.FullName `
                 -Name $DeploymentName `

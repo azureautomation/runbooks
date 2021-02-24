@@ -54,7 +54,7 @@ param(
 )
 try
 {
-    $RunbookName = "Format-AutomationSolutionSearchAz"
+    $RunbookName = "Format-AzAutomationSolutionSearch"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     $VerbosePreference = "silentlycontinue"
