@@ -7,7 +7,7 @@ Args:
     subscription_id (-s) - Subscription id of the Automation account
     resource_group (-g) - Resource group name of the Automation account
     automation_account (-a) - Automation account name
-    module_name (-m) - Name of module to import from pypi.org
+    module_name (-m) - Name of module to import from pypi.org (supports comma separated list of names)
     Imports module
     Example:
         import_python3package_from_pypi.py -s xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxx -g contosogroup -a contosoaccount -m pytz
@@ -102,7 +102,7 @@ def import_package_with_dependencies (packagename):
 
 if __name__ == '__main__':
     if len(sys.argv) < 9:
-        raise Exception("Requires Subscription id -s, Automation resource group name -g, account name -a, and module name -g as arguments. \
+        raise Exception("Requires Subscription id -s, Automation resource group name -g, account name -a, and module name -m as arguments. \
                         Example: -s xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxx -g contosogroup -a contosoaccount -m pytz ")
 
     # Process any arguments sent in
@@ -126,5 +126,6 @@ if __name__ == '__main__':
     token = get_automation_runas_token()
 
     # Import package with dependencies from pypi.org
-    import_package_with_dependencies(module_name)
+    for module_name in module_name.split(','):
+        import_package_with_dependencies(module_name)
     print ("\nCheck the python 3 packages page for import status...")
