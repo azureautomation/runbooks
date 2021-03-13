@@ -66,7 +66,7 @@ def get_packagename_from_filename(packagefilename):
 
 def resolve_download_url(packagename, packagefilename):
     response = requests.get("%s/%s" % (PYPI_ENDPOINT, packagename))
-    download_uri_regex = "<a href=\"([^\"]+)\".*>%s<" % packagefilename
+    download_uri_regex = "<a href=\"([^\"]+)\"[^>]*?>%s<" % packagefilename
     download_uri_match = re.search(download_uri_regex, str(response.content))
     print ("Detected download uri %s for %s" % (download_uri_match.group(1), packagename))
     return download_uri_match.group(1)
