@@ -60,8 +60,7 @@
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. NOTE: This script is
-    intended to be run with administrator privileges and on a machine with WMF 5.
+    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker.
     
     The major steps of the script are outlined below. 
     1) Install the necessary modules
