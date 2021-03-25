@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo 
 
-.VERSION 1.6
+.VERSION 1.7
 
 .GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
 
@@ -25,6 +25,12 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES 
+
+1.7 - 7/30/2019
+ -- MODIFIED BY Peppe Kerstens
+ -- #54 Fixed source assumption.
+ -- removed aliases, proper PS commands
+ -- #49 added Az check as implemented by rcarboneras to overcome merge conflicts
 
 1.6 - 11/15/2018
  -- MODIFIED BY Alexander Zabielski
@@ -136,9 +142,9 @@
 
     AUTHOR: Jenny Hunter, Azure Automation Team
 
-    LASTEDIT: May 29, 2018
+    LASTEDIT: July 30 2019
 
-    EDITBY: Jenny Hunter
+    EDITBY: Peppe Kerstens
 
 #>
 
@@ -184,13 +190,16 @@ $ErrorActionPreference = "Stop"
 Write-Output "Importing necessary modules..."
 
 # Create a list of the modules necessary to register a hybrid worker
-$AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
+$AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""; "Repository" = "PSGallery"}
 $Modules = @($AzureRmModule)
 
 # Import modules
 foreach ($Module in $Modules) {
 
     $ModuleName = $Module.Name
+    $splatRepository = @{}
+    If ($Module.Repository) {$splatRepository.Repository = $Module.Repository}
+
 
     # Find the module version
     if ([string]::IsNullOrEmpty($Module.Version)){
@@ -205,13 +214,22 @@ foreach ($Module in $Modules) {
     }
 
     # Check if the required module is already installed
-    $CurrentModule = Get-Module -Name $ModuleName -ListAvailable | where "Version" -eq $ModuleVersion
+    $CurrentModule = Get-Module -Name $ModuleName -ListAvailable | Where-Object "Version" -eq $ModuleVersion
 
     if (!$CurrentModule) {
 
-        $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force
+        $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion @splatRepository -Force
         Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
 
+    } else {
+        if (($ModuleName -eq "AzureRm") -and (Get-InstalledModule -Name Az)) {
+            Write-Output "$ModuleName was not found but Az module is installed instead. Enabling ARM Aliases.."
+            Enable-AzureRmAlias
+        } else {
+
+            $null = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force
+            Write-Output "     Successfully installed version $ModuleVersion of $ModuleName..."
+        }
     } else {
         Write-Output "     Required version $ModuleVersion of $ModuleName is installed..."
     }
@@ -245,7 +263,7 @@ $Account = Add-AzureRmAccount @paramsplat
 # Set the active subscription
 $null = Set-AzureRmContext -SubscriptionID $SubscriptionID
 
-# Check that the resource groups are valid
+# Check that the resource groups are valid 
 $null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
 if ($OMSResourceGroupName) {
     $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
@@ -342,7 +360,7 @@ try {
     $null = Unblock-File $Destination
 
     # Change directory to location of the downloaded MMA
-    cd $env:temp
+    Set-Location -Path  $env:temp
 
     # Install the MMA
     $Command = "/C:setup.exe /qn ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_ID=$WorkspaceID" + " OPINSIGHTS_WORKSPACE_KEY=$WorkspaceKey " + " AcceptEndUserLicenseAgreement=1"
@@ -361,9 +379,9 @@ do {
     # Check for the MMA folders
     try {
         # Change the directory to the location of the hybrid registration module
-        cd "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AzureAutomation"
-        $version = (ls | Sort-Object LastWriteTime -Descending | Select -First 1).Name
-        cd "$version\HybridRegistration"
+        Set-Location -Path "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AzureAutomation"
+        $version = (Get-ChildItem | Sort-Object LastWriteTime -Descending | Select-Item -First 1).Name
+        Set-Location -Path "$version\HybridRegistration"
 
         # Import the module
         Import-Module (Resolve-Path('HybridRegistration.psd1'))
