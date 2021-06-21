@@ -66,10 +66,11 @@ def get_packagename_from_filename(packagefilename):
 
 def resolve_download_url(packagename, packagefilename):
     response = requests.get("%s/%s" % (PYPI_ENDPOINT, packagename))
-    download_uri_regex = "<a href=\"([^\"]+)\".*>%s<" % packagefilename
-    download_uri_match = re.search(download_uri_regex, str(response.content))
-    print ("Detected download uri %s for %s" % (download_uri_match.group(1), packagename))
-    return download_uri_match.group(1)
+    urls = re.findall(r'href=[\'"]?([^\'" >]+)', str(response.content))   
+    for url in urls:
+        if packagefilename in url:
+            print ("Detected download uri %s for %s" % (url, packagename))
+            return(url)
 
 def send_webservice_import_module_request(packagename, download_uri_for_file):
     request_url = "https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Automation/automationAccounts/%s/python3Packages/%s?api-version=2018-06-30" \
