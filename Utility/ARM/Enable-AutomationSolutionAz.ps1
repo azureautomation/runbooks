@@ -88,7 +88,7 @@ Param (
 )
 try
 {
-    $RunbookName = "Enable-AzAutomationSolution"
+    $RunbookName = "Enable-AutomationSolutionAz"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     $VerbosePreference = "silentlycontinue"
@@ -775,7 +775,7 @@ try
         },
         "etag": {
             "type": "string",
-            "defaultValue": ""
+            "defaultValue": "*"
         },
         "apiVersion": {
             "defaultValue": "2017-04-26-preview",
@@ -820,14 +820,15 @@ try
             # Add all of the parameters
             $QueryDeploymentParams = @{}
             $QueryDeploymentParams.Add("location", $WorkspaceLocation)
-            $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
+            $QueryDeploymentParams.Add("id", $SolutionGroup.Id)
             $QueryDeploymentParams.Add("resourceName", ($WorkspaceName + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
             $QueryDeploymentParams.Add("category", $SolutionType)
             $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
             $QueryDeploymentParams.Add("query", $NewQuery)
             $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
-            $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
             $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
+            # $SolutionGroup.ETag is now empty, myst hardcode *
+            $QueryDeploymentParams.Add("etag", "*")
 
             # Create deployment name
             $DeploymentName = $SolutionUpdateDeploymentName + (Get-Date).ToFileTimeUtc()

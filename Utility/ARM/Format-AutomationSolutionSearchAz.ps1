@@ -54,7 +54,7 @@ param(
 )
 try
 {
-    $RunbookName = "Format-AzAutomationSolutionSearch"
+    $RunbookName = "Format-AutomationSolutionSearchAz"
     Write-Output -InputObject "Starting Runbook: $RunbookName at time: $(get-Date -format r).`nRunning PS version: $($PSVersionTable.PSVersion)`nOn host: $($env:computername)"
 
     $VerbosePreference = "silentlycontinue"
@@ -574,13 +574,14 @@ try
                     # Add all of the parameters
                     $QueryDeploymentParams = @{}
                     $QueryDeploymentParams.Add("location", $WorkspaceInfo.Location)
-                    $QueryDeploymentParams.Add("id", "/" + $SolutionGroup.Id)
+                    $QueryDeploymentParams.Add("id", $SolutionGroup.Id)
                     $QueryDeploymentParams.Add("resourceName", ($WorkspaceInfo.Name + "/" + $SolutionType + "|" + "MicrosoftDefaultComputerGroup").ToLower())
                     $QueryDeploymentParams.Add("category", $SolutionType)
                     $QueryDeploymentParams.Add("displayName", "MicrosoftDefaultComputerGroup")
                     $QueryDeploymentParams.Add("query", $UpdatedQuery)
                     $QueryDeploymentParams.Add("functionAlias", $SolutionType + "__MicrosoftDefaultComputerGroup")
-                    $QueryDeploymentParams.Add("etag", $SolutionGroup.ETag)
+                    # $SolutionGroup.ETag is now empty, myst hardcode *
+                    $QueryDeploymentParams.Add("etag", "*")
                     $QueryDeploymentParams.Add("apiVersion", $SolutionApiVersion)
 
                     # Create deployment name
