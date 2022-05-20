@@ -95,7 +95,10 @@
 
     Optional. A string containing the TenantID to be used.
 
+.PARAMETER DeviceCode
 
+    Optional. Use DeviceCode swith to loging into Azure environment when running this script on a Windows Core machine.
+    
 .PARAMETER WorkspaceName
 
     Optional. The name of the OMS Workspace to be referenced. If not specified, a new OMS workspace 
@@ -158,6 +161,9 @@ Param (
 
 [Parameter(Mandatory=$false)]
 [String] $TenantID,
+
+[Parameter(Mandatory=$false)]
+[Switch] $DeviceCode,
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
@@ -229,6 +235,10 @@ if ($Credential) {
 
 if($TenantID) {
     $paramsplat.TenantId = $TenantID
+}
+
+if($DeviceCode) {
+    $paramsplat.DeviceCode = $true
 }
 
 Write-Output "Connecting with the Following Parameters"
