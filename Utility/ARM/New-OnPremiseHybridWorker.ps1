@@ -26,7 +26,7 @@
 
 .RELEASENOTES 
 
-1.7 - 11/15/2018
+1.7 - 22/07/2022
  -- MODIFIED BY Michal Gajda
  -- Added param DeviceCode for device authentication.
  
