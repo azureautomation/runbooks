@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo 
 
-.VERSION 1.6
+.VERSION 1.7
 
 .GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
 
@@ -26,6 +26,10 @@
 
 .RELEASENOTES 
 
+1.7 - 11/15/2018
+ -- MODIFIED BY Michal Gajda
+ -- Added param DeviceCode for device authentication.
+ 
 1.6 - 11/15/2018
  -- MODIFIED BY Alexander Zabielski
  -- Updated the parameters to accept a TenantID to pass to the connection params.
