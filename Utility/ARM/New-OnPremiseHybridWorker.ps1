@@ -1,6 +1,6 @@
-﻿<#PSScriptInfo 
+<#PSScriptInfo 
 
-.VERSION 1.6
+.VERSION 1.7
 
 .GUID b6ad1d8e-263a-46d6-882b-71592d6e166d 
 
@@ -25,6 +25,10 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES 
+
+1.7 - 22/07/2022
+ -- MODIFIED BY Michal Gajda
+ -- Added param DeviceCode for device authentication.
 
 1.6 - 11/15/2018
  -- MODIFIED BY Alexander Zabielski
@@ -55,12 +59,12 @@
 .SYNOPSIS 
 
     This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. An OMS workspace 
-    will all be generated if needed.
+    will all be generated if needed. This script uses Az modules. 
 
 
 .DESCRIPTION
 
-    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker. NOTE: This script is
+    This Azure/OMS Automation runbook onboards a local machine as a hybrid worker.This script has been updated to use Az modules. Version 1.6 is using AzureRM modules. NOTE: This script is
     intended to be run with administrator privileges and on a machine with WMF 5.
     
     The major steps of the script are outlined below. 
@@ -94,6 +98,10 @@
 .PARAMETER TenantID
 
     Optional. A string containing the TenantID to be used.
+
+.PARAMETER DeviceCode
+
+    Optional. Use DeviceCode swith to loging into Azure environment when running this script on a Windows Core machine.
 
 
 .PARAMETER WorkspaceName
@@ -136,9 +144,9 @@
 
     AUTHOR: Jenny Hunter, Azure Automation Team
 
-    LASTEDIT: May 29, 2018
+    LASTEDIT: June 22 , 2020
 
-    EDITBY: Jenny Hunter
+    EDITBY: Jaspreet kaur
 
 #>
 
@@ -158,6 +166,9 @@ Param (
 
 [Parameter(Mandatory=$false)]
 [String] $TenantID,
+
+[Parameter(Mandatory=$false)]
+[Switch] $DeviceCode,
 
 # OMS Workspace
 [Parameter(Mandatory=$false)]
@@ -184,8 +195,8 @@ $ErrorActionPreference = "Stop"
 Write-Output "Importing necessary modules..."
 
 # Create a list of the modules necessary to register a hybrid worker
-$AzureRmModule = @{"Name" = "AzureRM"; "Version" = ""}
-$Modules = @($AzureRmModule)
+$AzModule = @{"Name" = "Az"; "Version" = ""}
+$Modules = @($AzModule)
 
 # Import modules
 foreach ($Module in $Modules) {
@@ -231,30 +242,34 @@ if($TenantID) {
     $paramsplat.TenantId = $TenantID
 }
 
+if($DeviceCode) {
+    $paramsplat.DeviceCode = $true
+}
+
 Write-Output "Connecting with the Following Parameters"
 Write-Output $paramsplat
 
-$Account = Add-AzureRmAccount @paramsplat 
+$Account = Connect-AzAccount @paramsplat 
 
 # Get a reference to the current subscription
-#$Subscription = Get-AzureRmSubscription -SubscriptionId $SubscriptionID
+#$Subscription = Get-AzSubscription -SubscriptionId $SubscriptionID
 # Get the tenant id for this subscription
 #$TenantID = $Subscription.TenantId
 
 
 # Set the active subscription
-$null = Set-AzureRmContext -SubscriptionID $SubscriptionID
+$null = Set-AzContext -SubscriptionID $SubscriptionID
 
 # Check that the resource groups are valid
-$null = Get-AzureRmResourceGroup -Name $AAResourceGroupName
+$null = Get-AzResourceGroup -Name $AAResourceGroupName
 if ($OMSResourceGroupName) {
-    $null = Get-AzureRmResourceGroup -Name $OMSResourceGroupName
+    $null = Get-AzResourceGroup -Name $OMSResourceGroupName
 } else {
     $OMSResourceGroupName = $AAResourceGroupName
 }
 
 # Check that the automation account is valid
-$AutomationAccount = Get-AzureRmAutomationAccount -ResourceGroupName $AAResourceGroupName -Name $AutomationAccountName
+$AutomationAccount = Get-AzAutomationAccount -ResourceGroupName $AAResourceGroupName -Name $AutomationAccountName
 
 # Find the automation account region
 $AALocation = $AutomationAccount.Location
@@ -263,14 +278,14 @@ $AALocation = $AutomationAccount.Location
 Write-Output("Accessing Azure Automation Account named $AutomationAccountName in region $AALocation...")
 
 # Get Azure Automation Primary Key and Endpoint
-$AutomationInfo = Get-AzureRMAutomationRegistrationInfo -ResourceGroupName $AAResourceGroupName -AutomationAccountName $AutomationAccountName
+$AutomationInfo = Get-AzAutomationRegistrationInfo -ResourceGroupName $AAResourceGroupName -AutomationAccountName $AutomationAccountName
 $AutomationPrimaryKey = $AutomationInfo.PrimaryKey
 $AutomationEndpoint = $AutomationInfo.Endpoint
 
 # Create a new OMS workspace if needed
 try {
 
-    $Workspace = Get-AzureRmOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $OMSResourceGroupName  -ErrorAction Stop
+    $Workspace = Get-AzOperationalInsightsWorkspace -Name $WorkspaceName -ResourceGroupName $OMSResourceGroupName  -ErrorAction Stop
     $OmsLocation = $Workspace.Location
     Write-Output "Referencing existing OMS Workspace named $WorkspaceName in region $OmsLocation..."
 
@@ -297,7 +312,7 @@ try {
 
     Write-Output "Creating new OMS Workspace named $WorkspaceName in region $OmsLocation..."
     # Create the new workspace for the given name, region, and resource group
-    $Workspace = New-AzureRmOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku PerNode -ResourceGroupName $OMSResourceGroupName
+    $Workspace = New-AzOperationalInsightsWorkspace -Location $OmsLocation -Name $WorkspaceName -Sku PerNode -ResourceGroupName $OMSResourceGroupName
 
 }
 
@@ -310,11 +325,11 @@ if (!($AALocation -match $OmsLocation) -and !($OmsLocation -match "eastus" -and 
 $WorkspaceId = $Workspace.CustomerId
 
 # Get the primary key for the OMS workspace
-$WorkspaceSharedKeys = Get-AzureRmOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $OMSResourceGroupName -Name $WorkspaceName
+$WorkspaceSharedKeys = Get-AzOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $OMSResourceGroupName -Name $WorkspaceName
 $WorkspaceKey = $WorkspaceSharedKeys.PrimarySharedKey
 
 # Activate the Azure Automation solution in the workspace
-$null = Set-AzureRmOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
+$null = Set-AzOperationalInsightsIntelligencePack -ResourceGroupName $OMSResourceGroupName -WorkspaceName $WorkspaceName -IntelligencePackName "AzureAutomation" -Enabled $true
 
 # Check for the MMA on the machine
 try {
