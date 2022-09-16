@@ -24,6 +24,9 @@
 		[Optional] Resource Id of the automation account from where assets need to be migrated
 	.PARAMETER DestinationAutomationAccountResourceId
 		[Optional] Resource Id of the automation account to where assets need to be migrated
+	.PARAMETER Type[]
+		[Mandatory] Array consisting of all the types of assets that need to be migrated, possible values are Certificates, Connections, Credentials, Modules, Runbooks, Variables
+
 .AUTHOR Microsoft
 
 .VERSION 1.0
