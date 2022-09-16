@@ -1,37 +1,33 @@
 #
 .SYNOPSIS
-	This Script is for migration of assets from one azure automation account to another  
-    Prerequisites: 
-	1. The Account to where the assets are to be migrated should exist
-    2. System managed Identities is enabled in the source account involved in the migration process
-	3. Source account's managed Identity has contributor access with read and write privileges to the destination account(https://docs.microsoft.com/en-us/azure/role-based-access-control/quickstart-assign-role-user-portal)
-	4. For proper migration this script has to be run as a runbook on the source automation account as it requires access to assets
+	This PowerShell script is for migration of Automation account assets from the account in primary region to the account in secondary region. This script migrates only Runbooks, Modules, Connections, Credentials, Certificates and Variables.
+
+	Prerequisites:
+		1.Ensure that the Automation account in the secondary region is created and available so that assets from primary region can be migrated to it.
+		2.System Managed Identities should be enabled in the Automation account in the primary region.
+		3.Ensure that Primary Automation account's Managed Identity has Contributor access with read and write permissions to the Automation account in secondary region. You can enable it by providing the necessary permissions in Secondary Automation account’s managed identities. Learn more
+		4.This script requires access to Automation account assets in primary region. Hence, it should be executed as a runbook in that Automation account for successful migration.
 
 .PARAMETER SourceAutomationAccountName
-	[Mandatory] Name of automation account from where assets need to be migrated (Source Account)
+	Name of automation account from where assets need to be migrated (Source Account)
 
 .PARAMETER DestinationAutomationAccountName
-	[Mandatory] Name of automation account to where assets need to be migrated (Destination Account)
+	Name of automation account to where assets need to be migrated (Destination Account)
 
 .PARAMETER SourceResourceGroup
-	[Mandatory] Resource group to which the automation account from where assets need to be migrated belongs
+	Resource group to which the automation account from where assets need to be migrated belongs
 
 .PARAMETER DestinationResourceGroup
-	[Mandatory] Resource group to which the automation account to where assets need to be migrated belongs
+	Resource group to which the automation account to where assets need to be migrated belongs
 
 .PARAMETER SourceSubscriptionId
-	[Mandatory] Id of the Subscription to which the automation account from where assets need to be migrated  belongs
+	Id of the Subscription to which the automation account from where assets need to be migrated  belongs
 
 .PARAMETER DestinationSubscriptionId
-	[Mandatory] Id of the Subscription to which the automation account to where assets need to be migrated  belongs
+	Id of the Subscription to which the automation account to where assets need to be migrated  belongs
 
 .PARAMETER Type[]
-	[Mandatory] Array consisting of all the types of assets that need to be migrated, possible values are: Certificates, Connections, Credentials, Modules, Runbooks, Variables
-
-.NOTES
-    1. Script for Migrations from-> Source account to Destination Account (will have to be created for now)
-	2. Please do the following for the execution of script if source account's managed identity does not have read write access control of the destination account:
-		• Get into the destination account and grant access of destination account to your source account's managed identity using this guide Tutorial: https://docs.microsoft.com/en-us/azure/role-based-access-control/quickstart-assign-role-user-portal
+	Array consisting of all the types of assets that need to be migrated, possible values are: Certificates, Connections, Credentials, Modules, Runbooks, Variables
 
 .AUTHOR Microsoft
 
