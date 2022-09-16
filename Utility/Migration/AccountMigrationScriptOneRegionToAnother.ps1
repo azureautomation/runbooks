@@ -8,27 +8,22 @@
 		3.Ensure that Primary Automation account's Managed Identity has Contributor access with read and write permissions to the Automation account in secondary region. You can enable it by providing the necessary permissions in Secondary Automation account’s managed identities. Learn more
 		4.This script requires access to Automation account assets in primary region. Hence, it should be executed as a runbook in that Automation account for successful migration.
 
-.PARAMETER SourceAutomationAccountName
-	Name of automation account from where assets need to be migrated (Source Account)
-
-.PARAMETER DestinationAutomationAccountName
-	Name of automation account to where assets need to be migrated (Destination Account)
-
-.PARAMETER SourceResourceGroup
-	Resource group to which the automation account from where assets need to be migrated belongs
-
-.PARAMETER DestinationResourceGroup
-	Resource group to which the automation account to where assets need to be migrated belongs
-
-.PARAMETER SourceSubscriptionId
-	Id of the Subscription to which the automation account from where assets need to be migrated  belongs
-
-.PARAMETER DestinationSubscriptionId
-	Id of the Subscription to which the automation account to where assets need to be migrated  belongs
-
-.PARAMETER Type[]
-	Array consisting of all the types of assets that need to be migrated, possible values are: Certificates, Connections, Credentials, Modules, Runbooks, Variables
-
+	.PARAMETER SourceAutomationAccountName
+		[Optional] Name of automation account from where assets need to be migrated (Source Account)
+	.PARAMETER DestinationAutomationAccountName
+		[Optional] Name of automation account to where assets need to be migrated (Destination Account)
+	.PARAMETER SourceResourceGroup
+		[Optional] Resource group to which the automation account from where assets need to be migrated
+	.PARAMETER DestinationResourceGroup
+		[Optional] Resource group to which the automation account to where assets need to be migrated
+	.PARAMETER SourceSubscriptionId
+		[Optional] Id of the Subscription to which the automation account from where assets need to be migrated
+	.PARAMETER DestinationSubscriptionId
+		[Optional] Id of the Subscription to which the automation account to where assets need to be migrated
+	.PARAMETER SourceAutomationAccountResourceId
+		[Optional] Resource Id of the automation account from where assets need to be migrated
+	.PARAMETER DestinationAutomationAccountResourceId
+		[Optional] Resource Id of the automation account to where assets need to be migrated
 .AUTHOR Microsoft
 
 .VERSION 1.0
