@@ -1,31 +1,37 @@
-#
+<#
 .SYNOPSIS
-	This PowerShell script is for migration of Automation account assets from the account in primary region to the account in secondary region. This script migrates only Runbooks, Modules, Connections, Credentials, Certificates and Variables.
+	This Script is for migration of assets from one azure automation account to another  
+    Prerequisites: 
+	1. The Account to where the assets are to be migrated should exist
+    2. System managed Identities is enabled in the source account involved in the migration process
+	3. Source account's managed Identity has contributor access with read and write privileges to the destination account(https://docs.microsoft.com/en-us/azure/role-based-access-control/quickstart-assign-role-user-portal)
+	4. For proper migration this script has to be run as a runbook on the source automation account as it requires access to assets
 
-	Prerequisites:
-		1.Ensure that the Automation account in the secondary region is created and available so that assets from primary region can be migrated to it.
-		2.System Managed Identities should be enabled in the Automation account in the primary region.
-		3.Ensure that Primary Automation account's Managed Identity has Contributor access with read and write permissions to the Automation account in secondary region. You can enable it by providing the necessary permissions in Secondary Automation account’s managed identities. Learn more
-		4.This script requires access to Automation account assets in primary region. Hence, it should be executed as a runbook in that Automation account for successful migration.
+.PARAMETER SourceAutomationAccountName
+	[Mandatory] Name of automation account from where assets need to be migrated (Source Account)
 
-	.PARAMETER SourceAutomationAccountName
-		[Optional] Name of automation account from where assets need to be migrated (Source Account)
-	.PARAMETER DestinationAutomationAccountName
-		[Optional] Name of automation account to where assets need to be migrated (Destination Account)
-	.PARAMETER SourceResourceGroup
-		[Optional] Resource group to which the automation account from where assets need to be migrated
-	.PARAMETER DestinationResourceGroup
-		[Optional] Resource group to which the automation account to where assets need to be migrated
-	.PARAMETER SourceSubscriptionId
-		[Optional] Id of the Subscription to which the automation account from where assets need to be migrated
-	.PARAMETER DestinationSubscriptionId
-		[Optional] Id of the Subscription to which the automation account to where assets need to be migrated
-	.PARAMETER SourceAutomationAccountResourceId
-		[Optional] Resource Id of the automation account from where assets need to be migrated
-	.PARAMETER DestinationAutomationAccountResourceId
-		[Optional] Resource Id of the automation account to where assets need to be migrated
-	.PARAMETER Type[]
-		[Mandatory] Array consisting of all the types of assets that need to be migrated, possible values are Certificates, Connections, Credentials, Modules, Runbooks, Variables
+.PARAMETER DestinationAutomationAccountName
+	[Mandatory] Name of automation account to where assets need to be migrated (Destination Account)
+
+.PARAMETER SourceResourceGroup
+	[Mandatory] Resource group to which the automation account from where assets need to be migrated belongs
+
+.PARAMETER DestinationResourceGroup
+	[Mandatory] Resource group to which the automation account to where assets need to be migrated belongs
+
+.PARAMETER SourceSubscriptionId
+	[Mandatory] Id of the Subscription to which the automation account from where assets need to be migrated  belongs
+
+.PARAMETER DestinationSubscriptionId
+	[Mandatory] Id of the Subscription to which the automation account to where assets need to be migrated  belongs
+
+.PARAMETER Type[]
+	[Mandatory] Array consisting of all the types of assets that need to be migrated, possible values are: Certificates, Connections, Credentials, Modules, Runbooks, Variables
+
+.NOTES
+    1. Script for Migrations from-> Source account to Destination Account (will have to be created for now)
+	2. Please do the following for the execution of script if source account's managed identity does not have read write access control of the destination account:
+		• Get into the destination account and grant access of destination account to your source account's managed identity using this guide Tutorial: https://docs.microsoft.com/en-us/azure/role-based-access-control/quickstart-assign-role-user-portal
 
 .AUTHOR Microsoft
 
@@ -49,15 +55,17 @@ catch {
     throw $_.Exception
 }
 
-$SourceAutomationAccountName
-$DestinationAutomationAccountName
-$SourceResourceGroup
-$DestinationResourceGroup
-$SourceSubscriptionId
-$DestinationSubscriptionId
-$SourceAutomationAcccountResourceId="/subscriptions/430eaafe-fb8f-4014-8deb-1b174430a299/resourceGroups/abhishek/providers/Microsoft.Automation/automationAccounts/MigStart"
-$DestinationAutomationAcccountResourceId= "/subscriptions/1e5e7c02-d552-41bc-95fc-bdf8e8478fcf/resourceGroups/abhishek1/providers/Microsoft.Automation/automationAccounts/MigEndPoint"
+$SourceAutomationAccountName=
+$DestinationAutomationAccountName=
+$SourceResourceGroup=
+$DestinationResourceGroup=
+$SourceSubscriptionId=
+$DestinationSubscriptionId=
+$SourceAutomationAcccountResourceId=
+$DestinationAutomationAcccountResourceId=
+
 $Types= @("Certificates", "Connections", "Credentials", "Modules", "Runbooks", "Variables")
+
 
 Function ParseReourceID($resourceID)
 {
@@ -69,33 +77,50 @@ Function ParseReourceID($resourceID)
 	return $result
 }
 
+Function RandomStringProducer
+{
+	$TokenSet = @{
+		L = [Char[]]'abcdefghijklmnopqrstuvwxyz'
+		N = [Char[]]'0123456789'
+	}
+
+
+	$Lower = Get-Random -Count 10 -InputObject $TokenSet.L
+	$Number = Get-Random -Count 10 -InputObject $TokenSet.N
+
+
+	$StringSet = $Lower + $Number
+	$RandomString=(Get-Random -Count 15 -InputObject $StringSet) -join ''
+	return $RandomString
+}
+
 Function CheckifInputIsValid($In)
 {
 	if ([string]::IsNullOrWhiteSpace($In))
-    {
-       return $False
-    }
+	{
+	return $False
+	}
 	return $True
 }
 
 Function Test-IsGuid
 {
-    [OutputType([bool])]
-    param
-    (
-        [Parameter(Mandatory = $true)]
-        [string]$StringGuid
-    )
- 
-   $ObjectGuid = [System.Guid]::empty
-   return [System.Guid]::TryParse($StringGuid,[System.Management.Automation.PSReference]$ObjectGuid) # Returns True if successfully parsed
+	[OutputType([bool])]
+	param
+	(
+		[Parameter(Mandatory = $true)]
+		[string]$StringGuid
+	)
+
+$ObjectGuid = [System.Guid]::empty
+return [System.Guid]::TryParse($StringGuid,[System.Management.Automation.PSReference]$ObjectGuid) # Returns True if successfully parsed
 }
 
 #Get bearer token for authentication
 Function Get-AzCachedAccessToken() 
 {
 	$token=Get-AzAccessToken 
-    return [String]$token.Token
+	return [String]$token.Token
 }
 
 
@@ -123,13 +148,26 @@ Function StoreModules($Modules_Custom)
 
 }
 
+Function ValidateDestinationSubId($SubscriptionId)
+{	
+	$SubscriptionsFullDetails=Get-AzSubscription
+	$SubIds=$SubscriptionsFullDetails.SubscriptionId
+	foreach($sub in $SubIds )
+	{
+		if($sub -eq $SubscriptionId)
+		{
+			return $true
+		}
+	}
+	return $false
+
+}
 
 Function CreateStorageAcc($StorageAccountName, $storageAccountRG)
 {
 	New-AzStorageAccount -ResourceGroupName $storageAccountRG -Name $StorageAccountName -Location westus -SkuName Standard_LRS
 	$storageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $storageAccountRG -AccountName $storageAccountName).Value[0]
-	$secureStorageAccountKey=ConvertTo-SecureString [String]$storageAccountKey -AsPlainText -Force
-	return $secureStorageAccountKey
+	return $storageAccountKey
 	
 }
 
@@ -176,7 +214,7 @@ Function SendToBlob($Modules)
 Function RemoveStorageAcc($StorageAccountName, $StorageAccountRG, $SubscriptionId)
 {
 	Set-Context($SubscriptionId)
-	Remove-AzStorageAccount -ResourceGroupName $StorageAccountRG  -Name $StorageAccountName
+	Remove-AzStorageAccount -ResourceGroupName $StorageAccountRG  -Name $StorageAccountName -Force
 }
 
 #setting context
@@ -204,7 +242,6 @@ Function Import-RunbooksFromOldAccount{
 	{
 		Write-Error "Failed to retrieve runbooks from automation account \' $SourceAutomationAccountName \'"
 	}
-	# $Runbooks | Export-AzAutomationRunbook -OutputFolder $LocalStoragePath -Force ;
 	return $Runbooks
 }
 
@@ -408,7 +445,6 @@ Function TransferRunbooks
 {
 	Set-Context $SourceSubscriptionId
 	$Runbooks = Import-RunbooksFromOldAccount
-	Write-Output $Runbooks
 	if($null -ne $Runbooks)
 	{
 		$Runbooks | Export-AzAutomationRunbook -OutputFolder $LocalStoragePath -Force  
@@ -509,18 +545,17 @@ Function TransferModules
 	}
 }
 
-# Start point for the script
-if($SourceAutomationAcccountResourceId -ne $null)
+if($SourceAutomationAccountResourceId.Length -ne 0)
 {
-	$parsedResourceID=ParseReourceID $SourceAutomationAcccountResourceId
+	$parsedResourceID=ParseReourceID $SourceAutomationAccountResourceId
 	$SourceResourceGroup=$parsedResourceID[0]
 	$SourceSubscriptionId=$parsedResourceID[1]
 	$SourceAutomationAccountName=$parsedResourceID[2]
 }
 
-if($DestinationAutomationAcccountResourceId -ne $null)
+if($DestinationAutomationAccountResourceId.Length -ne 0)
 {
-	$parsedResourceID=ParseReourceID $DestinationAutomationAcccountResourceId
+	$parsedResourceID=ParseReourceID $DestinationAutomationAccountResourceId
 	$DestinationResourceGroup=$parsedResourceID[0]
 	$DestinationSubscriptionId=$parsedResourceID[1]
 	$DestinationAutomationAccountName=$parsedResourceID[2]
@@ -529,44 +564,52 @@ if($DestinationAutomationAcccountResourceId -ne $null)
 $LocalStoragePath= ".\"
 $subscriptionId = $SourceSubscriptionId
 $storageAccountRG = $SourceResourceGroup
-$storageAccountName = "migrationacctemp1"
-$storageContainerName = "migrationcontainertemp1"
-$tempFolder="LocalTempFolder1"
+$storageAccountName = RandomStringProducer
+$storageContainerName = "migrationcontainer"
+$tempFolder=RandomStringProducer
+
+$Access=0
 
 if(CheckifInputIsValid($SourceAutomationAccountName) -and CheckifInputIsValid($SourceResourceGroup) -and CheckifInputIsValid($SourceSubscriptionId) -and CheckifInputIsValid($DestinationAutomationAccountName) -and CheckifInputIsValid($DestinationResourceGroup) -and CheckifInputIsValid($DestinationSubscriptionId))
 {
 	if((Test-IsGuid $SourceSubscriptionId) -and (Test-IsGuid $DestinationSubscriptionId))
 	{
-		foreach($assestType in $Types)
+		if(ValidateDestinationSubId $DestinationSubscriptionId)	
 		{
-			if($assestType -eq "Runbooks")
+			foreach($assestType in $Types)
 			{
-				TransferRunbooks
-			}
-			elseif($assestType -eq "Variables")
-			{
-				TransferVariables
-			}
-			elseif($assestType -eq "Connections")
-			{
-				TransferConnections
-			}
-			elseif($assestType -eq "Credentials")
-			{
-				TransferCredentials
-			}
-			elseif($assestType -eq "Certificates")
-			{
-				TransferCertificates
-			}
-			elseif($assestType -eq "Modules")
-			{
-				TransferModules
-			}
-			else{
-				Write-Error "Please enter a valid type as $assestType is not a valid option, acceptable options are: Certificates, Connections, Credentials, Modules, Runbooks, Variables"
-			}
+				if($assestType -eq "Runbooks")
+				{
+					TransferRunbooks
+				}
+				elseif($assestType -eq "Variables")
+				{
+					TransferVariables
+				}
+				elseif($assestType -eq "Connections")
+				{
+					TransferConnections
+				}
+				elseif($assestType -eq "Credentials")
+				{
+					TransferCredentials
+				}
+				elseif($assestType -eq "Certificates")
+				{
+					TransferCertificates
+				}
+				elseif($assestType -eq "Modules")
+				{
+					TransferModules
+				}
+				else{
+					Write-Error "Please enter a valid type as $assestType is not a valid option, acceptable options are: Certificates, Connections, Credentials, Modules, Runbooks, Variables"
+				}
 
+			}
+		}
+		else{
+			Write-Error "Please ensure source account's managed Identity has contributor access with read and write privileges to the destination account(https://docs.microsoft.com/en-us/azure/role-based-access-control/quickstart-assign-role-user-portal)"
 		}
 
 	}
@@ -580,4 +623,3 @@ else
 	Write-Error "Please enter valid Inputs(either Source and Destination Resource IDs or Source and Destination Subscription IDs, Resource Group names and Automation account names)"
 }
 
-	
