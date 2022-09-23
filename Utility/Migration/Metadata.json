@@ -1,0 +1,11 @@
+{
+    "Author": "Abhishek Chopra",
+    "ContentSize": 8114,
+    "ContentUrl": "https://raw.githubusercontent.com/Ab0907/Migrate-Automation-account-from-one-region-to-another/main/AccountMigrationScriptOneRegionToAnother.ps1",
+    "IsFederated": true,
+    "IsWorkflow": false,
+    "RunbookKindString": "PowerShell",
+    "Title": "Migrate Automation account from one region to another",
+    "Summary": "This PowerShell script is for migration of Automation account assets from the account in primary region to the account in secondary region. This script migrates only Runbooks, Modules, Connections, Credentials, Certificates and Variables. ",
+    "UserTags": "Powershell, Azure Automation"
+}
