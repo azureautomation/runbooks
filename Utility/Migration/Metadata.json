@@ -1,5 +1,5 @@
 {
-    "Author": "Abhishek Chopra",
+    "Author": "Azure Automation Product Team",
     "ContentSize": 8114,
     "ContentUrl": "https://raw.githubusercontent.com/Ab0907/Migrate-Automation-account-from-one-region-to-another/main/AccountMigrationScriptOneRegionToAnother.ps1",
     "IsFederated": true,
