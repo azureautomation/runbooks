@@ -1,4 +1,4 @@
-# Migrate-Automation-account-from-one-region-to-another
+# Migrate Automation account from one region to another
 This PowerShell script is for migration of Automation account assets from the account in primary region to the account in secondary region. This script migrates only Runbooks, Modules, Connections, Credentials, Certificates and Variables.
 ### Prerequisites:
 		1. Ensure that the Automation account in the secondary region is created and available so that assets from primary region can be migrated to it.
