@@ -71,15 +71,35 @@ def resolve_download_url(packagename, version):
             return(url)  
     print("Could not find WHL from PIPI for package %s and version %s" % (packagename, version))        
 
-def send_webservice_import_module_request(packagename, download_uri_for_file):
-    request_url = "https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Automation/automationAccounts/%s/python3Packages/%s?api-version=2018-06-30" \
-                  % (subscription_id, resource_group, automation_account, packagename)
+def get_msi_token():
+    endPoint = os.getenv('IDENTITY_ENDPOINT')+"?resource=https://management.azure.com/" 
+    identityHeader = os.getenv('IDENTITY_HEADER') 
+    payload={} 
+    headers = { 
+    'X-IDENTITY-HEADER': identityHeader,
+    'Metadata': 'True' 
+    } 
+    response = requests.request("GET", endPoint, headers=headers, data=payload) 
+    return response.json()['access_token']
 
-    requestbody = { 'properties': { 'description': 'uploaded via automation', 'contentLink': {'uri': "%s" % download_uri_for_file} } }
-    headers = {'Content-Type' : 'application/json', 'Authorization' : 'Bearer %s' % token}
-    r = requests.put(request_url, data=json.dumps(requestbody), headers=headers)
-    if str(r.status_code) not in ["200", "201"]:
-        raise Exception("Error importing package {0} into Automation account. Error code is {1}".format(packagename, str(r.status_code)))
+def send_webservice_import_module_request(packagename, download_uri_for_file):
+
+    for attempt in range(6):
+        request_url = "https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Automation/automationAccounts/%s/python3Packages/%s?api-version=2018-06-30" \
+                    % (subscription_id, resource_group, automation_account, packagename)
+
+        token = get_msi_token()
+        requestbody = { 'properties': { 'description': 'uploaded via automation', 'contentLink': {'uri': "%s" % download_uri_for_file} } }
+        headers = {'Content-Type' : 'application/json', 'Authorization' : 'Bearer %s' % token}
+        r = requests.put(request_url, data=json.dumps(requestbody), headers=headers)
+        if str(r.status_code) in ["429"]:
+            print ("Download request ", request_url, "throttled - waiting 60 seconds")
+            time.sleep(60)
+        elif str(r.status_code) in ["200", "201"]:
+            break
+        else:
+            raise Exception("Error importing package {0} into Automation account. Error code is {1}".format(packagename, str(r.status_code)))
+    
 
 def find_and_dependencies(packagename, version, dep_graph, dep_map):
     dep_map.update({packagename: version})
@@ -113,16 +133,16 @@ if __name__ == '__main__':
 
     opts, args = getopt.getopt(sys.argv[1:], "s:g:a:m:v:")
     for o, i in opts:
-        if o == '-s':  
+        if o == '-s':
             subscription_id = i
-        elif o == '-g':  
+        elif o == '-g':
             resource_group = i
-        elif o == '-a': 
+        elif o == '-a':
             automation_account = i
-        elif o == '-m': 
+        elif o == '-m':
             module_name = i
         elif o == '-v':
-            version_name = i    
+            version_name = i
 
     module_with_version = module_name + "==" + version_name
     # Install the given module first
@@ -142,4 +162,4 @@ if __name__ == '__main__':
     # Import package with dependencies from pypi.org
     for module_name,version in dep_map.items():
         download_uri_for_file = resolve_download_url(module_name, version)
-
+        send_webservice_import_module_request(module_name, download_uri_for_file)
