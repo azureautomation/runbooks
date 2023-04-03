@@ -8,6 +8,8 @@ Param (
     [Parameter(Mandatory = $true)]
     [String] $SubscriptionId,
     [Parameter(Mandatory = $true)]
+    [String] $RoleDefinitionName,
+    [Parameter(Mandatory = $true)]
     [String] $SelfSignedCertPlainPassword,
     [Parameter(Mandatory = $false)]
     [string] $EnterpriseCertPathForRunAsAccount,
@@ -40,12 +42,16 @@ function CreateServicePrincipal([System.Security.Cryptography.X509Certificates.X
     $GetServicePrincipal = Get-AzADServicePrincipal -ObjectId $ServicePrincipal.Id
     # Sleep here for a few seconds to allow the service principal application to become active (ordinarily takes a few seconds)
     Sleep -s 15
+    
+    
     # Requires User Access Administrator or Owner.
-    $NewRole = New-AzRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $Application.AppId -ErrorAction SilentlyContinue
+    # Check here how to assign roles. https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles
+    # https://learn.microsoft.com/en-us/powershell/module/az.resources/new-azroleassignment?view=azps-9.5.0
+    $NewRole = New-AzRoleAssignment -RoleDefinitionName $RoleDefinitionName -ServicePrincipalName $Application.AppId -ErrorAction SilentlyContinue
     $Retries = 0;
     While ($NewRole -eq $null -and $Retries -le 6) {
         Sleep -s 10
-        New-AzRoleAssignment -RoleDefinitionName Contributor -ServicePrincipalName $Application.AppId | Write-Verbose -ErrorAction SilentlyContinue
+        New-AzRoleAssignment -RoleDefinitionName $RoleDefinitionName -ServicePrincipalName $Application.AppId | Write-Verbose -ErrorAction SilentlyContinue
         $NewRole = Get-AzRoleAssignment -ServicePrincipalName $Application.AppId -ErrorAction SilentlyContinue
         $Retries++;
     }
