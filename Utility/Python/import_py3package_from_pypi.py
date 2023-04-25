@@ -48,6 +48,7 @@ def extract_and_compare_version(url, min_req_version):
 
 def resolve_download_url(packagename, version):
     response = requests.get("%s/%s" % (PYPI_ENDPOINT, packagename))
+    print("response from Python lib server for ", packagename, " was ", response.content)
     urls = re.findall(r'href=[\'"]?([^\'" >]+)', str(response.content))
     for url in urls:
         if 'cp38-win_amd64.whl' in url and version in url:
@@ -71,33 +72,44 @@ def resolve_download_url(packagename, version):
             return(url)  
     print("Could not find WHL from PIPI for package %s and version %s" % (packagename, version))        
 
+def get_msi_token():
+    endPoint = os.getenv('IDENTITY_ENDPOINT')+"?resource=https://management.azure.com/" 
+    identityHeader = os.getenv('IDENTITY_HEADER') 
+    payload={} 
+    headers = { 
+    'X-IDENTITY-HEADER': identityHeader,
+    'Metadata': 'True' 
+    } 
+    response = requests.request("GET", endPoint, headers=headers, data=payload) 
+    return response.json()['access_token']
+
 def send_webservice_import_module_request(packagename, download_uri_for_file):
-    request_url = "https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Automation/automationAccounts/%s/python3Packages/%s?api-version=2018-06-30" \
-                  % (subscription_id, resource_group, automation_account, packagename)
 
-    requestbody = { 'properties': { 'description': 'uploaded via automation', 'contentLink': {'uri': "%s" % download_uri_for_file} } }
-    headers = {'Content-Type' : 'application/json', 'Authorization' : 'Bearer %s' % token}
-    r = requests.put(request_url, data=json.dumps(requestbody), headers=headers)
-    if str(r.status_code) not in ["200", "201"]:
-        raise Exception("Error importing package {0} into Automation account. Error code is {1}".format(packagename, str(r.status_code)))
+    for attempt in range(6):
+        request_url = "https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Automation/automationAccounts/%s/python3Packages/%s?api-version=2018-06-30" \
+                    % (subscription_id, resource_group, automation_account, packagename)
 
-def find_and_dependencies(packagename, version, dep_graph, dep_map):
-    dep_map.update({packagename: version})
-    for child in dep_graph:
-        if child['package']['key'].casefold() == packagename.casefold():
-            for dep in child['dependencies']:
-                version = dep['installed_version'] 
-                if version == '?' :
-                    version = dep['required_version'][2:]
-                    if "!" in version :
-                        version = version .split('!')[0]
-                find_and_dependencies(dep['package_name'],version,dep_graph, dep_map)  
-                
+        token = get_msi_token()
+        requestbody = { 'properties': { 'description': 'uploaded via automation', 'contentLink': {'uri': "%s" % download_uri_for_file} } }
+        headers = {'Content-Type' : 'application/json', 'Authorization' : 'Bearer %s' % token}
+        r = requests.put(request_url, data=json.dumps(requestbody), headers=headers)
+        if str(r.status_code) in ["429"]:
+            print ("Download request ", request_url, "throttled - waiting 60 seconds")
+            time.sleep(60)
+        elif str(r.status_code) in ["200", "201"]:
+            break
+        else:
+            raise Exception("Error importing package {0} into Automation account. Error code is {1}".format(packagename, str(r.status_code)))
+    
 
-subprocess.check_call([sys.executable, '-m', 'pip', 'install','pipdeptree'])
+def find_dependencies(dep_graph, dep_map):
+    for child in dep_graph['install']:
+        dep_module_name = child['metadata']['name']
+        dep_module_version = child['metadata']['version']
+        print("Adding module ", dep_module_name, " with version ", dep_module_version)
+        dep_map.update({dep_module_name: dep_module_version})
 
-subprocess.check_call([sys.executable, '-m', 'pip', 'install','packaging'])
-
+subprocess.check_call([sys.executable, '-m', 'pip', 'install','--upgrade', 'pip', '--user'])
 
 if __name__ == '__main__':
     if len(sys.argv) < 9:
@@ -113,33 +125,26 @@ if __name__ == '__main__':
 
     opts, args = getopt.getopt(sys.argv[1:], "s:g:a:m:v:")
     for o, i in opts:
-        if o == '-s':  
+        if o == '-s':
             subscription_id = i
-        elif o == '-g':  
+        elif o == '-g':
             resource_group = i
-        elif o == '-a': 
+        elif o == '-a':
             automation_account = i
-        elif o == '-m': 
+        elif o == '-m':
             module_name = i
         elif o == '-v':
-            version_name = i    
+            version_name = i
 
     module_with_version = module_name + "==" + version_name
-    # Install the given module first
-    for i in (1,10):
-        try:
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', module_with_version])
-            break
-        except subprocess.CalledProcessError as e:
-            continue 
+    subprocess.check_call([sys.executable, '-m', 'pip',  'install', '--dry-run', module_with_version, '-I', '--quiet', '--report', 'modules.json'])
 
-    result = subprocess.run(
-        [sys.executable, "-m", "pipdeptree","-j"], capture_output=True, text=True
-    )
-    dep_graph = json.loads(result.stdout)
+    f = open('modules.json', 'rb')
+    strJson = bytearray(f.read())
+    dep_graph = json.loads(strJson)
     dep_map = {}
-    find_and_dependencies(module_name,version_name,dep_graph,dep_map)
+    find_dependencies(dep_graph,dep_map)
     # Import package with dependencies from pypi.org
     for module_name,version in dep_map.items():
         download_uri_for_file = resolve_download_url(module_name, version)
-
+        send_webservice_import_module_request(module_name, download_uri_for_file)
