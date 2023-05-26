@@ -13,7 +13,7 @@ Param(
     [Parameter(Mandatory = $true)]
     [string] $resourceGroupName,
     [Parameter(Mandatory = $true)]
-    [string] $accountName,
+    [string] $accountName
 )
 
 # This script requires system identity enabled for the automation account with automation reader access on this automation account - read runbook content.
