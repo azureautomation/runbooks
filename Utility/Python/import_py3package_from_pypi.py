@@ -95,7 +95,7 @@ def send_webservice_import_module_request(packagename, download_uri_for_file):
     r = requests.put(request_url, data=json.dumps(requestbody), headers=headers)
     if str(r.status_code) == "403":
         raise Exception("Error 403 importing package {0} into Automation account. Did you assign the necessary write permission? (Microsoft.Automation/automationAccounts/python3Packages/write)".format(packagename))
-    if str(r.status_code) not in ["200", "201"]:
+    elif str(r.status_code) not in ["200", "201"]:
         raise Exception("Error importing package {0} into Automation account. Error code is {1}".format(packagename, str(r.status_code)))
 
 def find_and_dependencies(packagename, version, dep_graph, dep_map):
