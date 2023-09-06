@@ -38,10 +38,13 @@ while($true) {
         if ($runbook.properties.runbookType -eq "PowerShell" -or $runbook.properties.runbookType -eq "PowerShell7") {
 
             $runbookContentUri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.Automation/automationAccounts/$accountName/runbooks/$runbookName/content?api-version=2015-10-31"
-            $runbookContent = Invoke-RestMethod -Method "GET" -Uri "$($runbookContentUri)" -ContentType "text/powershell" -Headers $Headers
-            
-            if ($runbookContent -and $runbookContent.Contains("AzureRunAsConnection")) {
-                Write-Output $runbookName
+            try {
+                $runbookContent = Invoke-RestMethod -Method "GET" -Uri "$($runbookContentUri)" -ContentType "text/powershell" -Headers $Headers    
+                if ($runbookContent -and $runbookContent.Contains("AzureRunAsConnection")) {
+                    Write-Output $runbookName
+                }
+            } catch {
+                #No published version of the runbook found. skipping the runbook.
             }
         }
     }
