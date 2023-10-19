@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
  
-.VERSION 1.0.1
+.VERSION 1.0.2
  
 .GUID c383bb81-c95e-4845-bc95-428db6a36ba5
  
@@ -91,7 +91,7 @@ function GetRunAsAccountAADApplicationId([string] $resourceGroupName, [string] $
 
 function GetRunAsAccountRoleAssignments ([string] $subscriptionId)
 {
-    Select-AzSubscription -Subscription $subscriptionId
+    Select-AzSubscription -Subscription $subscriptionId | Out-Null
     $automationAccounts = Get-AzAutomationAccount
 
     if (!$automationAccounts) 
@@ -110,22 +110,9 @@ function GetRunAsAccountRoleAssignments ([string] $subscriptionId)
             -automationAccountName $AutomationAccount.AutomationAccountName
         if ($runasAccountAADAplicationId) 
         { 
-            $subscriptionScope = "/subscriptions/" + $SubscriptionId
-            if ($ReplaceCustomRoleAssignment -eq $true)
-            {
-                $currentRoleAssignments = Get-AzRoleAssignment `
-                    -ServicePrincipalName $runasAccountAADAplicationId `
-                    -Scope $subscriptionScope `
-                    -ErrorAction Stop
-            }
-            else
-            {
-                $currentRoleAssignments = Get-AzRoleAssignment `
-                    -ServicePrincipalName $runasAccountAADAplicationId `
-                    -RoleDefinitionName "Contributor" `
-                    -Scope $subscriptionScope `
-                    -ErrorAction Stop
-            }
+			$currentRoleAssignments = Get-AzRoleAssignment `
+				-ServicePrincipalName $runasAccountAADAplicationId `
+				-ErrorAction Stop -WarningAction SilentlyContinue | Format-Table Scope, DisplayName, RoleDefinitionName, ObjectId
 
             Write-Host ("The following role assignments exist in automation account: " + $automationAccount.AutomationAccountName)
             $currentRoleAssignments
