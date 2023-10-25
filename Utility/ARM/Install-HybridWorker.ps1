@@ -204,7 +204,7 @@ $null = Unblock-File $Destination
 
 
 # Import the DSC configuration to the automation account
-Write-Output "Importing Hybird Worker DSC file..."
+Write-Output "Importing Hybrid Worker DSC file..."
 $null = Import-AzureRmAutomationDscConfiguration -AutomationAccountName $AutomationAccountName -ResourceGroupName $ResourceGroup -SourcePath $Destination -Published -Force
 
 
