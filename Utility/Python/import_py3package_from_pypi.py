@@ -83,7 +83,11 @@ def resolve_download_url(packagename, version):
     for url in urls:
         if 'py3-none-any.whl' in url and extract_and_compare_version(url,version):
             print ("Detected download uri %s for %s" % (url, packagename))
-            return(url)  
+            return(url)
+    for url in urls:
+        if 'cp38-none-win_amd64.whl' in url and version in url:
+            print ("Detected download uri %s for %s" % (url, packagename))
+            return(url)
     print("Could not find WHL from PIPI for package %s and version %s" % (packagename, version))       
 
 def send_webservice_import_module_request(packagename, download_uri_for_file):
