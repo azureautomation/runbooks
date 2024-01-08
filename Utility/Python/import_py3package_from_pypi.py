@@ -51,8 +51,9 @@ token = response['access_token']
 def extract_and_compare_version(url, min_req_version):
     try:
         re.search('\d+(\.\d+)+', url).group(0)        
-    except :
-         print ("Failed to extract and compare version URL  %s min_req_versionor %s" % (url, min_req_version))
+    except Exception as e:
+        print ("Failed to extract and compare version URL  %s min_req_versionor %s" % (url, min_req_version))
+        print ("Error: %s" % str(e))
 
     extracted_ver = re.search('\d+(\.\d+)+', url).group(0)
     print ("Extracted version   %s min_req_versionor %s" % (extracted_ver, min_req_version))
@@ -82,7 +83,11 @@ def resolve_download_url(packagename, version):
     for url in urls:
         if 'py3-none-any.whl' in url and extract_and_compare_version(url,version):
             print ("Detected download uri %s for %s" % (url, packagename))
-            return(url)  
+            return(url)
+    for url in urls:
+        if 'cp38-none-win_amd64.whl' in url and version in url:
+            print ("Detected download uri %s for %s" % (url, packagename))
+            return(url)
     print("Could not find WHL from PIPI for package %s and version %s" % (packagename, version))       
 
 def send_webservice_import_module_request(packagename, download_uri_for_file):
@@ -92,7 +97,9 @@ def send_webservice_import_module_request(packagename, download_uri_for_file):
     requestbody = { 'properties': { 'description': 'uploaded via automation', 'contentLink': {'uri': "%s" % download_uri_for_file} } }
     headers = {'Content-Type' : 'application/json', 'Authorization' : 'Bearer %s' % token}
     r = requests.put(request_url, data=json.dumps(requestbody), headers=headers)
-    if str(r.status_code) not in ["200", "201"]:
+    if str(r.status_code) == "403":
+        raise Exception("Error 403 importing package {0} into Automation account. Did you assign the necessary write permission? (Microsoft.Automation/automationAccounts/python3Packages/write)".format(packagename))
+    elif str(r.status_code) not in ["200", "201"]:
         raise Exception("Error importing package {0} into Automation account. Error code is {1}".format(packagename, str(r.status_code)))
 
 def find_and_dependencies(packagename, version, dep_graph, dep_map):
@@ -104,7 +111,7 @@ def find_and_dependencies(packagename, version, dep_graph, dep_map):
                 if version == '?' :
                     version = dep['required_version'][2:]
                     if "!" in version :
-                        version = version .split('!')[0]
+                        version = version.split('!')[0]
                 find_and_dependencies(dep['package_name'],version,dep_graph, dep_map)  
                 
 
