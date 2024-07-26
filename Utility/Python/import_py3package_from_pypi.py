@@ -16,6 +16,14 @@ Changelog:
     2020-12-29 AutomationTeam:
     -Import Python 3 package with dependencies
 """
+
+import subprocess
+import sys
+
+# Install requests module
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'requests'])
+
+
 import requests
 import subprocess
 import json
