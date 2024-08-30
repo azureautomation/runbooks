@@ -4,7 +4,7 @@
 .VERSION 1.1
 
 .GUID 1ce8af29-11c2-4b5a-9548-d6bb359c5bf8
-
+#a
 .AUTHOR AzureAutomationTeam
 
 .COMPANYNAME Microsoft
