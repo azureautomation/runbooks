@@ -15,23 +15,24 @@
 
 .NOTES
     AUTHOR: Azure/OMS Automation Team
-    LASTEDIT: June 30, 2016  
+    LASTEDIT: May 4, 2019  
+    UPDATED FOR AZ MODULE: Martin Zurita
 #>       
 
 $ServicePrincipalConnection = Get-AutomationConnection -Name "AzureRunAsConnection"
-Add-AzureRmAccount `
+Add-AzAccount `
     -ServicePrincipal `
     -TenantId $ServicePrincipalConnection.TenantId `
     -ApplicationId $ServicePrincipalConnection.ApplicationId `
     -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint | Write-Verbose
 
-Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID  | Write-Verbose 
+Select-AzSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID  | Write-Verbose 
 
-$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts -ExtensionResourceName Microsoft.Automation
+$AutomationResource = Get-AzResource -ResourceType Microsoft.Automation/AutomationAccounts
 
 foreach ($Automation in $AutomationResource)
 {
-    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+    $Job = Get-AzAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
     if (!([string]::IsNullOrEmpty($Job)))
     {
         $AutomationInformation = @{}
