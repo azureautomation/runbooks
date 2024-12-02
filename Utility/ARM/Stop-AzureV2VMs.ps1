@@ -105,7 +105,7 @@ else {
 foreach ($VM in $VMs) {
 	$StopRtn = $VM | Stop-AzureRmVM -Force -ErrorAction Continue
 
-	if (!$StopRtn.IsSuccessStatusCode) {
+	if ($StopRtn.Status -ne "Succeeded") {
 		# The VM failed to stop, so send notice
         Write-Output ($VM.Name + " failed to stop")
         Write-Error ($VM.Name + " failed to stop. Error was:") -ErrorAction Continue
